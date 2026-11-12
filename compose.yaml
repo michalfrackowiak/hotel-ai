@@ -1,0 +1,26 @@
+services:
+  web:
+    build: .
+    ports:
+      - "127.0.0.1:${HOTEL_PORT:-8080}:8000"
+    environment:
+      DJANGO_DEBUG: "${DJANGO_DEBUG:-1}"
+      DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:-}"
+      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-}"
+      BOOKING_API_KEY: "${BOOKING_API_KEY:-}"
+      HOTEL_DEMO_ADMIN_USERNAME: "${HOTEL_DEMO_ADMIN_USERNAME:-}"
+      HOTEL_DEMO_ADMIN_PASSWORD: "${HOTEL_DEMO_ADMIN_PASSWORD:-}"
+    volumes:
+      - hotel-data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz/', timeout=2).close()
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  hotel-data:

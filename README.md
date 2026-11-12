@@ -2,6 +2,25 @@
 
 Hotel-ai is a bilingual hotel reception agent for making room reservations in English and Polish. The alpha uses a Django booking engine and a browser interface for voice and chat.
 
+## Run the booking engine locally
+
+Copy `.env.example` to `.env` and set `BOOKING_API_KEY` to a private random value to enable the booking API. To create the requested demo administrator, use `HOTEL_DEMO_ADMIN_USERNAME=Neptun` and set `HOTEL_DEMO_ADMIN_PASSWORD` to the test password in your local `.env`.
+
+```sh
+docker compose up --build --wait
+docker compose exec web python manage.py seed_demo
+```
+
+Open [Django admin](http://127.0.0.1:8080/admin/) to manage the room inventory and nightly prices and inspect confirmed bookings. The seed creates `ROOM-2` for up to two guests at PLN 120.00 per night and `ROOM-6` for up to six guests at PLN 200.00 per night. Re-running the seed preserves existing prices and administrator credentials. A Docker volume persists the SQLite database.
+
+See the [booking API reference](docs/booking-api.md) for availability and confirmation requests. Compose runs the Django development server on `127.0.0.1`, with `DJANGO_DEBUG=1` by default to serve the admin assets. Set `HOTEL_PORT` in `.env` if port 8080 is in use.
+
+```sh
+docker compose exec web python manage.py check
+docker compose exec web python manage.py makemigrations --check --dry-run
+docker compose exec web python manage.py test
+```
+
 ## Development environment
 
 Use Git, authenticated GitHub CLI, Docker with Compose, and Node.js 20 or newer for browser automation. Python 3.13 is useful for host-side checks. Clone the private repository with `gh repo clone michalfrackowiak/hotel-ai`.
@@ -12,7 +31,7 @@ Use Git, authenticated GitHub CLI, Docker with Compose, and Node.js 20 or newer 
 - [`.codex/config.toml`](.codex/config.toml) configures Playwright MCP for isolated browser checks and OpenAI Docs MCP for provider and Codex references. In a trusted Codex project, use `codex mcp list` to inspect the configured servers. Node downloads the pinned Playwright MCP package when needed. Its first browser launch may also need a browser download.
 - [`docs/tooling-research.md`](docs/tooling-research.md) records the evaluated tooling and the rationale for using a repository handoff as shared memory.
 
-`main` holds merged milestones. Use `develop/<milestone>` branches and pull requests for development. The first application milestone adds Docker startup instructions and the booking API reference.
+`main` holds merged milestones. Use `develop/<milestone>` branches and pull requests for development.
 
 ### Skill sources
 
