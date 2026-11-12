@@ -1,0 +1,58 @@
+{% load static %}
+<!doctype html>
+<html lang="{{ language }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>{% if language == "pl" %}Rezerwacja pokoju{% else %}Book a room{% endif %} · Hotel-ai</title>
+    <link rel="stylesheet" href="{% static 'reception/reception.css' %}">
+    <script src="{% static 'reception/chat.js' %}" defer></script>
+</head>
+<body>
+    <header class="site-header">
+        <div class="site-bar">
+            <span class="wordmark"><span class="brand-mark" aria-hidden="true"></span>Hotel-ai</span>
+            <nav class="languages" aria-label="{% if language == 'pl' %}Język{% else %}Language{% endif %}">
+                <a href="/" lang="en"{% if language == "en" %} aria-current="true"{% endif %}>English</a>
+                <a href="/?lang=pl" lang="pl"{% if language == "pl" %} aria-current="true"{% endif %}>Polski</a>
+            </nav>
+        </div>
+    </header>
+    <main id="reception-app" data-language="{{ language }}" class="booking-layout">
+        <section class="intro" aria-labelledby="booking-title">
+            <h1 id="booking-title">{% if language == "pl" %}Zarezerwuj pokój{% else %}Book a room{% endif %}</h1>
+            <p>{% if language == "pl" %}Podaj terminy i liczbę gości. Recepcja sprawdzi dostępność i poda cenę przed potwierdzeniem rezerwacji.{% else %}Share your dates and guest count. Reception will check availability and quote the price before you confirm.{% endif %}</p>
+        </section>
+        <section class="chat-panel" aria-labelledby="reception-title">
+            <header class="chat-header">
+                <div class="chat-heading">
+                    <span class="reception-mark" aria-hidden="true"></span>
+                    <h2 id="reception-title">{% if language == "pl" %}Recepcja hotelowa{% else %}Hotel reception{% endif %}</h2>
+                </div>
+                <button id="chat-reset" class="quiet-button" type="button" disabled>{% if language == "pl" %}Od nowa{% else %}Start over{% endif %}</button>
+            </header>
+            <div id="chat-log" class="chat-log" role="log" aria-label="{% if language == 'pl' %}Rozmowa z recepcją{% else %}Reception conversation{% endif %}" tabindex="0">
+                <ol id="chat-messages" class="messages"></ol>
+            </div>
+            <div class="chat-footer">
+                <div class="chat-feedback">
+                    <p id="chat-status" role="status"></p>
+                    <button id="chat-retry" class="quiet-button" type="button" hidden>{% if language == "pl" %}Połącz ponownie{% else %}Reconnect{% endif %}</button>
+                </div>
+                <div id="chat-confirmation" class="confirmation-actions" hidden>
+                    <button class="confirm-button" type="button" data-answer="{% if language == 'pl' %}Tak{% else %}Yes{% endif %}">{% if language == "pl" %}Tak, rezerwuję{% else %}Yes, book it{% endif %}</button>
+                    <button class="quiet-button" type="button" data-answer="{% if language == 'pl' %}Nie{% else %}No{% endif %}">{% if language == "pl" %}Nie{% else %}No{% endif %}</button>
+                </div>
+                <form id="chat-form" class="chat-form" method="post" action="/reception/message/">
+                    {% csrf_token %}
+                    <label class="sr-only" for="chat-message">{% if language == "pl" %}Twoja wiadomość{% else %}Your message{% endif %}</label>
+                    <input id="chat-message" name="message" type="text" placeholder="{% if language == 'pl' %}Napisz wiadomość…{% else %}Type a message…{% endif %}" maxlength="500" autocomplete="off" disabled required>
+                    <button id="chat-send" class="send-button" type="submit" disabled>{% if language == "pl" %}Wyślij{% else %}Send{% endif %}<span aria-hidden="true"> →</span></button>
+                </form>
+                <noscript><p>{% if language == "pl" %}Włącz JavaScript, aby rozpocząć rozmowę.{% else %}Enable JavaScript to start the conversation.{% endif %}</p></noscript>
+            </div>
+        </section>
+    </main>
+</body>
+</html>
