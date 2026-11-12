@@ -1,0 +1,16 @@
+.git
+.github
+.agents
+.codex
+.venv
+docs
+data
+**/.env*
+**/secrets
+**/__pycache__
+**/*.py[cod]
+**/*.sqlite3*
+**/node_modules
+.playwright-mcp
+playwright-report
+test-results
