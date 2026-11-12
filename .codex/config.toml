@@ -1,0 +1,7 @@
+[mcp_servers.openai_docs]
+url = "https://developers.openai.com/mcp"
+
+[mcp_servers.playwright]
+command = "npx"
+args = ["--yes", "@playwright/mcp@0.0.85", "--headless", "--isolated"]
+startup_timeout_sec = 30

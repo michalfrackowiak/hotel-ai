@@ -1,0 +1,21 @@
+# Development tooling research
+
+Verified 12 November 2026 against upstream documentation and the local development tools.
+
+## Verification and session handoff
+
+The project plan’s “agent-skills” most closely matches Addy Osmani’s Agent Skills. Its upstream pack covers incremental implementation, review, and session handoff. The native Codex plugin loads all of its skills. Codex also discovers individual skills under the repository’s `.agents/skills/`, which lets contributors share a pinned set through Git. [Agent Skills for Codex](https://github.com/addyosmani/agent-skills/blob/main/docs/codex-setup.md), [OpenAI project skill installation](https://developers.openai.com/api/reference/cli#use-the-cli-from-a-coding-agent)
+
+Release `0.6.15` resolves to commit `8bfcc1f9916f2eea55494d8c1fa7f4bde867dd9e`. The review and context-engineering skills are the closest fit for the requested loop. The review skill calls for checking acceptance criteria and verification evidence. The context skill specifies what to persist across sessions, including decisions, the next task, and test commands and outcomes. Keep the upstream MIT notice with any copied skill material. [Release](https://github.com/addyosmani/agent-skills/releases/tag/0.6.15), [Review skill](https://github.com/addyosmani/agent-skills/blob/0.6.15/skills/code-review-and-quality/SKILL.md), [Context engineering skill](https://github.com/addyosmani/agent-skills/blob/0.6.15/skills/context-engineering/SKILL.md), [License](https://github.com/addyosmani/agent-skills/blob/0.6.15/LICENSE)
+
+Keep shared session memory in the versioned roadmap and handoff, with `AGENTS.md` pointing new sessions to both. Record what changed, what the reviewer reproduced, which checks passed, and where to resume. Git history makes that record available across machines and worktrees. [Codex project instructions](https://developers.openai.com/cookbook/examples/gpt-5/codex_prompting_guide#using-agentsmd), [Agent Skills handoff guidance](https://github.com/addyosmani/agent-skills/blob/main/docs/getting-started.md#task-boundary-restarts-and-ralph-loops)
+
+## Claude-Mem
+
+The likely match for “calude-memo” is `thedotmack/claude-mem`. Claude-Mem supports Codex and uses hooks to capture development activity for a background worker. The local worker depends on Node, Bun, and uv and stores its memory under `~/.claude-mem`. Cloud sync is opt-in and usage telemetry defaults on. Claude-Mem’s Codex inference provider requires a file-backed Codex CLI ChatGPT login and uses the account’s subscription. Codex separately requires trust for non-managed plugin hooks. This makes Claude-Mem a per-developer option alongside the shared repository handoff. [Claude-Mem setup and requirements](https://github.com/thedotmack/claude-mem/blob/main/README.md), [Codex inference provider](https://github.com/thedotmack/claude-mem/blob/main/docs/codex-provider.md), [OpenAI plugin hook trust](https://developers.openai.com/plugins/build/plugins#configure-installed-server-policy)
+
+## Repository and application tools
+
+- **GitHub CLI** was authenticated on the development machine. `gh` supports creating and merging PRs, checking workflow runs, and installing individual project-scoped skills at a commit or release. It was available at version 2.102.0. [GitHub PR commands](https://cli.github.com/manual/gh_pr), [GitHub run commands](https://cli.github.com/manual/gh_run), [Project skill installation](https://cli.github.com/manual/gh_skill_install)
+- **GitHub MCP** is available as an optional connection for browsing repositories and PRs from an agent tool. Its official server can expose individual tools and supports read-only operation. Git and the authenticated GitHub CLI cover the current development workflow. [Official GitHub MCP server](https://github.com/github/github-mcp-server)
+- **Django 5.2 LTS and Python 3.13** are a compatible baseline for the SQLite alpha. Docker Engine 29.9.2 and Compose v5.6.1 responded on the development machine. A Compose volume can persist the SQLite data across container rebuilds. [Django 5.2 support](https://docs.djangoproject.com/en/5.2/releases/5.2/#python-compatibility), [Docker Compose volumes](https://docs.docker.com/compose/gettingstarted/#step-5-persist-data-with-named-volumes)
