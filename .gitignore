@@ -1,0 +1,16 @@
+/.venv/
+/data/
+/secrets/
+/.env
+/.env.*
+!/.env.example
+__pycache__/
+*.py[cod]
+*.sqlite3*
+/.coverage
+/.pytest_cache/
+/.ruff_cache/
+/node_modules/
+/.playwright-mcp/
+/playwright-report/
+/test-results/
