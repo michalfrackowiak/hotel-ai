@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "bookings",
     "reception",
+    "model_providers",
 ]
 
 MIDDLEWARE = [
@@ -81,3 +82,5 @@ STATIC_URL = "/static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 BOOKING_API_KEY = os.environ.get("BOOKING_API_KEY", "")
+HOTEL_MODEL_API_KEY = os.environ.get("HOTEL_MODEL_API_KEY", "")
+HOTEL_OLLAMA_URL = os.environ.get("HOTEL_OLLAMA_URL", "http://host.docker.internal:11434")
