@@ -34,7 +34,9 @@ class ModelProviderTests(TestCase):
         self.assertIsNone(extract_stay_value("confirm", "yes", "en"))
         post.assert_not_called()
 
-    @override_settings(HOTEL_OLLAMA_URL="http://ollama:11434/", HOTEL_MODEL_API_KEY="hosted-test-key")
+    @override_settings(
+        HOTEL_OLLAMA_URL="http://ollama:11434/", HOTEL_OLLAMA_TIMEOUT=45, HOTEL_MODEL_API_KEY="hosted-test-key"
+    )
     @patch("model_providers.extraction._post_json")
     def test_selecting_ollama_uses_the_local_endpoint_without_hosted_credentials(self, post):
         AgentConfiguration.objects.create(provider="ollama", model="test-local-model")
@@ -44,7 +46,8 @@ class ModelProviderTests(TestCase):
         self.assertEqual(url, "http://ollama:11434/api/chat")
         self.assertEqual(payload["model"], "test-local-model")
         self.assertEqual(payload["messages"][-1]["content"], "dwie osoby")
-        self.assertEqual(post.call_args.kwargs, {})
+        self.assertEqual(payload["format"]["properties"]["value"]["type"], ["integer", "null"])
+        self.assertEqual(post.call_args.kwargs, {"timeout": 45})
 
     @override_settings(HOTEL_MODEL_API_KEY="hosted-test-key", HOTEL_MODEL_BASE_URL="https://models.example.com/v1/")
     @patch("model_providers.extraction._post_json")

@@ -15,3 +15,5 @@ The configured model helps interpret free-form dates and guest counts the built-
 1. Start [Ollama](https://ollama.com/) on a machine reachable from Django and download a small multilingual model, such as `ollama pull qwen3:1.7b`.
 2. Set `HOTEL_OLLAMA_URL` in `.env` to the Ollama server's base URL. The default `http://host.docker.internal:11434` points to the host from Docker Desktop. Recreate the web container after changing the URL.
 3. Select **Self-hosted Ollama** in Django admin and enter `qwen3:1.7b` or the tag of an installed model. Model changes in admin apply to the next message. [Ollama Chat API](https://docs.ollama.com/api/chat) · [Qwen3 model](https://ollama.com/library/qwen3:1.7b)
+
+On a CPU-only host, load the selected model with `ollama run <model>` before trying it in chat. The alpha also verified guest-count extraction in both languages with the smaller `qwen3:0.6b`. If warmed-up requests still time out, raise `HOTEL_OLLAMA_TIMEOUT` in `.env` and recreate the web container. The default is 30 seconds and the maximum is 120. The chat still accepts the date and guest formats in its prompts when the model is unavailable.
