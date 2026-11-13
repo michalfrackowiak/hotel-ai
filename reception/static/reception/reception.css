@@ -1,0 +1,427 @@
+/* Fontsource 5.3.0, with licenses in fonts/. */
+@font-face {
+    font-family: "DM Sans";
+    src: url("fonts/dm-sans-latin-ext-wght-normal.woff2") format("woff2");
+    font-weight: 100 1000;
+    font-display: swap;
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+    font-family: "DM Sans";
+    src: url("fonts/dm-sans-latin-wght-normal.woff2") format("woff2");
+    font-weight: 100 1000;
+    font-display: swap;
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: "Instrument Serif";
+    src: url("fonts/instrument-serif-latin-ext-400-normal.woff2") format("woff2");
+    font-display: swap;
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+    font-family: "Instrument Serif";
+    src: url("fonts/instrument-serif-latin-400-normal.woff2") format("woff2");
+    font-display: swap;
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+    --canvas: #f2f1e9;
+    --paper: #fffefa;
+    --ink: #192b21;
+    --muted: #4d5c50;
+    --accent: #254d38;
+    --accent-hover: #193a2a;
+    --assistant: #f1f2ec;
+    --guest: #e0ebdf;
+    --line: #dce2d8;
+    --field-border: #a8b2a6;
+    --content-width: 1140px;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(ellipse at top left, #e8ece0 0%, var(--canvas) 60%);
+    color: var(--ink);
+    font-family: "DM Sans", system-ui, sans-serif;
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}
+
+button, input {
+    color: inherit;
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+button:disabled, input:disabled {
+    cursor: default;
+    opacity: .58;
+}
+
+.site-header {
+    border-bottom: 1px solid #d6ddd0;
+}
+
+.site-bar,
+.booking-layout {
+    width: min(var(--content-width), calc(100% - 64px));
+    margin-inline: auto;
+}
+
+.site-bar {
+    min-height: 78px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+
+.wordmark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.brand-mark {
+    display: grid;
+    width: 29px;
+    height: 29px;
+    place-items: end center;
+    border-radius: 7px;
+    background: var(--accent);
+}
+
+.brand-mark::after {
+    content: "";
+    width: 13px;
+    height: 20px;
+    border: 2px solid #e2eddb;
+    border-bottom: 0;
+    border-radius: 12px 12px 0 0;
+}
+
+.languages {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid #d6ddd0;
+    border-radius: 8px;
+}
+
+.languages a {
+    padding: 6px 12px;
+    border-radius: 5px;
+    color: var(--muted);
+    font-size: .875rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.languages a[aria-current] {
+    background: var(--accent);
+    color: white;
+}
+
+.languages a:not([aria-current]):hover {
+    background: #e1e6db;
+    color: var(--ink);
+}
+
+.booking-layout {
+    display: grid;
+    grid-template-columns: minmax(230px, .8fr) minmax(0, 1.55fr);
+    align-items: start;
+    gap: clamp(32px, 5vw, 74px);
+    padding-block: clamp(44px, 8vh, 90px) 44px;
+}
+
+.intro {
+    padding-top: 22px;
+}
+
+.intro h1 {
+    margin: 0 0 20px;
+    font: 400 clamp(3.6rem, 6.3vw, 5.5rem)/.95 "Instrument Serif", Georgia, serif;
+    letter-spacing: -.03em;
+    text-wrap: balance;
+}
+
+.intro p {
+    max-width: 32ch;
+    margin: 0;
+    color: var(--muted);
+    font-size: clamp(1rem, 1.4vw, 1.125rem);
+    line-height: 1.65;
+}
+
+.chat-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 490px;
+    height: min(680px, calc(100dvh - 194px));
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background: var(--paper);
+    box-shadow: 0 18px 45px #192b2112;
+}
+
+.chat-header,
+.chat-footer {
+    flex: none;
+    padding: 16px 22px;
+}
+
+.chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--line);
+}
+
+.chat-heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.chat-heading h2 {
+    margin: 0;
+    font-size: 1.02rem;
+    font-weight: 700;
+}
+
+.reception-mark {
+    display: grid;
+    flex: none;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border-radius: 12px;
+    background: var(--guest);
+}
+
+.reception-mark::after {
+    content: "";
+    width: 18px;
+    height: 15px;
+    border: 2px solid var(--accent);
+    border-radius: 11px 11px 3px 3px;
+}
+
+.quiet-button,
+.confirm-button,
+.send-button {
+    min-height: 42px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: .875rem;
+    font-weight: 700;
+}
+
+.quiet-button {
+    background: transparent;
+    color: var(--accent);
+}
+
+.quiet-button:hover:enabled {
+    background: var(--assistant);
+}
+
+.confirm-button {
+    border-color: var(--accent);
+    background: var(--guest);
+    color: var(--accent);
+}
+
+.confirm-button:hover:enabled {
+    background: #cfdccc;
+}
+
+.send-button {
+    min-height: 48px;
+    padding-inline: 17px;
+    background: var(--accent);
+    color: white;
+    white-space: nowrap;
+}
+
+.send-button:hover:enabled {
+    background: var(--accent-hover);
+}
+
+.chat-log {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+}
+
+.chat-log:focus-visible {
+    outline-offset: -3px;
+}
+
+.messages {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 0;
+    padding: 22px;
+    list-style: none;
+}
+
+.message {
+    max-width: min(88%, 60ch);
+    padding: 11px 15px;
+    border-radius: 14px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.message p {
+    margin: 0;
+}
+
+.message--reception {
+    border-bottom-left-radius: 4px;
+    background: var(--assistant);
+}
+
+.message--guest {
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+    background: var(--guest);
+}
+
+.message .booking-reference {
+    margin-top: 8px;
+    font-weight: 650;
+}
+
+.chat-footer {
+    border-top: 1px solid var(--line);
+}
+
+.chat-feedback,
+.confirmation-actions,
+.chat-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.chat-feedback p {
+    margin: 0;
+    color: var(--muted);
+    font-size: .875rem;
+}
+
+.chat-feedback p:not(:empty),
+.confirmation-actions {
+    margin-bottom: 9px;
+}
+
+.confirmation-actions {
+    flex-wrap: wrap;
+}
+
+.chat-form input[type="text"] {
+    flex: 1;
+    width: 0;
+    min-width: 0;
+    min-height: 48px;
+    padding: 10px 12px;
+    border: 1px solid var(--field-border);
+    border-radius: 8px;
+    background: var(--paper);
+}
+
+.chat-form input::placeholder {
+    color: var(--muted);
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+    .site-bar,
+    .booking-layout {
+        width: calc(100% - 32px);
+    }
+
+    .site-bar {
+        min-height: 64px;
+    }
+
+    .booking-layout {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 20px;
+        padding-block: 28px 24px;
+    }
+
+    .intro {
+        padding-top: 0;
+    }
+
+    .intro h1 {
+        margin-bottom: 10px;
+        font-size: clamp(2.8rem, 8vw, 4rem);
+        text-wrap: unset;
+    }
+
+    .intro p {
+        max-width: 45ch;
+        font-size: .95rem;
+    }
+
+    .chat-panel {
+        min-height: 400px;
+        height: min(650px, calc(100dvh - 265px));
+        border-radius: 14px;
+    }
+
+    .chat-header,
+    .chat-footer,
+    .messages {
+        padding: 12px;
+    }
+
+    .chat-feedback {
+        flex-wrap: wrap;
+    }
+}
