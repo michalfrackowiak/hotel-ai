@@ -1,0 +1,20 @@
+services:
+  calendar-sync:
+    build: .
+    command: ["python", "manage.py", "sync_room_calendars", "--watch"]
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      DJANGO_DEBUG: "${DJANGO_DEBUG:-1}"
+      DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:-}"
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/google-calendar
+    volumes:
+      - hotel-data:/app/data
+    secrets:
+      - google-calendar
+
+secrets:
+  google-calendar:
+    file: ./secrets/google-calendar.json
