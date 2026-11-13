@@ -66,6 +66,20 @@ body {
     outline-offset: 3px;
 }
 
+.voice-controls {
+    margin-top: 24px;
+}
+
+#voice-status {
+    margin: 8px 0 0;
+    color: var(--muted);
+    font-size: .875rem;
+}
+
+#voice-status:empty {
+    display: none;
+}
+
 button, input {
     color: inherit;
     font: inherit;

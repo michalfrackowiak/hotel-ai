@@ -40,6 +40,7 @@
     let recognition = null;
     let speech = null;
     let stage = null;
+    let lastReply = null;
 
     function pauseAudio() {
         const current = recognition;
@@ -54,7 +55,7 @@
     function stop(message) {
         active = false;
         pauseAudio();
-        button.disabled = stage === "completed";
+        button.disabled = input.disabled || stage === "completed";
         button.textContent = copy.start;
         button.setAttribute("aria-pressed", "false");
         status.textContent = message;
@@ -62,9 +63,9 @@
 
     function transcribedMessage(text) {
         if (stage !== "email") return text;
-        const normalized = text.toLowerCase()
-            .replace(/\s+(?:at|małpa)\s+/gu, "@")
-            .replace(/\s+(?:dot|kropka)\s+/gu, ".");
+        const normalized = text
+            .replace(/\s+(?:at|małpa)\s+/giu, "@")
+            .replace(/\s+(?:dot|kropka)\s+/giu, ".");
         return normalized.includes("@") ? normalized.replace(/\s/g, "") : text;
     }
 
@@ -134,33 +135,34 @@
     button.addEventListener("click", () => {
         if (active) {
             stop(copy.finished);
-        } else if (!input.disabled && stage !== "completed") {
+        } else if (!input.disabled && lastReply && stage !== "completed") {
             active = true;
             button.textContent = copy.stop;
             button.setAttribute("aria-pressed", "true");
-            listen();
+            speak(lastReply);
         }
     });
-    function waitForReply() {
-        if (!active) return;
+    form.addEventListener("reception:request", (event) => {
+        if (!active || event.detail.reset) {
+            if (active) stop(copy.finished);
+            button.disabled = true;
+            return;
+        }
         pauseAudio();
         status.textContent = copy.waiting;
-    }
-    form.addEventListener("submit", waitForReply, { capture: true });
-    document.getElementById("chat-confirmation").addEventListener("click", waitForReply, { capture: true });
-    document.getElementById("chat-reset").addEventListener("click", () => {
-        if (active) stop(copy.finished);
     });
     form.addEventListener("reception:reply", (event) => {
         stage = event.detail.stage;
+        lastReply = event.detail.reply;
         button.disabled = !active && stage === "completed";
         if (active) {
             pauseAudio();
-            speak(event.detail.reply);
+            speak(lastReply);
         }
     });
     form.addEventListener("reception:error", () => {
         if (active) stop(copy.error);
+        button.disabled = true;
     });
     document.addEventListener("visibilitychange", () => {
         if (document.hidden && active) stop(copy.finished);

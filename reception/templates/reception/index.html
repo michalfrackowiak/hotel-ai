@@ -8,6 +8,7 @@
     <title>{% if language == "pl" %}Rezerwacja pokoju{% else %}Book a room{% endif %} · Hotel-ai</title>
     <link rel="stylesheet" href="{% static 'reception/reception.css' %}">
     <script src="{% static 'reception/chat.js' %}" defer></script>
+    <script src="{% static 'reception/voice.js' %}" defer></script>
 </head>
 <body>
     <header class="site-header">
@@ -23,6 +24,10 @@
         <section class="intro" aria-labelledby="booking-title">
             <h1 id="booking-title">{% if language == "pl" %}Zarezerwuj pokój{% else %}Book a room{% endif %}</h1>
             <p>{% if language == "pl" %}Podaj terminy i liczbę gości. Recepcja sprawdzi dostępność i poda cenę przed potwierdzeniem rezerwacji.{% else %}Share your dates and guest count. Reception will check availability and quote the price before you confirm.{% endif %}</p>
+            <div class="voice-controls">
+                <button id="start-voice" class="confirm-button" type="button" aria-pressed="false" aria-describedby="voice-status" disabled>{% if language == "pl" %}Włącz rozmowę głosową{% else %}Start voice booking{% endif %}</button>
+                <p id="voice-status" role="status"></p>
+            </div>
         </section>
         <section class="chat-panel" aria-labelledby="reception-title">
             <header class="chat-header">
