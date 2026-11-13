@@ -3,12 +3,29 @@ from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
+from django.urls import reverse
+from django.utils import timezone
 
 from .extraction import extract_stay_value
 from .models import AgentConfiguration
 
 
 class ModelProviderTests(TestCase):
+    @patch("reception.views.extract_stay_value")
+    def test_chat_uses_provider_only_for_unparsed_stay_inputs(self, extract):
+        extract.return_value = timezone.localdate()
+        endpoint = reverse("reception-message")
+        started = self.client.post(endpoint, {"language": "en", "start": True}, content_type="application/json").json()
+        next_turn = self.client.post(endpoint, {
+            "language": "en", "revision": started["revision"], "message": "I want to arrive today, please.",
+        }, content_type="application/json").json()
+        self.assertEqual(next_turn["stage"], "check_out")
+        extract.assert_called_once_with("check_in", "I want to arrive today, please.", "en")
+        self.client.post(endpoint, {
+            "language": "en", "revision": next_turn["revision"], "message": "tomorrow",
+        }, content_type="application/json")
+        extract.assert_called_once()
+
     @patch("model_providers.extraction._post_json")
     def test_demo_and_contact_fields_stay_inside_django(self, post):
         self.assertIsNone(extract_stay_value("guests", "two", "en"))

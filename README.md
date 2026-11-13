@@ -13,6 +13,8 @@ docker compose exec web python manage.py seed_demo
 
 Open [Hotel-ai reception](http://127.0.0.1:8080/) and choose **English** or **Polski**. The chat asks for dates, guest count, and contact details, then shows the room and total before asking you to confirm. A confirmed stay appears in Django admin with its booking reference.
 
+The chat works with the built-in parser by default. To interpret more free-form dates and guest counts, [configure a hosted model or Ollama](docs/model-providers.md) in Django admin.
+
 Open [Django admin](http://127.0.0.1:8080/admin/) to manage the room inventory and nightly prices and inspect confirmed bookings. The seed creates `ROOM-2` for up to two guests at PLN 120.00 per night and `ROOM-6` for up to six guests at PLN 200.00 per night. Re-running the seed preserves existing prices and administrator credentials. A Docker volume persists the SQLite database.
 
 See the [booking API reference](docs/booking-api.md) for availability and confirmation requests. Compose runs the Django development server on `127.0.0.1`, with `DJANGO_DEBUG=1` by default to serve the admin assets. Set `HOTEL_PORT` in `.env` if port 8080 is in use.
