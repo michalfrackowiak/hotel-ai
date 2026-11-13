@@ -20,7 +20,7 @@
             connectionError: "The connection was interrupted. Reconnect to continue.",
             reload: "Refresh this page to reconnect to reception.",
             updated: "The conversation was updated. Follow the latest reply.",
-            languageChanged: "The conversation language changed. Reconnect to continue in English.",
+            languageChanged: "The conversation language changed. Start over to continue in English.",
             reference: "Booking reference",
         },
         pl: {
@@ -31,7 +31,7 @@
             connectionError: "Połączenie zostało przerwane. Połącz się ponownie, aby kontynuować.",
             reload: "Odśwież stronę, aby połączyć się ponownie z recepcją.",
             updated: "Rozmowa została zaktualizowana. Postępuj zgodnie z najnowszą odpowiedzią.",
-            languageChanged: "Język rozmowy został zmieniony. Połącz się ponownie, aby kontynuować po polsku.",
+            languageChanged: "Język rozmowy został zmieniony. Wybierz „Zacznij od nowa”, aby kontynuować po polsku.",
             reference: "Numer rezerwacji",
         },
     }[language];
@@ -111,7 +111,6 @@
             }
             if (stale && result.language !== language) {
                 failure = labels.languageChanged;
-                retryButton.hidden = false;
                 return;
             }
 
