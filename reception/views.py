@@ -8,6 +8,8 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST, require_safe
 
+from model_providers.extraction import extract_stay_value
+
 from .conversation import advance, new_conversation
 from .models import Conversation
 from .parsing import parse_stay_input
@@ -73,6 +75,8 @@ def message(request):
         preview = Conversation.objects.filter(session_id=request.session.session_key).values_list("state", flat=True).first()
         if preview and preview["revision"] == revision and preview["language"] == language and preview["stage"] in STAY_STAGES:
             parsed = parse_stay_input(preview["stage"], text, language)
+            if parsed is None:
+                parsed = extract_stay_value(preview["stage"], text, language)
 
     # Recheck the revision under SQLite's write lock after parsing. Booking and
     # conversation updates commit together, including a retried confirmation.
