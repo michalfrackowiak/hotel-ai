@@ -1,5 +1,6 @@
 from urllib.parse import urlsplit
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -13,11 +14,6 @@ class AgentConfiguration(models.Model):
     id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
     provider = models.CharField(max_length=12, choices=Provider.choices, default=Provider.DEMO)
     model = models.CharField(max_length=120, blank=True, help_text="Model name from the selected provider.")
-    hosted_base_url = models.URLField(
-        max_length=250,
-        blank=True,
-        help_text="HTTPS API base URL including the API version, such as https://api.openai.com/v1.",
-    )
 
     class Meta:
         constraints = [models.CheckConstraint(condition=models.Q(id=1), name="single_agent_configuration")]
@@ -29,8 +25,8 @@ class AgentConfiguration(models.Model):
             return
         if not self.model.strip():
             raise ValidationError({"model": "Enter the model name for this provider."})
-        if self.provider == self.Provider.HOSTED and not valid_endpoint(self.hosted_base_url, schemes={"https"}):
-            raise ValidationError({"hosted_base_url": "Enter an HTTPS API base URL without credentials or query parameters."})
+        if self.provider == self.Provider.HOSTED and not valid_endpoint(settings.HOTEL_MODEL_BASE_URL, schemes={"https"}):
+            raise ValidationError("Set HOTEL_MODEL_BASE_URL to an HTTPS API base URL without credentials or query parameters.")
 
     def __str__(self):
         return self.get_provider_display()

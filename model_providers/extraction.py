@@ -42,7 +42,7 @@ def _request_value(config, messages):
         payload.update(format="json", think=False, options={"temperature": 0, "num_predict": 80})
         return _post_json(f"{url}/api/chat", payload)["message"]["content"]
 
-    url = config.hosted_base_url.rstrip("/")
+    url = settings.HOTEL_MODEL_BASE_URL.rstrip("/")
     key = settings.HOTEL_MODEL_API_KEY
     if not key or not valid_endpoint(url, schemes={"https"}):
         return None

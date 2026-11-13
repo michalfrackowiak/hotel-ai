@@ -6,9 +6,9 @@ The configured model helps interpret free-form dates and guest counts the built-
 
 ## Hosted OpenAI-compatible API
 
-1. Set `HOTEL_MODEL_API_KEY` in the ignored `.env` file and run `docker compose up -d --force-recreate web` to load it.
-2. Select **Hosted OpenAI-compatible API**. Enter the HTTPS base URL, including the API version when required, and the model ID. For OpenAI use `https://api.openai.com/v1` and a model available to your project that supports JSON mode in Chat Completions.
-3. Open a new booking chat and try a date written in words. If the provider is unavailable, use the date format in the prompt to continue. [Chat Completions API](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)
+1. Set `HOTEL_MODEL_API_KEY` and `HOTEL_MODEL_BASE_URL` together in the ignored `.env` file, then run `docker compose up -d --force-recreate web`. Use the provider's HTTPS API base URL including its version when required. OpenAI uses `https://api.openai.com/v1`.
+2. Select **Hosted OpenAI-compatible API** in Django admin and enter the model ID. Choose a model that supports JSON mode in Chat Completions.
+3. Open a new booking chat and try “I’d like to check in tomorrow, please.” If the provider is unavailable, use the date format in the prompt to continue. [Chat Completions API](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)
 
 ## Self-hosted Ollama
 

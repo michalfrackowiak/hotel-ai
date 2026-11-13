@@ -29,12 +29,10 @@ class ModelProviderTests(TestCase):
         self.assertEqual(payload["messages"][-1]["content"], "dwie osoby")
         self.assertEqual(post.call_args.kwargs, {})
 
-    @override_settings(HOTEL_MODEL_API_KEY="hosted-test-key")
+    @override_settings(HOTEL_MODEL_API_KEY="hosted-test-key", HOTEL_MODEL_BASE_URL="https://models.example.com/v1/")
     @patch("model_providers.extraction._post_json")
     def test_selecting_hosted_uses_chat_completions_with_bearer_credentials(self, post):
-        AgentConfiguration.objects.create(
-            provider="hosted", model="test-hosted-model", hosted_base_url="https://models.example.com/v1/"
-        )
+        AgentConfiguration.objects.create(provider="hosted", model="test-hosted-model")
         post.return_value = {"choices": [{"message": {"content": '{"value": "2027-06-17"}'}}]}
         self.assertEqual(extract_stay_value("check_in", "June seventeenth, 2027", "en"), date(2027, 6, 17))
         self.assertEqual(post.call_args.args[0], "https://models.example.com/v1/chat/completions")
@@ -43,9 +41,7 @@ class ModelProviderTests(TestCase):
     @override_settings(HOTEL_MODEL_API_KEY="")
     @patch("model_providers.extraction._post_json")
     def test_missing_key_and_malformed_model_output_do_not_advance_the_chat(self, post):
-        config = AgentConfiguration.objects.create(
-            provider="hosted", model="test-model", hosted_base_url="https://models.example.com/v1"
-        )
+        config = AgentConfiguration.objects.create(provider="hosted", model="test-model")
         self.assertIsNone(extract_stay_value("guests", "two", "en"))
         post.assert_not_called()
         config.provider = "ollama"
@@ -57,11 +53,12 @@ class ModelProviderTests(TestCase):
             self.assertIsNone(extract_stay_value("guests", "two", "en"))
 
     def test_hosted_configuration_requires_model_and_https_url(self):
-        config = AgentConfiguration(provider="hosted", hosted_base_url="http://models.example.com/v1")
+        config = AgentConfiguration(provider="hosted")
         with self.assertRaises(ValidationError):
             config.full_clean()
         config.model = "test-model"
-        with self.assertRaises(ValidationError):
+        with self.settings(HOTEL_MODEL_BASE_URL="http://models.example.com/v1"):
+            with self.assertRaises(ValidationError):
+                config.full_clean()
+        with self.settings(HOTEL_MODEL_BASE_URL="https://models.example.com/v1"):
             config.full_clean()
-        config.hosted_base_url = "https://models.example.com/v1"
-        config.full_clean()

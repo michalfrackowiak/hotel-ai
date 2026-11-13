@@ -17,7 +17,6 @@ class Migration(migrations.Migration):
                 ('id', models.PositiveSmallIntegerField(default=1, editable=False, primary_key=True, serialize=False)),
                 ('provider', models.CharField(choices=[('demo', 'Built-in demo'), ('hosted', 'Hosted OpenAI-compatible API'), ('ollama', 'Self-hosted Ollama')], default='demo', max_length=12)),
                 ('model', models.CharField(blank=True, help_text='Model name from the selected provider.', max_length=120)),
-                ('hosted_base_url', models.URLField(blank=True, help_text='HTTPS API base URL including the API version, such as https://api.openai.com/v1.', max_length=250)),
             ],
             options={
                 'verbose_name': 'reception agent configuration',
