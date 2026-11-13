@@ -17,5 +17,5 @@ Use the local `.env` settings in the [README](../README.md) to enable demo admin
 
 - The Docker stack was checked from a fresh checkout with a new SQLite volume. Django tests cover the booking API, bilingual chat, model provider contracts, and Google Calendar publication. CI also checks that the two reception routes and their JavaScript load after startup.
 - Chromium completed English and Polish reservations with simulated browser speech, including permission denial and typed fallback. Use [browser voice setup](browser-voice.md) to verify a real microphone and playback on the intended device.
-- Hosted API behavior was checked against fixtures. An optional real endpoint check requires its key in `.env`. The built-in parser works without a model endpoint. See [provider setup](model-providers.md).
+- Django extracted free-form English and Polish guest counts using a warmed `qwen3:0.6b` model on a local Ollama server. Hosted API behavior was checked against fixtures. A live hosted endpoint check requires its key in `.env`. The built-in parser works without a model endpoint. See [provider setup](model-providers.md).
 - Calendar publication was tested with simulated Google responses. Follow the [live calendar check](room-calendars.md#verify-a-live-calendar) after configuring a shared test calendar and service-account credentials.

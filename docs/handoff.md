@@ -2,7 +2,7 @@
 
 ## Latest milestone
 
-Alpha verification, PR [#7](https://github.com/michalfrackowiak/hotel-ai/pull/7). A fresh Compose checkout verified local startup, dependency and migration checks, automated tests, and the reception, booking API, and admin paths. CI checks both language routes and chat and voice assets. See [alpha verification](alpha-verification.md) for the commands and the manual integration checks.
+Alpha verification, PR [#7](https://github.com/michalfrackowiak/hotel-ai/pull/7). A fresh Compose checkout verified local startup, dependency and migration checks, all 31 tests, and the reception, booking API, and admin paths. CI checks both language routes and chat and voice assets. A warmed local Ollama model extracted guest counts in both languages. See [alpha verification](alpha-verification.md) for the commands and the manual integration checks.
 
 ## Previous milestones
 
