@@ -2,9 +2,11 @@
 
 ## Latest milestone
 
-Room calendars, PR [#6](https://github.com/michalfrackowiak/hotel-ai/pull/6). A room can publish confirmed stays as all-day busy events without guest details. Django remains the source of availability. The optional worker uses a stable event ID and a durable retry record. An independent eight-worker SQLite probe produced one Google API attempt with simulated credentials and transport. A live Google Calendar test is pending. See [calendar setup](room-calendars.md).
+Alpha verification, PR [#7](https://github.com/michalfrackowiak/hotel-ai/pull/7). A fresh Compose checkout verified local startup, dependency and migration checks, automated tests, and the reception, booking API, and admin paths. CI checks both language routes and chat and voice assets. See [alpha verification](alpha-verification.md) for the commands and the manual integration checks.
 
 ## Previous milestones
+
+Room calendars, PR [#6](https://github.com/michalfrackowiak/hotel-ai/pull/6). A room can publish confirmed stays as all-day busy events without guest details. Django remains the source of availability. The optional worker uses a stable event ID and a durable retry record. An independent eight-worker SQLite probe produced one Google API attempt with simulated credentials and transport. A live Google Calendar test is pending. See [calendar setup](room-calendars.md).
 
 Browser voice, PR [#5](https://github.com/michalfrackowiak/hotel-ai/pull/5). The guest can start a voice session in English or Polish. Voice reads the current prompt and submits microphone transcripts through the same chat flow. Chromium with simulated speech completed real reservations in both languages and exercised microphone denial, reset, and text fallback. A physical microphone and speaker still need a manual check. See [browser voice setup](browser-voice.md).
 
@@ -22,4 +24,4 @@ Development tooling shipped in PR [#1](https://github.com/michalfrackowiak/hotel
 
 ## Next action
 
-Branch from `main` for alpha verification. Start from a fresh Git checkout and a disposable database, and verify reception, booking API, and admin. Record the remaining manual integration checks.
+Run the manual integration checks in [alpha verification](alpha-verification.md) when the target microphone, provider credentials, or shared calendar are available. The dedicated mobile number and external booking-platform integrations are later milestones in the roadmap.

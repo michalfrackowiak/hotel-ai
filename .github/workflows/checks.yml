@@ -26,11 +26,15 @@ jobs:
             python manage.py makemigrations --check --dry-run
             python manage.py test
           '
-      - name: Smoke-test startup and admin static files
+      - name: Smoke-test startup, reception, and admin assets
         run: |
           docker compose up --wait --wait-timeout 60
           docker compose exec -T web python manage.py seed_demo
           curl --fail --silent --show-error http://127.0.0.1:8080/healthz/
+          curl --fail --silent --show-error http://127.0.0.1:8080/ | grep -F 'id="start-voice"'
+          curl --fail --silent --show-error 'http://127.0.0.1:8080/?lang=pl' | grep -F 'Włącz rozmowę głosową'
+          curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8080/static/reception/chat.js
+          curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8080/static/reception/voice.js
           curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8080/admin/login/
           curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8080/static/admin/css/base.css
       - name: Print Compose logs after a failure

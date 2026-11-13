@@ -10,7 +10,7 @@ Each milestone has a development branch, a pull request to `main`, and independe
 - [x] Model configuration. Switch the conversation model from Django admin. Support a hosted OpenAI-compatible provider with an API key and a small self-hosted model through Ollama. Run the local demo without a paid provider.
 - [x] Browser voice. Allow guests to start a microphone session on the Django page, use English or Polish, and hear responses through the same conversation flow. Test both languages, microphone errors, and the booking confirmation path.
 - [x] Room calendars. Link each room to its own Google Calendar in Django admin and publish bookings to the configured room calendar. Automated checks cover date boundaries and safe retries. Live publication remains pending a shared test calendar and service-account credentials.
-- [ ] Alpha verification. Start the Docker stack from a fresh checkout. Verify the complete guest and admin paths and document local setup and provider configuration.
+- [x] Alpha verification. Start the Docker stack from a fresh checkout. Verify guest and admin paths and document local setup and provider configuration. Physical audio and credentialed hosted provider and Calendar checks are documented separately.
 
 ## Later releases
 
