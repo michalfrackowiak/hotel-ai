@@ -86,6 +86,7 @@
         retryButton.hidden = true;
         status.textContent = payload.message ? labels.waiting : labels.connecting;
         updateControls();
+        form.dispatchEvent(new CustomEvent("reception:request", { detail: { reset: payload.reset === true } }));
 
         try {
             const response = await fetch(form.action, {
