@@ -68,3 +68,16 @@ class Booking(models.Model):
 
     def __str__(self):
         return str(self.reference)
+
+
+class CalendarPublication(models.Model):
+    booking = models.OneToOneField(Booking, on_delete=models.PROTECT, related_name="calendar_publication")
+    calendar_id = models.CharField(max_length=255)
+    event_may_exist = models.BooleanField(default=False)
+    attempts = models.PositiveIntegerField(default=0)
+    next_attempt_at = models.DateTimeField()
+    published_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return str(self.booking)

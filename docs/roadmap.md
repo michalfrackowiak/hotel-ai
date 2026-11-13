@@ -9,7 +9,7 @@ Each milestone has a development branch, a pull request to `main`, and independe
 - [x] Bilingual booking conversation. Offer a browser chat in English and Polish that gathers stay details and contact information, quotes an available room, and requires explicit confirmation before writing a booking. Verify successful and unavailable stays in both languages.
 - [x] Model configuration. Switch the conversation model from Django admin. Support a hosted OpenAI-compatible provider with an API key and a small self-hosted model through Ollama. Run the local demo without a paid provider.
 - [x] Browser voice. Allow guests to start a microphone session on the Django page, use English or Polish, and hear responses through the same conversation flow. Test both languages, microphone errors, and the booking confirmation path.
-- [ ] Room calendars. Link each room to its own Google Calendar in Django admin and publish bookings to the configured room calendar. Verify date boundaries and safe retries, then exercise a real test calendar when credentials are available.
+- [x] Room calendars. Link each room to its own Google Calendar in Django admin and publish bookings to the configured room calendar. Automated checks cover date boundaries and safe retries. Live publication remains pending a shared test calendar and service-account credentials.
 - [ ] Alpha verification. Start the Docker stack from a fresh checkout. Verify the complete guest and admin paths and document local setup and provider configuration.
 
 ## Later releases

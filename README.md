@@ -17,6 +17,8 @@ Click **Start voice booking** to talk to the same reception and hear its replies
 
 The chat works with the built-in parser by default. To interpret more free-form dates and guest counts, [configure a hosted model or Ollama](docs/model-providers.md) in Django admin.
 
+To publish reservations to a dedicated Google Calendar for each room, follow the [room calendar setup](docs/room-calendars.md).
+
 Open [Django admin](http://127.0.0.1:8080/admin/) to manage the room inventory and nightly prices and inspect confirmed bookings. The seed creates `ROOM-2` for up to two guests at PLN 120.00 per night and `ROOM-6` for up to six guests at PLN 200.00 per night. Re-running the seed preserves existing prices and administrator credentials. A Docker volume persists the SQLite database.
 
 See the [booking API reference](docs/booking-api.md) for availability and confirmation requests. Compose runs the Django development server on `127.0.0.1`, with `DJANGO_DEBUG=1` by default to serve the admin assets. Set `HOTEL_PORT` in `.env` if port 8080 is in use.

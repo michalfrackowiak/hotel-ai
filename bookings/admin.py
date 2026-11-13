@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Booking, Client, Price, Room
+from .models import Booking, CalendarPublication, Client, Price, Room
 
 
 @admin.register(Room)
@@ -38,3 +38,10 @@ class BookingAdmin(ViewOnlyAdmin):
     list_select_related = ("room", "client")
     search_fields = ("reference", "room__code", "client__name", "client__email")
     readonly_fields = ("reference", "created_at", "total_price")
+
+
+@admin.register(CalendarPublication)
+class CalendarPublicationAdmin(ViewOnlyAdmin):
+    list_display = ("booking", "calendar_id", "published_at", "attempts", "last_error")
+    list_select_related = ("booking",)
+    search_fields = ("booking__reference", "calendar_id")
