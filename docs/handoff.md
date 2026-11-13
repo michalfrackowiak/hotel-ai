@@ -2,9 +2,11 @@
 
 ## Latest milestone
 
-Browser voice, PR [#5](https://github.com/michalfrackowiak/hotel-ai/pull/5). The guest can start a voice session in English or Polish. Voice reads the current prompt and submits microphone transcripts through the same chat flow. Chromium with simulated speech completed real reservations in both languages and exercised microphone denial, reset, and text fallback. A physical microphone and speaker still need a manual check. See [browser voice setup](browser-voice.md).
+Room calendars, PR [#6](https://github.com/michalfrackowiak/hotel-ai/pull/6). A room can publish confirmed stays as all-day busy events without guest details. Django remains the source of availability. The optional worker uses a stable event ID and a durable retry record. An independent eight-worker SQLite probe produced one Google API attempt with simulated credentials and transport. A live Google Calendar test is pending. See [calendar setup](room-calendars.md).
 
 ## Previous milestones
+
+Browser voice, PR [#5](https://github.com/michalfrackowiak/hotel-ai/pull/5). The guest can start a voice session in English or Polish. Voice reads the current prompt and submits microphone transcripts through the same chat flow. Chromium with simulated speech completed real reservations in both languages and exercised microphone denial, reset, and text fallback. A physical microphone and speaker still need a manual check. See [browser voice setup](browser-voice.md).
 
 Model configuration, PR [#4](https://github.com/michalfrackowiak/hotel-ai/pull/4). Django admin switches among the built-in parser, a hosted OpenAI-compatible model, and Ollama. The selected provider interprets date and guest-count messages the local parser cannot read. The hosted URL and API key live together in deployment configuration. See [provider setup](model-providers.md).
 
@@ -20,4 +22,4 @@ Development tooling shipped in PR [#1](https://github.com/michalfrackowiak/hotel
 
 ## Next action
 
-Branch from `main` for room calendar publishing. Keep Django as the source of availability and verify Google Calendar publication with a shared test calendar when credentials are available.
+Branch from `main` for alpha verification. Start from a fresh Git checkout and a disposable database, and verify reception, booking API, and admin. Record the remaining manual integration checks.
