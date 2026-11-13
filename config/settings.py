@@ -85,3 +85,9 @@ BOOKING_API_KEY = os.environ.get("BOOKING_API_KEY", "")
 HOTEL_MODEL_API_KEY = os.environ.get("HOTEL_MODEL_API_KEY", "")
 HOTEL_MODEL_BASE_URL = os.environ.get("HOTEL_MODEL_BASE_URL", "https://api.openai.com/v1")
 HOTEL_OLLAMA_URL = os.environ.get("HOTEL_OLLAMA_URL", "http://host.docker.internal:11434")
+try:
+    HOTEL_OLLAMA_TIMEOUT = int(os.environ.get("HOTEL_OLLAMA_TIMEOUT", "30"))
+except ValueError as error:
+    raise ImproperlyConfigured("HOTEL_OLLAMA_TIMEOUT must be an integer number of seconds.") from error
+if not 1 <= HOTEL_OLLAMA_TIMEOUT <= 120:
+    raise ImproperlyConfigured("HOTEL_OLLAMA_TIMEOUT must be between 1 and 120 seconds.")
