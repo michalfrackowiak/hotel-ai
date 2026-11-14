@@ -8,10 +8,10 @@ From the project root, download the pinned public models and start the Compose s
 
 ```sh
 python tts_runtime/download_models.py
-docker compose -f compose.yaml -f compose.zonos.yaml up --build --wait --wait-timeout 180
+docker compose -f compose.yaml -f compose.zonos.yaml up --build --wait --wait-timeout 300
 ```
 
-The first Docker build compiles the pinned upstream CPU server. The sidecar stays on the internal Compose network. Open [Hotel-ai reception](http://127.0.0.1:8080/), choose a language, and click **Start voice booking**. The chat displays the reply while audio is being prepared. The microphone resumes after playback ends.
+The first Docker build compiles the pinned upstream CPU server. Startup can take a few minutes while the model loads. The sidecar is reachable on the Compose network. Open [Hotel-ai reception](http://127.0.0.1:8080/), choose a language, and click **Start voice booking**. The chat displays the reply while audio is being prepared. The microphone resumes after playback ends. Set `HOTEL_ZONOS_TIMEOUT` in `.env` to change how many seconds Django waits for synthesis. The default is 60 seconds.
 
 ```sh
 docker compose -f compose.yaml -f compose.zonos.yaml logs zonos
