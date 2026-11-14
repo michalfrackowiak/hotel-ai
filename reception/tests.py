@@ -93,13 +93,23 @@ class ReceptionTests(TestCase):
 
     @patch("django.utils.timezone.localdate", return_value=date(2027, 12, 30))
     def test_checkout_relative_to_today_after_a_separate_arrival(self, today):
-        for language, arrival, departure, arrival_text, departure_text in (
-            ("en", "tomorrow", "in three days", "2027-12-31", "2028-01-02"),
-            ("pl", "jutro", "za trzy dni", "31.12.2027", "02.01.2028"),
+        for language, arrival, departure, arrival_text, departure_text, question in (
+            (
+                "en", "tomorrow", "in three days", "2027-12-31", "2028-01-02",
+                "How long will you be staying with us, or when is your planned check-out date?",
+            ),
+            (
+                "pl", "jutro", "za trzy dni", "31.12.2027", "02.01.2028",
+                "Jak długo planujesz u nas zostać albo kiedy chcesz się wymeldować?",
+            ),
         ):
             with self.subTest(language=language):
                 current = self.post(language=language, reset=True).json()
                 current = self.turn(current, arrival, "check_out")
+                self.assertIn(question, current["reply"])
+                self.assertIn(departure, current["reply"])
+                current = self.turn(current, arrival, "check_out")
+                self.assertIn(departure, current["reply"])
                 current = self.turn(current, departure, "guests")
                 self.assertIn(arrival_text, current["reply"])
                 self.assertIn(departure_text, current["reply"])

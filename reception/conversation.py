@@ -13,8 +13,11 @@ COPY = {
     "en": {
         "welcome": "Hello! When would you like to check in? You can say tomorrow or give a date.",
         "check_in": "What is your check-in date? Please choose today or a later date.",
-        "ask_check_out": "When will you check out? You can say in three days or give a date.",
-        "check_out": "When will you check out? Please choose a day after check-in.",
+        "ask_check_out": (
+            "How long will you be staying with us, or when is your planned check-out date? "
+            "You can give a date or say when you’ll check out, for example, in three days."
+        ),
+        "check_out": "Please give a checkout date after check-in. For example, you can say in three days.",
         "ask_guests": "Check-in is {check_in} and checkout is {check_out}. How many guests are staying?",
         "guests": "Please enter the number of guests as a positive whole number.",
         "ask_name": "Room {room} is available for {rate} PLN per night, {total} PLN for the stay. What name should I put on the booking?",
@@ -30,8 +33,11 @@ COPY = {
     "pl": {
         "welcome": "Dzień dobry! Kiedy chcesz się zameldować? Możesz powiedzieć jutro lub podać datę.",
         "check_in": "Kiedy chcesz się zameldować? Podaj dzisiejszą lub późniejszą datę.",
-        "ask_check_out": "Kiedy chcesz się wymeldować? Możesz powiedzieć za trzy dni lub podać datę.",
-        "check_out": "Kiedy chcesz się wymeldować? Podaj dzień po dacie zameldowania.",
+        "ask_check_out": (
+            "Jak długo planujesz u nas zostać albo kiedy chcesz się wymeldować? "
+            "Możesz podać datę lub powiedzieć na przykład za trzy dni."
+        ),
+        "check_out": "Podaj datę wymeldowania po zameldowaniu. Możesz na przykład powiedzieć za trzy dni.",
         "ask_guests": "Zameldowanie {check_in}, wymeldowanie {check_out}. Ilu gości będzie nocować?",
         "guests": "Podaj liczbę gości jako dodatnią liczbę całkowitą.",
         "ask_name": "Pokój {room} jest dostępny w cenie {rate} PLN za noc, {total} PLN za cały pobyt. Na kogo mam zapisać rezerwację?",
