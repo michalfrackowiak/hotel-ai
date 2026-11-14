@@ -1,7 +1,9 @@
 import json
+import re
 
+from django.conf import settings
 from django.db import transaction
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.http.request import UnreadablePostError
 from django.shortcuts import render
 from django.views.decorators.cache import never_cache
@@ -13,9 +15,11 @@ from model_providers.extraction import extract_stay_value
 from .conversation import advance, new_conversation
 from .models import Conversation
 from .parsing import parse_stay_input
+from .speech import SpeechUnavailable, synthesize
 
 
 MAX_BODY_BYTES = 4096
+MAX_AUDIO_REQUEST_BYTES = 128
 MAX_MESSAGE_LENGTH = 500
 STAY_STAGES = ("check_in", "check_out", "guests")
 
@@ -26,7 +30,10 @@ STAY_STAGES = ("check_in", "check_out", "guests")
 def index(request):
     language = "pl" if request.GET.get("lang") == "pl" else "en"
     request.session.setdefault("reception", True)
-    return render(request, "reception/index.html", {"language": language})
+    return render(request, "reception/index.html", {
+        "language": language,
+        "piper_enabled": bool(settings.HOTEL_PIPER_URL),
+    })
 
 
 def _result(state, *, stale=False):
@@ -100,3 +107,42 @@ def message(request):
             conversation.state = state
             conversation.save(update_fields=["state"])
         return _result(state)
+
+
+@never_cache
+@require_POST
+def audio(request):
+    if not settings.HOTEL_PIPER_URL:
+        return HttpResponse(status=503)
+    if request.content_type != "application/json":
+        return _invalid(415)
+    try:
+        body = request.read(MAX_AUDIO_REQUEST_BYTES + 1)
+        if len(body) > MAX_AUDIO_REQUEST_BYTES:
+            return _invalid(413)
+        payload = json.loads(body)
+    except (UnreadablePostError, ValueError, RecursionError):
+        return _invalid()
+    if not isinstance(payload, dict) or payload.keys() != {"revision"}:
+        return _invalid()
+    revision = payload["revision"]
+    if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{32}", revision):
+        return _invalid()
+
+    if not request.session.get("reception"):
+        return HttpResponse(status=404)
+    conversation = Conversation.objects.filter(session_id=request.session.session_key)
+    state = conversation.values_list("state", flat=True).first()
+    if state is None:
+        return HttpResponse(status=404)
+    if state["revision"] != revision:
+        return HttpResponse(status=409)
+    try:
+        speech = synthesize(state["reply"], state["language"])
+    except SpeechUnavailable:
+        speech = None
+    if not conversation.filter(state__revision=revision).exists():
+        return HttpResponse(status=409)
+    if speech is None:
+        return HttpResponse(status=503)
+    return HttpResponse(speech, content_type="audio/wav", headers={"X-Content-Type-Options": "nosniff"})

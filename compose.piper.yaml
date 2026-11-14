@@ -1,0 +1,31 @@
+services:
+  web:
+    environment:
+      HOTEL_PIPER_URL: "http://piper:5000"
+    networks:
+      - default
+      - speech
+
+  piper:
+    build: ./piper_runtime
+    cpus: 1.0
+    init: true
+    mem_limit: 1g
+    read_only: true
+    restart: unless-stopped
+    networks:
+      - speech
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz', timeout=2).close()
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+networks:
+  speech:
+    internal: true

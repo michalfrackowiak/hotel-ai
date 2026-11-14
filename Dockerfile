@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && install -d -o hotel -g hotel /app/data
 
 COPY . .
+RUN DJANGO_DEBUG=1 python manage.py collectstatic --noinput
 USER hotel
 EXPOSE 8000
 CMD ["sh", "-ec", "python manage.py migrate --noinput && exec python manage.py runserver 0.0.0.0:8000 --noreload"]

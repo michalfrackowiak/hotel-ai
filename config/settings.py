@@ -36,6 +36,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -80,6 +81,7 @@ TIME_ZONE = "Europe/Warsaw"
 USE_I18N = True
 USE_TZ = True
 STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 BOOKING_API_KEY = os.environ.get("BOOKING_API_KEY", "")
@@ -95,3 +97,10 @@ if not 1 <= HOTEL_OLLAMA_TIMEOUT <= 120:
 
 HOTEL_TELEPHONY_PUBLIC_BASE_URL = os.environ.get("HOTEL_TELEPHONY_PUBLIC_BASE_URL", "").rstrip("/")
 HOTEL_TWILIO_AUTH_TOKEN = os.environ.get("HOTEL_TWILIO_AUTH_TOKEN", "")
+HOTEL_PIPER_URL = os.environ.get("HOTEL_PIPER_URL", "").rstrip("/")
+try:
+    HOTEL_PIPER_TIMEOUT = int(os.environ.get("HOTEL_PIPER_TIMEOUT", "10"))
+except ValueError as error:
+    raise ImproperlyConfigured("HOTEL_PIPER_TIMEOUT must be an integer number of seconds.") from error
+if not 1 <= HOTEL_PIPER_TIMEOUT <= 120:
+    raise ImproperlyConfigured("HOTEL_PIPER_TIMEOUT must be between 1 and 120 seconds.")
