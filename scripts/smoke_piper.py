@@ -1,4 +1,4 @@
-"""Exercise real Piper synthesis through the private Django listener."""
+"""Exercise real Piper synthesis from the configured reception origin."""
 
 import io
 import json
@@ -17,7 +17,7 @@ def check_speech(base_url, language):
     if 'data-audio-url="/reception/audio/"' not in page:
         raise ValueError("Reception did not enable Piper")
     csrf = next(cookie.value for cookie in cookies if cookie.name == "csrftoken")
-    headers = {"Content-Type": "application/json", "X-CSRFToken": csrf}
+    headers = {"Content-Type": "application/json", "X-CSRFToken": csrf, "Origin": base_url}
     start = Request(
         f"{base_url}/reception/message/",
         data=json.dumps({"language": language, "start": True}).encode(),

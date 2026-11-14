@@ -12,6 +12,7 @@ Each milestone has a development branch, a pull request to `main`, and independe
 - [x] Room calendars. Link each room to its own Google Calendar in Django admin and publish bookings to the configured room calendar. Automated checks cover date boundaries and safe retries. Live publication remains pending a shared test calendar and service-account credentials.
 - [x] Alpha verification. Start the Docker stack from a fresh checkout. Verify guest and admin paths and document local setup and provider configuration. Physical audio and credentialed hosted provider and Calendar checks are documented separately.
 - [x] Split deployment and lightweight speech. Deploy Django, SQLite, and Piper on the ARM64 server. Keep browser microphone input and playback on the MacBook. Verify private SSH access, English and Polish WAV generation, and browser voice fallback. See the [server deployment guide](server-deployment.md).
+- [x] Public browser access. Serve the reception through Nginx with HTTP-to-HTTPS redirects and automatic certificate renewal. Verify bilingual Piper replies and private administration routes. See the [server deployment guide](server-deployment.md).
 
 ## Later releases
 

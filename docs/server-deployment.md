@@ -1,4 +1,4 @@
-# Private server deployment
+# Server deployment
 
 The Linux server runs Django, Gunicorn, SQLite, and Piper. It stores room rates, availability, reservations, and configuration in a Docker volume. Django uses its built-in parser for the demo. The MacBook runs the reception in Chrome, captures the microphone, submits recognized text, and plays back the WAV replies. Chrome may send microphone audio to its speech-recognition service. [Speech recognition documentation](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition)
 
@@ -39,4 +39,63 @@ ssh -i ~/.ssh/your-server-key -o ExitOnForwardFailure=yes -N \
   -L 127.0.0.1:8080:127.0.0.1:8080 ubuntu@your-server
 ```
 
-Leave the terminal open and visit [reception](http://127.0.0.1:8080/) or [Django admin](http://127.0.0.1:8080/admin/). If port 8080 is busy on the Mac, change the first port in `-L` to `18080` and open `http://127.0.0.1:18080/`. If the server uses a different `HOTEL_PORT`, use it in server smoke checks and for the last port in `-L`. The web service binds only to loopback, and Piper listens only on its internal Docker network. Public HTTPS and the live phone connector use separate deployment steps.
+Leave the terminal open and visit [reception](http://127.0.0.1:8080/) or [Django admin](http://127.0.0.1:8080/admin/). If port 8080 is busy on the Mac, change the first port in `-L` to `18080` and open `http://127.0.0.1:18080/`. If the server uses a different `HOTEL_PORT`, use it in server smoke checks and for the last port in `-L`. Django listens only on loopback, and Piper listens only on its internal Docker network.
+
+## Publish the reception
+
+The Nginx configuration exposes the guest page and its chat and audio routes. Django admin, the booking API, and phone callbacks are available only through their private or separately configured listeners. Browsers require a secure context for microphone access. Use the SSH tunnel for voice booking while the HTTP setup is in progress, and use fictional guest details in the HTTP demo. [Browser secure contexts](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Secure_Contexts)
+
+Set `DJANGO_ALLOWED_HOSTS=92.5.19.10` in the server `.env`, preserving any existing entries. Use your public IP in the Nginx `server_name`, the HTTPS redirect, and `DJANGO_ALLOWED_HOSTS` for another deployment. Recreate the Django container to apply the environment change. The [guest route configuration](../deploy/nginx/hotel-ai-reception.inc) points to loopback port 8080. Update the upstream URLs if your stack uses a different `HOTEL_PORT`.
+
+Allow inbound TCP ports 80 and 443 in the cloud and host firewalls. On a dedicated server with Ubuntu's default Nginx site enabled, disable its symlink at `/etc/nginx/sites-enabled/default`. Keep port 8080 private for Django and the SSH tunnel.
+
+### Bootstrap HTTP
+
+```sh
+docker compose -p hotel-ai -f compose.yaml -f compose.server.yaml -f compose.piper.yaml up -d --wait web
+sudo apt install nginx
+sudo install -d /var/lib/hotel-ai-acme /etc/nginx/snippets
+sudo install -m 0644 deploy/nginx/hotel-ai-reception.inc /etc/nginx/snippets/hotel-ai-reception.inc
+sudo install -m 0644 deploy/nginx/hotel-ai-http.conf /etc/nginx/conf.d/hotel-ai.conf
+sudo nginx -t
+sudo systemctl enable --now nginx
+sudo systemctl reload nginx
+```
+
+From a separate machine, confirm `curl -fsS http://92.5.19.10/healthz/` succeeds before requesting a certificate.
+
+### Enable HTTPS for browser voice
+
+Install Certbot 5.4 or later. This server uses the official Certbot snap (`sudo snap install --classic certbot`), which provides its own renewal timer. The certificate covers the public IP directly and is valid for just over six days, so automatic renewal and reload are required. Install the certificate with the name `hotel-ai`, which matches the paths in the [HTTPS configuration](../deploy/nginx/hotel-ai.conf). [Let's Encrypt IP certificates with Certbot](https://letsencrypt.org/2026/03/11/shorter-certs-certbot.html)
+
+```sh
+sudo /snap/bin/certbot certonly --cert-name hotel-ai --preferred-profile shortlived \
+  --webroot --webroot-path /var/lib/hotel-ai-acme --ip-address 92.5.19.10
+```
+
+Set `DJANGO_TRUST_PROXY_PROTO=1` in the server `.env` for HTTPS and recreate the Django container. This assumes requests reach Django through the private listener and Nginx sets `X-Forwarded-Proto` itself.
+
+```sh
+docker compose -p hotel-ai -f compose.yaml -f compose.server.yaml -f compose.piper.yaml up --build -d --wait web
+sudo install -m 0644 deploy/nginx/hotel-ai.conf /etc/nginx/conf.d/hotel-ai.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Keep Certbot's renewal timer active. Save the following deploy hook at `/etc/letsencrypt/renewal-hooks/deploy/reload-hotel-ai-nginx`, make it executable, and verify renewal with `sudo /snap/bin/certbot renew --dry-run --run-deploy-hooks`. The HTTP entry point redirects visitors to HTTPS and serves ACME challenges for renewals. The HTTPS proxy applies the Secure flag to session and CSRF cookies.
+
+```sh
+#!/bin/sh
+/usr/sbin/nginx -t && /usr/bin/systemctl reload nginx
+```
+
+Verify from a separate machine. Expect `308` for the HTTP entry point, `200` for the reception and JavaScript over HTTPS, and `404` for the admin and booking API over HTTPS. The speech smoke exercises the HTTPS session and checks that Piper returns WAV audio in both languages.
+
+```sh
+curl -sS -o /dev/null -w '%{http_code}\n' http://92.5.19.10/
+curl -fsS 'https://92.5.19.10/?lang=pl'
+curl -fsS -o /dev/null https://92.5.19.10/static/reception/chat.js
+curl -sS -o /dev/null -w '%{http_code}\n' https://92.5.19.10/admin/
+curl -sS -o /dev/null -w '%{http_code}\n' https://92.5.19.10/api/availability/
+python3 scripts/smoke_piper.py https://92.5.19.10
+```
