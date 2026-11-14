@@ -15,7 +15,7 @@ from model_providers.extraction import extract_stay_value
 from .conversation import advance, new_conversation
 from .models import Conversation
 from .parsing import parse_stay_input
-from .speech import SpeechUnavailable, synthesize
+from .speech import MAX_PCM_BYTES, SpeechUnavailable, synthesize, transcribe
 
 
 MAX_BODY_BYTES = 4096
@@ -33,6 +33,7 @@ def index(request):
     return render(request, "reception/index.html", {
         "language": language,
         "piper_enabled": bool(settings.HOTEL_PIPER_URL),
+        "asr_enabled": bool(settings.HOTEL_ASR_URL),
     })
 
 
@@ -146,3 +147,43 @@ def audio(request):
     if speech is None:
         return HttpResponse(status=503)
     return HttpResponse(speech, content_type="audio/wav", headers={"X-Content-Type-Options": "nosniff"})
+
+
+@never_cache
+@require_POST
+def transcript(request):
+    if not settings.HOTEL_ASR_URL:
+        return HttpResponse(status=503)
+    if request.content_type != "application/octet-stream":
+        return _invalid(415)
+    revision = request.headers.get("X-Reception-Revision", "")
+    if not re.fullmatch(r"[0-9a-f]{32}", revision):
+        return _invalid()
+
+    if not request.session.get("reception"):
+        return HttpResponse(status=404)
+    conversation = Conversation.objects.filter(session_id=request.session.session_key)
+    state = conversation.values_list("state", flat=True).first()
+    if state is None:
+        return HttpResponse(status=404)
+    if state["revision"] != revision or state["stage"] == "completed":
+        return HttpResponse(status=409)
+
+    try:
+        pcm = request.read(MAX_PCM_BYTES + 1)
+    except UnreadablePostError:
+        return _invalid()
+    if len(pcm) > MAX_PCM_BYTES:
+        return _invalid(413)
+    if not pcm or len(pcm) % 2:
+        return _invalid()
+
+    try:
+        text = transcribe(pcm, state["language"])
+    except SpeechUnavailable:
+        text = None
+    if not conversation.filter(state__revision=revision).exists():
+        return HttpResponse(status=409)
+    if text is None:
+        return HttpResponse(status=503)
+    return JsonResponse({"text": text})

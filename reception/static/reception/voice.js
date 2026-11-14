@@ -7,8 +7,12 @@
     const synthesis = window.speechSynthesis;
     const canSpeak = Boolean(synthesis && window.SpeechSynthesisUtterance);
     const audioUrl = button.dataset.audioUrl;
+    const transcribeUrl = button.dataset.transcribeUrl;
     const audioContextType = window.AudioContext || window.webkitAudioContext;
+    const offlineContextType = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     const canPlayPiper = Boolean(audioUrl && audioContextType);
+    const canRecord = Boolean(transcribeUrl && audioContextType && offlineContextType &&
+        window.AudioWorkletNode && navigator.mediaDevices?.getUserMedia);
     const polish = document.documentElement.lang === "pl";
     const locale = polish ? "pl-PL" : "en-US";
     const copy = polish ? {
@@ -21,7 +25,11 @@
         speaking: "Recepcja odpowiada…",
         fallback: "Piper jest niedostępny. Używam głosu przeglądarki…",
         stale: "Rozmowa zmieniła się w innej karcie. Odśwież stronę, aby wznowić rozmowę głosową.",
+        connecting: "Włączam mikrofon…",
         permission: "Zezwól na dostęp do mikrofonu, aby rozmawiać głosowo.",
+        microphone: "Nie można użyć mikrofonu. Sprawdź, czy jest podłączony, lub skorzystaj z czatu.",
+        transcribing: "Rozpoznaję odpowiedź…",
+        recognition: "Rozpoznawanie mowy jest niedostępne. Spróbuj ponownie lub skorzystaj z czatu.",
         silence: "Nie usłyszano odpowiedzi. Spróbuj ponownie lub skorzystaj z czatu.",
         error: "Rozmowa głosowa została przerwana. Spróbuj ponownie lub skorzystaj z czatu.",
         finished: "Rozmowa głosowa zakończona.",
@@ -35,22 +43,31 @@
         speaking: "Reception is speaking…",
         fallback: "Piper is unavailable. Using the browser voice…",
         stale: "The conversation changed in another tab. Refresh to resume voice booking.",
+        connecting: "Opening the microphone…",
         permission: "Allow microphone access to use voice booking.",
+        microphone: "The microphone is unavailable. Check that it is connected or use chat.",
+        transcribing: "Transcribing your answer…",
+        recognition: "Speech recognition is unavailable. Try again or use chat.",
         silence: "No response was heard. Try again or use chat.",
         error: "Voice booking was interrupted. Try again or use chat.",
         finished: "Voice booking ended.",
     };
 
-    if (!window.isSecureContext || !recognitionType || (!canPlayPiper && !canSpeak)) {
+    if (!window.isSecureContext || (!canRecord && !recognitionType) || (!canPlayPiper && !canSpeak)) {
         status.textContent = copy.unavailable;
         return;
     }
+    const privacy = document.getElementById("voice-privacy");
+    if (privacy) privacy.hidden = !canRecord;
 
     let active = false;
     let recognition = null;
     let speech = null;
     let playback = null;
     let audioContext = null;
+    let microphone = null;
+    let microphoneModule = null;
+    let recording = null;
     let stage = null;
     let lastReply = null;
 
@@ -70,6 +87,7 @@
         const current = recognition;
         recognition = null;
         if (current) current.abort();
+        clearRecording();
         clearPlayback();
         if (speech) {
             speech = null;
@@ -80,6 +98,11 @@
     function stop(message) {
         active = false;
         pauseAudio();
+        const stream = microphone?.stream;
+        microphone = null;
+        if (stream) {
+            for (const track of stream.getTracks()) track.stop();
+        }
         button.disabled = input.disabled || stage === "completed";
         button.textContent = copy.start;
         button.setAttribute("aria-pressed", "false");
@@ -94,7 +117,23 @@
         return normalized.includes("@") ? normalized.replace(/\s/g, "") : text;
     }
 
-    function listen() {
+    function submitTranscript(text) {
+        const transcript = text.trim();
+        if (!transcript) {
+            stop(copy.silence);
+            return;
+        }
+        const message = transcribedMessage(transcript);
+        if (input.disabled || message.length > input.maxLength) {
+            stop(copy.error);
+            return;
+        }
+        input.value = message;
+        status.textContent = copy.waiting;
+        form.requestSubmit();
+    }
+
+    function listenWithBrowser() {
         if (!active) return;
         const current = new recognitionType();
         recognition = current;
@@ -109,37 +148,159 @@
         };
         current.onerror = (event) => {
             if (recognition !== current) return;
-            const permissionDenied = ["not-allowed", "service-not-allowed"].includes(event.error);
-            if (permissionDenied) stop(copy.permission);
-            else stop(event.error === "no-speech" ? copy.silence : copy.error);
+            if (event.error === "not-allowed") stop(copy.permission);
+            else if (event.error === "audio-capture") stop(copy.microphone);
+            else stop(event.error === "no-speech" ? copy.silence : copy.recognition);
         };
         current.onend = () => {
             if (recognition !== current) return;
             recognition = null;
-            if (!transcript) {
-                stop(copy.silence);
-                return;
-            }
-            if (input.disabled || transcript.length > input.maxLength) {
-                stop(copy.error);
-                return;
-            }
-            input.value = transcribedMessage(transcript);
-            status.textContent = copy.waiting;
-            form.requestSubmit();
+            submitTranscript(transcript);
         };
         try {
             current.start();
             status.textContent = copy.listening;
         } catch {
             recognition = null;
-            stop(copy.error);
+            stop(copy.recognition);
+        }
+    }
+
+    function stopCapture(current) {
+        if (!current.source) return;
+        clearTimeout(current.timer);
+        current.track.enabled = false;
+        current.node.port.onmessage = null;
+        current.node.onprocessorerror = null;
+        current.source.disconnect();
+        current.node.disconnect();
+        current.source = null;
+    }
+
+    function clearRecording() {
+        if (!recording) return;
+        const current = recording;
+        recording = null;
+        current.controller.abort();
+        stopCapture(current);
+    }
+
+    async function encodePcm(samples, inputRate) {
+        const rate = 16000;
+        if (inputRate !== rate) {
+            const offline = new offlineContextType(1, Math.ceil(samples.length * rate / inputRate), rate);
+            const source = offline.createBufferSource();
+            source.buffer = offline.createBuffer(1, samples.length, inputRate);
+            source.buffer.copyToChannel(samples, 0);
+            source.connect(offline.destination);
+            source.start();
+            samples = (await offline.startRendering()).getChannelData(0);
+        }
+        const output = new DataView(new ArrayBuffer(samples.length * 2));
+        for (let i = 0; i < samples.length; i++) {
+            const sample = Math.max(-1, Math.min(1, samples[i]));
+            output.setInt16(i * 2, Math.round(sample < 0 ? sample * 32768 : sample * 32767), true);
+        }
+        return output.buffer;
+    }
+
+    async function transcribe(current, samples) {
+        if (recording !== current) return;
+        stopCapture(current);
+        if (!samples?.length) {
+            stop(copy.silence);
+            return;
+        }
+        status.textContent = copy.transcribing;
+        try {
+            const bytes = await encodePcm(samples, audioContext.sampleRate);
+            if (recording !== current) return;
+            const response = await fetch(transcribeUrl, {
+                method: "POST",
+                credentials: "same-origin",
+                cache: "no-store",
+                headers: {
+                    "Content-Type": "application/octet-stream",
+                    "X-CSRFToken": form.elements.csrfmiddlewaretoken.value,
+                    "X-Reception-Revision": current.revision,
+                },
+                body: bytes,
+                signal: current.controller.signal,
+            });
+            if (recording !== current) return;
+            if (response.status === 404 || response.status === 409) {
+                stop(copy.stale);
+                button.disabled = true;
+                return;
+            }
+            if (!response.ok) throw new Error("Transcription request failed");
+            const result = await response.json();
+            if (recording === current) submitTranscript(result.text);
+        } catch {
+            if (recording === current) stop(copy.recognition);
+        }
+    }
+
+    function listenWithMicrophone() {
+        const stream = microphone?.stream;
+        const track = stream?.getAudioTracks()[0];
+        if (!track || track.readyState !== "live") {
+            stop(copy.microphone);
+            return;
+        }
+        try {
+            const node = new AudioWorkletNode(audioContext, "reception-microphone", { channelCount: 1 });
+            const source = audioContext.createMediaStreamSource(stream);
+            const current = { source, node, track, revision: lastReply.revision, controller: new AbortController() };
+            recording = current;
+            current.timer = setTimeout(() => stop(copy.silence), 25000);
+            node.port.onmessage = (event) => transcribe(current, event.data);
+            node.onprocessorerror = () => stop(copy.microphone);
+            source.connect(node).connect(audioContext.destination);
+            track.enabled = true;
+            status.textContent = copy.listening;
+        } catch {
+            stop(copy.microphone);
+        }
+    }
+
+    async function openMicrophone() {
+        const current = {};
+        microphone = current;
+        status.textContent = copy.connecting;
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+            });
+            if (microphone !== current) {
+                for (const track of stream.getTracks()) track.stop();
+                return;
+            }
+            current.stream = stream;
+            for (const track of stream.getAudioTracks()) {
+                track.enabled = false;
+                track.addEventListener("ended", () => {
+                    if (microphone === current) stop(copy.microphone);
+                });
+            }
+            microphoneModule ??= audioContext.audioWorklet.addModule(button.dataset.microphoneModule);
+            await microphoneModule;
+            if (microphone === current) {
+                current.ready = true;
+                if (!input.disabled || stage === "completed") speak(lastReply);
+            }
+        } catch (error) {
+            microphoneModule = null;
+            if (microphone === current) {
+                stop(["NotAllowedError", "SecurityError"].includes(error.name) ? copy.permission : copy.microphone);
+            }
         }
     }
 
     function finishReply() {
         if (stage === "completed") stop(copy.finished);
-        else listen();
+        else if (canRecord) listenWithMicrophone();
+        else listenWithBrowser();
     }
 
     function speakWithBrowser(reply, message) {
@@ -167,7 +328,7 @@
 
     async function speak(turn) {
         const context = audioContext;
-        if (!context) {
+        if (!canPlayPiper || !context) {
             speakWithBrowser(turn.reply, audioUrl ? copy.fallback : copy.speaking);
             return;
         }
@@ -237,7 +398,7 @@
             active = true;
             button.textContent = copy.stop;
             button.setAttribute("aria-pressed", "true");
-            if (canPlayPiper) {
+            if (canPlayPiper || canRecord) {
                 try {
                     // Resume playback during the click so later replies can play automatically.
                     audioContext ??= new audioContextType();
@@ -246,7 +407,9 @@
                     audioContext = null;
                 }
             }
-            speak(lastReply);
+            if (canRecord && audioContext) openMicrophone();
+            else if (canRecord) stop(copy.microphone);
+            else speak(lastReply);
         }
     });
     form.addEventListener("reception:request", (event) => {
@@ -262,7 +425,7 @@
         stage = event.detail.stage;
         lastReply = event.detail;
         button.disabled = !active && stage === "completed";
-        if (active) {
+        if (active && (!canRecord || microphone?.ready)) {
             pauseAudio();
             speak(lastReply);
         }

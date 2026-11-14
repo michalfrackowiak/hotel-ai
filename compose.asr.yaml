@@ -1,0 +1,31 @@
+services:
+  web:
+    environment:
+      HOTEL_ASR_URL: "http://asr:5001"
+    networks:
+      - default
+      - recognition
+
+  asr:
+    build: ./asr_runtime
+    cpus: 1.0
+    init: true
+    mem_limit: 1536m
+    read_only: true
+    restart: unless-stopped
+    networks:
+      - recognition
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/healthz', timeout=2).close()
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+
+networks:
+  recognition:
+    internal: true

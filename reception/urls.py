@@ -7,4 +7,5 @@ urlpatterns = [
     path("", views.index, name="reception"),
     path("reception/message/", views.message, name="reception-message"),
     path("reception/audio/", views.audio, name="reception-audio"),
+    path("reception/transcribe/", views.transcript, name="reception-transcript"),
 ]

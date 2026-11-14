@@ -1,6 +1,6 @@
 # Server deployment
 
-The Linux server runs Django, Gunicorn, SQLite, and Piper. It stores room rates, availability, reservations, and configuration in a Docker volume. Django uses its built-in parser for the demo. The MacBook runs the reception in Chrome, captures the microphone, submits recognized text, and plays back the WAV replies. Chrome may send microphone audio to its speech-recognition service. [Speech recognition documentation](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition)
+The Linux server runs Django, Gunicorn, SQLite, Piper, and Vosk. It stores room rates, availability, reservations, and configuration in a Docker volume. Django uses its built-in parser for the demo. The browser captures microphone replies, sends each utterance to the hotel server over HTTPS, and plays back Piper's WAV replies. Vosk transcribes the utterances in memory using separate small English and Polish models. [Vosk models](https://alphacephei.com/vosk/models)
 
 The server has two ARM Neoverse N1 cores, 11.6 GiB of RAM, and a 96 GiB root filesystem. Docker Engine and the Compose plugin were already present. Piper uses CPU inference with one worker and a one-CPU, 1 GiB container limit. Django serves the UI and admin assets with debug disabled. The browser session and SSH tunnel can be closed while the server keeps its reservations and continues running.
 
@@ -23,9 +23,9 @@ Piper gives both languages one neural speech engine. The smaller KittenTTS and M
 Install [Docker Engine and the Compose plugin](https://docs.docker.com/engine/install/ubuntu/) if needed. Place a checkout of the project on the server and run these commands from that directory. Use `sudo docker` where Docker requires administrator access. Keep `.env` readable only by your account and Docker administrators. On a new installation, generate independent values for `DJANGO_SECRET_KEY` and `BOOKING_API_KEY` with `openssl rand -hex 32`. Set `HOTEL_PORT=8080` in `.env`, or choose a free port. To seed an administrator, set `HOTEL_DEMO_ADMIN_USERNAME` and `HOTEL_DEMO_ADMIN_PASSWORD` in the same file before running `seed_demo`.
 
 ```sh
-docker compose -p hotel-ai -f compose.yaml -f compose.server.yaml -f compose.piper.yaml up --build -d --wait
+docker compose -p hotel-ai -f compose.yaml -f compose.server.yaml -f compose.piper.yaml -f compose.asr.yaml up --build -d --wait
 docker compose -p hotel-ai -f compose.yaml -f compose.server.yaml -f compose.piper.yaml exec web python manage.py seed_demo
-python3 scripts/smoke_piper.py http://127.0.0.1:8080
+python3 scripts/smoke_piper.py http://127.0.0.1:8080 --asr
 ```
 
 Use the same Compose project name on updates so that the stack keeps its `hotel-ai_hotel-data` volume. The initial deployment seeds the demo inventory in a fresh SQLite database.
@@ -52,7 +52,7 @@ Allow inbound TCP ports 80 and 443 in the cloud and host firewalls. On a dedicat
 ### Bootstrap HTTP
 
 ```sh
-docker compose -p hotel-ai -f compose.yaml -f compose.server.yaml -f compose.piper.yaml up -d --wait web
+docker compose -p hotel-ai -f compose.yaml -f compose.server.yaml -f compose.piper.yaml -f compose.asr.yaml up -d --wait
 sudo apt install nginx
 sudo install -d /var/lib/hotel-ai-acme /etc/nginx/snippets
 sudo install -m 0644 deploy/nginx/hotel-ai-reception.inc /etc/nginx/snippets/hotel-ai-reception.inc
@@ -76,7 +76,7 @@ sudo /snap/bin/certbot certonly --cert-name hotel-ai --preferred-profile shortli
 Set `DJANGO_TRUST_PROXY_PROTO=1` in the server `.env` for HTTPS and recreate the Django container. This assumes requests reach Django through the private listener and Nginx sets `X-Forwarded-Proto` itself.
 
 ```sh
-docker compose -p hotel-ai -f compose.yaml -f compose.server.yaml -f compose.piper.yaml up --build -d --wait web
+docker compose -p hotel-ai -f compose.yaml -f compose.server.yaml -f compose.piper.yaml -f compose.asr.yaml up --build -d --wait
 sudo install -m 0644 deploy/nginx/hotel-ai.conf /etc/nginx/conf.d/hotel-ai.conf
 sudo nginx -t
 sudo systemctl reload nginx
@@ -97,5 +97,5 @@ curl -fsS 'https://92.5.19.10/?lang=pl'
 curl -fsS -o /dev/null https://92.5.19.10/static/reception/chat.js
 curl -sS -o /dev/null -w '%{http_code}\n' https://92.5.19.10/admin/
 curl -sS -o /dev/null -w '%{http_code}\n' https://92.5.19.10/api/availability/
-python3 scripts/smoke_piper.py https://92.5.19.10
+python3 scripts/smoke_piper.py https://92.5.19.10 --asr
 ```
