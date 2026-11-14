@@ -101,6 +101,7 @@ if not 1 <= HOTEL_OLLAMA_TIMEOUT <= 120:
 HOTEL_TELEPHONY_PUBLIC_BASE_URL = os.environ.get("HOTEL_TELEPHONY_PUBLIC_BASE_URL", "").rstrip("/")
 HOTEL_TWILIO_AUTH_TOKEN = os.environ.get("HOTEL_TWILIO_AUTH_TOKEN", "")
 HOTEL_PIPER_URL = os.environ.get("HOTEL_PIPER_URL", "").rstrip("/")
+HOTEL_ASR_URL = os.environ.get("HOTEL_ASR_URL", "").rstrip("/")
 try:
     HOTEL_PIPER_TIMEOUT = int(os.environ.get("HOTEL_PIPER_TIMEOUT", "10"))
 except ValueError as error:

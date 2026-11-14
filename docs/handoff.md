@@ -2,11 +2,15 @@
 
 ## Latest milestone
 
+Public microphone transcription. The original browser speech service could fail after Piper finished its greeting. The public reception now captures audio during each listening turn and sends bounded PCM to Django. Django matches the session revision, uses the conversation language, and relays the samples in memory to an internal Vosk service. Other deployments may continue to use their browser speech service. See [browser voice booking](browser-voice.md) and the [server deployment guide](server-deployment.md).
+
+All 56 Django tests passed. The native ARM64 stack loaded both Vosk models and kept the Piper and Django services healthy. Independent Chrome tests fed prerecorded microphone replies through the public HTTPS page, the audio worklet, and Vosk. “Tomorrow” and “jutro” both advanced the conversation to checkout. Permission denial kept chat available. Stopping a session released the microphone and ignored a late transcript. Physical microphone recognition on the target browser remains a manual check.
+
+## Previous milestones
+
 Public browser access. Nginx on the Ubuntu host forwards the reception and its static files to Django on loopback. [HTTP](http://92.5.19.10/) redirects to the [HTTPS reception](https://92.5.19.10/). The host firewall allows inbound TCP 80 and 443 before the Oracle image's reject rule. Certbot renews the short-lived IP certificate with HTTP webroot validation and reloads Nginx through its deploy hook. The admin, booking API, and phone callback paths remain behind their private or separately configured listeners. See the [server deployment guide](server-deployment.md).
 
 External requests verified the redirect, trusted TLS, valid browser-style CSRF requests and rejection of cross-origin requests, English and Polish Piper WAVs, secure cookies, and public 404s for private endpoints. Independent Chrome checks played the real Piper replies using simulated microphone recognition. All 52 Django tests passed.
-
-## Previous milestones
 
 Split deployment and lightweight speech, PR [#10](https://github.com/michalfrackowiak/hotel-ai/pull/10). The Ubuntu 26.04 ARM64 host runs the `hotel-ai` Compose project from `~/hotel-ai`. Docker Engine 29.9.2 and Compose 5.6.1 were already installed. Django runs with debug disabled on the server's loopback port 8080. Piper shares a private Docker network with Django and uses the server's ARM CPU to synthesize English and Polish prompts. The MacBook connects over SSH and handles microphone capture and playback in Chrome. The server seeded demo inventory into a fresh SQLite volume. See [server setup](server-deployment.md).
 

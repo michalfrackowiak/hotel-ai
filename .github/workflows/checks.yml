@@ -49,17 +49,17 @@ jobs:
             http://127.0.0.1:8081/admin/login/)" = 404
           test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
             --data 'CallSid=CA00000000000000000000000000000001' http://127.0.0.1:8081/telephony/incoming/)" = 403
-      - name: Smoke-test the private server with Piper
+      - name: Smoke-test the private server with Piper and Vosk
         env:
           DJANGO_SECRET_KEY: django-insecure-ci-server-fixture
           HOTEL_PORT: "8082"
         run: |
-          docker compose -f compose.yaml -f compose.server.yaml -f compose.piper.yaml up --build --wait --wait-timeout 90 web piper
+          docker compose -f compose.yaml -f compose.server.yaml -f compose.piper.yaml -f compose.asr.yaml up --build --wait --wait-timeout 90 web piper asr
           curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8082/static/admin/css/base.css
-          python scripts/smoke_piper.py http://127.0.0.1:8082
+          python scripts/smoke_piper.py http://127.0.0.1:8082 --asr
       - name: Print Compose logs after a failure
         if: failure()
-        run: docker compose -f compose.yaml -f compose.piper.yaml logs --no-color
+        run: docker compose -f compose.yaml -f compose.piper.yaml -f compose.asr.yaml logs --no-color
       - name: Tear down the test stack
         if: always()
         run: docker compose down --volumes --remove-orphans

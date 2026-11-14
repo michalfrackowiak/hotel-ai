@@ -24,6 +24,12 @@ location = /reception/audio/ {
     proxy_pass http://127.0.0.1:8080/reception/audio/;
 }
 
+location = /reception/transcribe/ {
+    client_max_body_size 480000;
+    limit_req zone=hotel_ai_audio burst=5 nodelay;
+    proxy_pass http://127.0.0.1:8080/reception/transcribe/;
+}
+
 location ^~ /static/reception/ {
     proxy_pass http://127.0.0.1:8080/static/reception/;
 }
