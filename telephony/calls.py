@@ -24,7 +24,6 @@ MENU_RETRY = "Please choose a language. For English, press one."
 COPY = {
     "en": {
         "check_in": "What date would you like to check in? Say the day, month and four-digit year, or say tomorrow.",
-        "check_out": "What date will you check out? Say the day, month and four-digit year.",
         "email": "What is your email address? Say at and dot where they appear.",
         "email_retry": "I did not catch a valid email address. Please say it again, including at and dot.",
         "silence": "I didn't hear an answer. Please try again.",
@@ -32,7 +31,6 @@ COPY = {
     },
     "pl": {
         "check_in": "Kiedy chcesz się zameldować? Podaj dzień, miesiąc i pełny rok lub powiedz jutro.",
-        "check_out": "Kiedy chcesz się wymeldować? Podaj dzień, miesiąc i pełny rok.",
         "email": "Jaki jest Twój adres e-mail? Wypowiedz słowa małpa i kropka w odpowiednich miejscach.",
         "email_retry": "Nie udało się rozpoznać adresu e-mail. Powtórz go, używając słów małpa i kropka.",
         "silence": "Nie usłyszałem odpowiedzi. Spróbuj ponownie.",
@@ -114,10 +112,8 @@ def _spoken_reply(previous, next_state):
     copy = COPY[next_state["language"]]
     if stage == "email":
         next_state["reply"] = copy["email_retry" if previous["stage"] == "email" else "email"]
-    elif stage in ("check_in", "check_out"):
-        # An unavailable or cancelled stay returns a specific check-in prompt from the booking flow.
-        if stage == "check_out" or previous["stage"] == "check_in":
-            next_state["reply"] = copy[stage]
+    elif stage == previous["stage"] == "check_in":
+        next_state["reply"] = copy[stage]
     return next_state
 
 

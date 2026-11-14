@@ -2,9 +2,11 @@
 
 ## Latest milestone
 
-Relative checkout. The shared date parser accepts relative day and week offsets in English and Polish, measured from the current date in Europe/Warsaw. After accepting checkout, the reception reads back both dates before asking how many guests are staying. Regression tests cover “tomorrow” followed by “in three days” and its Polish equivalent across a year boundary. The yearless and one-sentence stay parser work remains open.
+Checkout question. After check-in, the reception asks how long the guest will stay or when they plan to check out. The prompt and retry give a supported example in English and Polish. Guests can supply a checkout date or an existing relative expression such as “in three days” or “za trzy dni.” Converting lengths measured from check-in remains pending.
 
 ## Previous milestones
+
+Relative checkout. The shared date parser accepts relative day and week offsets in English and Polish, measured from the current date in Europe/Warsaw. After accepting checkout, the reception reads back both dates before asking how many guests are staying. Regression tests cover “tomorrow” followed by “in three days” and its Polish equivalent across a year boundary. The yearless and one-sentence stay parser work remains open.
 
 Public microphone transcription. The original browser speech service could fail after Piper finished its greeting. The public reception now captures audio during each listening turn and sends bounded PCM to Django. Django matches the session revision, uses the conversation language, and relays the samples in memory to an internal Vosk service. Other deployments may continue to use their browser speech service. See [browser voice booking](browser-voice.md) and the [server deployment guide](server-deployment.md).
 
