@@ -139,7 +139,7 @@
             }
             if (reply !== null) {
                 form.dispatchEvent(new CustomEvent("reception:reply", {
-                    detail: { reply, stage, language },
+                    detail: { reply, stage, language, revision },
                 }));
             }
             if (failure !== null) {

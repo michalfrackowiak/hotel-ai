@@ -25,7 +25,7 @@
             <h1 id="booking-title">{% if language == "pl" %}Zarezerwuj pokój{% else %}Book a room{% endif %}</h1>
             <p>{% if language == "pl" %}Podaj terminy i liczbę gości. Recepcja sprawdzi dostępność i poda cenę przed potwierdzeniem rezerwacji.{% else %}Share your dates and guest count. Reception will check availability and quote the price before you confirm.{% endif %}</p>
             <div class="voice-controls">
-                <button id="start-voice" class="confirm-button" type="button" aria-pressed="false" aria-describedby="voice-status" disabled>{% if language == "pl" %}Włącz rozmowę głosową{% else %}Start voice booking{% endif %}</button>
+                <button id="start-voice" class="confirm-button" type="button"{% if piper_enabled %} data-audio-url="{% url 'reception-audio' %}"{% endif %} aria-pressed="false" aria-describedby="voice-status" disabled>{% if language == "pl" %}Włącz rozmowę głosową{% else %}Start voice booking{% endif %}</button>
                 <p id="voice-status" role="status"></p>
             </div>
         </section>

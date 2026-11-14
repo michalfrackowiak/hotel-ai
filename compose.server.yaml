@@ -1,0 +1,12 @@
+services:
+  web:
+    environment:
+      DJANGO_DEBUG: "0"
+      DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in the server .env file}"
+    command:
+      - sh
+      - -ec
+      - >-
+        python manage.py migrate --noinput &&
+        exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 1 --threads 4
+    restart: unless-stopped
