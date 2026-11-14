@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     "bookings",
     "reception",
     "model_providers",
+    "telephony",
 ]
 
 MIDDLEWARE = [
@@ -91,3 +92,6 @@ except ValueError as error:
     raise ImproperlyConfigured("HOTEL_OLLAMA_TIMEOUT must be an integer number of seconds.") from error
 if not 1 <= HOTEL_OLLAMA_TIMEOUT <= 120:
     raise ImproperlyConfigured("HOTEL_OLLAMA_TIMEOUT must be between 1 and 120 seconds.")
+
+HOTEL_TELEPHONY_PUBLIC_BASE_URL = os.environ.get("HOTEL_TELEPHONY_PUBLIC_BASE_URL", "").rstrip("/")
+HOTEL_TWILIO_AUTH_TOKEN = os.environ.get("HOTEL_TWILIO_AUTH_TOKEN", "")
