@@ -20,6 +20,11 @@ RELATIVE_DATES = {
     "en": {"today": 0, "tomorrow": 1, "day after tomorrow": 2, "the day after tomorrow": 2},
     "pl": {"dzisiaj": 0, "dziś": 0, "jutro": 1, "pojutrze": 2},
 }
+RELATIVE_OFFSETS = {
+    "en": r"in ([0-9]{1,5}|[a-z]+) (day|days|week|weeks)",
+    "pl": r"za ([0-9]{1,5}|[a-ząćęłńóśźż]+) (dzień|dni|tydzień|tygodnie|tygodni)",
+}
+WEEK_UNITS = {"week", "weeks", "tydzień", "tygodnie", "tygodni"}
 
 
 def parse_stay_input(stage: str, text: str, language: str) -> date | int | None:
@@ -38,6 +43,12 @@ def parse_stay_input(stage: str, text: str, language: str) -> date | int | None:
     if stage in ("check_in", "check_out"):
         value = text.casefold().rstrip(".!")
         days = RELATIVE_DATES[language].get(value)
+        offset = re.fullmatch(RELATIVE_OFFSETS[language], value)
+        if offset:
+            count, unit = offset.groups()
+            amount = int(count) if count.isdecimal() else NUMBER_WORDS[language].get(count)
+            if amount is not None:
+                days = amount * (7 if unit in WEEK_UNITS else 1)
         if days is not None:
             return timezone.localdate() + timedelta(days=days)
         if language == "en":

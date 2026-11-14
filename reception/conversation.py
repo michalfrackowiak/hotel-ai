@@ -11,11 +11,11 @@ from bookings.services import BookingError, available_rooms, confirm_booking
 
 COPY = {
     "en": {
-        "welcome": "Hello! What date would you like to check in? You can enter it as YYYY-MM-DD.",
-        "check_in": "Enter a check-in date from today onward, using YYYY-MM-DD.",
-        "ask_check_out": "What date will you check out? You can enter it as YYYY-MM-DD.",
-        "check_out": "Enter a check-out date after check-in, using YYYY-MM-DD.",
-        "ask_guests": "How many guests are staying?",
+        "welcome": "Hello! When would you like to check in? You can say tomorrow or give a date.",
+        "check_in": "What is your check-in date? Please choose today or a later date.",
+        "ask_check_out": "When will you check out? You can say in three days or give a date.",
+        "check_out": "When will you check out? Please choose a day after check-in.",
+        "ask_guests": "Check-in is {check_in} and checkout is {check_out}. How many guests are staying?",
         "guests": "Please enter the number of guests as a positive whole number.",
         "ask_name": "Room {room} is available for {rate} PLN per night, {total} PLN for the stay. What name should I put on the booking?",
         "name": "Please enter a guest name of up to 150 characters.",
@@ -28,11 +28,11 @@ COPY = {
         "offer_changed": "That room or rate has changed. Please enter your check-in date to request a fresh quote.",
     },
     "pl": {
-        "welcome": "Dzień dobry! Kiedy chcesz się zameldować? Możesz podać datę w formacie DD.MM.RRRR.",
-        "check_in": "Podaj datę zameldowania od dzisiaj w formacie DD.MM.RRRR.",
-        "ask_check_out": "Kiedy chcesz się wymeldować? Możesz podać datę w formacie DD.MM.RRRR.",
-        "check_out": "Podaj datę wymeldowania po dacie zameldowania w formacie DD.MM.RRRR.",
-        "ask_guests": "Ilu gości będzie nocować?",
+        "welcome": "Dzień dobry! Kiedy chcesz się zameldować? Możesz powiedzieć jutro lub podać datę.",
+        "check_in": "Kiedy chcesz się zameldować? Podaj dzisiejszą lub późniejszą datę.",
+        "ask_check_out": "Kiedy chcesz się wymeldować? Możesz powiedzieć za trzy dni lub podać datę.",
+        "check_out": "Kiedy chcesz się wymeldować? Podaj dzień po dacie zameldowania.",
+        "ask_guests": "Zameldowanie {check_in}, wymeldowanie {check_out}. Ilu gości będzie nocować?",
         "guests": "Podaj liczbę gości jako dodatnią liczbę całkowitą.",
         "ask_name": "Pokój {room} jest dostępny w cenie {rate} PLN za noc, {total} PLN za cały pobyt. Na kogo mam zapisać rezerwację?",
         "name": "Podaj imię i nazwisko gościa, maksymalnie 150 znaków.",
@@ -81,7 +81,12 @@ def advance(state, message, parsed):
             state.update(stage="check_out", check_in=parsed.isoformat(), reply=copy["ask_check_out"])
     elif stage == "check_out":
         if type(parsed) is date and parsed > date.fromisoformat(state["check_in"]):
-            state.update(stage="guests", check_out=parsed.isoformat(), reply=copy["ask_guests"])
+            check_out = parsed.isoformat()
+            reply = copy["ask_guests"].format(
+                check_in=_display_date(state["check_in"], language),
+                check_out=_display_date(check_out, language),
+            )
+            state.update(stage="guests", check_out=check_out, reply=reply)
     elif stage == "guests":
         if type(parsed) is int and 1 <= parsed <= 32767:
             return _find_room(state, parsed)
