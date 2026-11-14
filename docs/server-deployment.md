@@ -10,7 +10,7 @@ The deployed Piper voices are Joe for English and Darkman for Polish. Each voice
 
 | Engine or model | Weight size | Languages relevant here |
 | --- | ---: | --- |
-| Kokoro-82M | 327 MB | English. Its published voices omit Polish. [Model and voice list](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md) |
+| Kokoro-82M (stock checkpoint) | 327 MB | English. Its published voices omit Polish. [Weights](https://huggingface.co/hexgrad/Kokoro-82M/tree/main), [voice list](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md) |
 | Piper Joe and Darkman | 63 MB each | English and Polish in one CPU runtime |
 | KittenTTS Nano 0.8 INT8 | About 28 MB including voice presets | English. [Model card](https://huggingface.co/KittenML/kitten-tts-nano-0.8-int8) |
 | Matcha-TTS PL Edge v2 INT8 | About 25 MB for the selected encoder, decoder, and vocoder | Polish. [Model card](https://huggingface.co/machinekind/Matcha-TTS-PL-Edge-v2) |
