@@ -2,9 +2,13 @@
 
 ## Latest milestone
 
-Alpha verification, PR [#7](https://github.com/michalfrackowiak/hotel-ai/pull/7). A fresh Compose checkout verified local startup, dependency and migration checks, all 31 tests, and the reception, booking API, and admin paths. CI checks both language routes and chat and voice assets. A warmed local Ollama model extracted guest counts in both languages. See [alpha verification](alpha-verification.md) for the commands and the manual integration checks.
+Inbound phone connector, PR [#8](https://github.com/michalfrackowiak/hotel-ai/pull/8). An optional Gunicorn service accepts signed Twilio voice webhooks and shares the browser reception's SQLite booking database. The caller chooses English or Polish by keypad, hears the quote, and confirms the booking by voice. Phone calls use the built-in parser so each callback has time to finish within the Twilio deadline. See [phone booking setup](phone-booking.md) for exact configuration, call routing, and the live smoke test.
+
+All 44 Django tests passed. Independent review verified the separate listener's route restrictions and sent eight simultaneous signed confirmations against file-backed SQLite. The callbacks returned one shared reference and created one booking. A live Twilio call and carrier route are still pending.
 
 ## Previous milestones
+
+Alpha verification, PR [#7](https://github.com/michalfrackowiak/hotel-ai/pull/7). A fresh Compose checkout verified local startup, dependency and migration checks, all 31 tests, and the reception, booking API, and admin paths. CI checks both language routes and chat and voice assets. A warmed local Ollama model extracted guest counts in both languages. See [alpha verification](alpha-verification.md) for the commands and the manual integration checks.
 
 Room calendars, PR [#6](https://github.com/michalfrackowiak/hotel-ai/pull/6). A room can publish confirmed stays as all-day busy events without guest details. Django remains the source of availability. The optional worker uses a stable event ID and a durable retry record. An independent eight-worker SQLite probe produced one Google API attempt with simulated credentials and transport. A live Google Calendar test is pending. See [calendar setup](room-calendars.md).
 
@@ -24,4 +28,4 @@ Development tooling shipped in PR [#1](https://github.com/michalfrackowiak/hotel
 
 ## Next action
 
-Run the manual integration checks in [alpha verification](alpha-verification.md) when the target microphone, provider credentials, or shared calendar are available. The dedicated mobile number and external booking-platform integrations are later milestones in the roadmap.
+Route a test number through Twilio and verify live calls in both languages when a number or SIP domain, a public HTTPS origin, and the carrier route are available. Add the Twilio Auth Token through the ignored `.env` file. The manual checks in [alpha verification](alpha-verification.md) remain pending the target microphone, hosted provider credentials, or shared calendar. Booking-platform integration depends on which platform the hotel uses.

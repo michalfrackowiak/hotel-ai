@@ -1,0 +1,32 @@
+services:
+  phone:
+    build: .
+    command:
+      - gunicorn
+      - --bind=0.0.0.0:8000
+      - --workers=2
+      - --timeout=20
+      - config.phone_wsgi:application
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${HOTEL_PHONE_PORT:-8081}:8000"
+    environment:
+      DJANGO_DEBUG: "0"
+      DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY for the phone service}"
+      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-}"
+      HOTEL_TELEPHONY_PUBLIC_BASE_URL: "${HOTEL_TELEPHONY_PUBLIC_BASE_URL:?Set the HTTPS phone webhook origin}"
+      HOTEL_TWILIO_AUTH_TOKEN: "${HOTEL_TWILIO_AUTH_TOKEN:?Set the Twilio Auth Token for the phone service}"
+    volumes:
+      - hotel-data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz/', timeout=2).close()
+      interval: 5s
+      timeout: 3s
+      retries: 10

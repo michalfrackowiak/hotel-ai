@@ -14,5 +14,6 @@ Each milestone has a development branch, a pull request to `main`, and independe
 
 ## Later releases
 
-- [ ] Connect the reception agent to a dedicated mobile number through a SIM/GSM or telephony gateway. Verify inbound calls and booking conversations in both languages.
+- [x] Implement the inbound phone connector, including English and Polish booking flows, signed callbacks, and retry-safe confirmation.
+- [ ] Route the dedicated mobile number to the connector and place live calls in both languages. This needs a Twilio number or SIP domain, a public HTTPS endpoint, and a carrier forwarding or cellular gateway route.
 - [ ] Add integrations with hotel booking platforms as needed.

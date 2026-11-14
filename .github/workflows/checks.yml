@@ -37,9 +37,21 @@ jobs:
           curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8080/static/reception/voice.js
           curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8080/admin/login/
           curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8080/static/admin/css/base.css
+      - name: Smoke-test the optional phone service
+        env:
+          DJANGO_SECRET_KEY: django-insecure-ci-phone-fixture
+          HOTEL_TELEPHONY_PUBLIC_BASE_URL: https://phone.example.test
+          HOTEL_TWILIO_AUTH_TOKEN: twilio-ci-fixture
+        run: |
+          docker compose -f compose.yaml -f compose.telephony.yaml up --wait --wait-timeout 60 phone
+          curl --fail --silent --show-error http://127.0.0.1:8081/healthz/
+          test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            http://127.0.0.1:8081/admin/login/)" = 404
+          test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --data 'CallSid=CA00000000000000000000000000000001' http://127.0.0.1:8081/telephony/incoming/)" = 403
       - name: Print Compose logs after a failure
         if: failure()
         run: docker compose logs --no-color
       - name: Tear down the test stack
         if: always()
-        run: docker compose down --volumes
+        run: docker compose down --volumes --remove-orphans
