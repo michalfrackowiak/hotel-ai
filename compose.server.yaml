@@ -3,6 +3,7 @@ services:
     environment:
       DJANGO_DEBUG: "0"
       DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in the server .env file}"
+      DJANGO_TRUST_PROXY_PROTO: "${DJANGO_TRUST_PROXY_PROTO:-0}"
     command:
       - sh
       - -ec

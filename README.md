@@ -15,7 +15,7 @@ Open [Hotel-ai reception](http://127.0.0.1:8080/) and choose **English** or **Po
 
 Click **Start voice booking** to talk to the same reception and hear its replies. See [browser voice setup](docs/browser-voice.md) for microphone access and spoken confirmation.
 
-For a separate Linux server, use the [private server deployment](docs/server-deployment.md) to run Django and English and Polish Piper speech synthesis. Connect the MacBook browser over an SSH tunnel.
+For a separate Linux server, see the [server deployment guide](docs/server-deployment.md) for Django, Piper, and the public HTTPS reception. Use the SSH tunnel for private administration.
 
 The chat works with the built-in parser by default. To interpret more free-form dates and guest counts, [configure a hosted model or Ollama](docs/model-providers.md) in Django admin.
 

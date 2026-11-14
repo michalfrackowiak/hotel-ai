@@ -45,6 +45,9 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+if os.environ.get("DJANGO_TRUST_PROXY_PROTO") == "1":
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 ROOT_URLCONF = "config.urls"
 TEMPLATES = [
     {

@@ -2,13 +2,17 @@
 
 ## Latest milestone
 
+Public browser access. Nginx on the Ubuntu host forwards the reception and its static files to Django on loopback. [HTTP](http://92.5.19.10/) redirects to the [HTTPS reception](https://92.5.19.10/). The host firewall allows inbound TCP 80 and 443 before the Oracle image's reject rule. Certbot renews the short-lived IP certificate with HTTP webroot validation and reloads Nginx through its deploy hook. The admin, booking API, and phone callback paths remain behind their private or separately configured listeners. See the [server deployment guide](server-deployment.md).
+
+External requests verified the redirect, trusted TLS, valid browser-style CSRF requests and rejection of cross-origin requests, English and Polish Piper WAVs, secure cookies, and public 404s for private endpoints. Independent Chrome checks played the real Piper replies using simulated microphone recognition. All 52 Django tests passed.
+
+## Previous milestones
+
 Split deployment and lightweight speech, PR [#10](https://github.com/michalfrackowiak/hotel-ai/pull/10). The Ubuntu 26.04 ARM64 host runs the `hotel-ai` Compose project from `~/hotel-ai`. Docker Engine 29.9.2 and Compose 5.6.1 were already installed. Django runs with debug disabled on the server's loopback port 8080. Piper shares a private Docker network with Django and uses the server's ARM CPU to synthesize English and Polish prompts. The MacBook connects over SSH and handles microphone capture and playback in Chrome. The server seeded demo inventory into a fresh SQLite volume. See [server setup](server-deployment.md).
 
 All 52 Django tests passed, and an independent review checked Compose isolation and the session-bound audio route. The native ARM64 smoke returned 5.48 seconds of English audio in 1.07 seconds and 7.47 seconds of Polish in 1.42 seconds through Django. Piper used about 341 MiB after the smoke. The release image explicitly grants the non-root service read access to the downloaded model files. Chromium played two live prompts in each language through the SSH tunnel with simulated microphone recognition, and it handled offline Piper and stale revisions. The server also passed admin login and authenticated rate checks.
 
 The Piper deployment supersedes the ZONOS3-Mini experiment in [PR #9](https://github.com/michalfrackowiak/hotel-ai/pull/9). Keep using the built-in conversation parser for the private demo. Hotel-ai uses a dedicated project and does not require Coolify.
-
-## Previous milestones
 
 Inbound phone connector, PR [#8](https://github.com/michalfrackowiak/hotel-ai/pull/8). An optional Gunicorn service accepts signed Twilio voice webhooks and shares the browser reception's SQLite booking database. The caller chooses English or Polish by keypad, hears the quote, and confirms the booking by voice. Phone calls use the built-in parser so each callback has time to finish within the Twilio deadline. See [phone booking setup](phone-booking.md) for exact configuration, call routing, and the live smoke test.
 
@@ -34,6 +38,6 @@ Development tooling shipped in PR [#1](https://github.com/michalfrackowiak/hotel
 
 ## Next action
 
-Open the private reception on the MacBook through the [SSH tunnel](server-deployment.md#connect-from-the-macbook) and make a voice booking in each language with the MacBook microphone and speakers to check speech quality and recognition.
+Open the [public reception](https://92.5.19.10/) in Chrome on the MacBook and make a voice booking in each language with its microphone and speakers. Use the [SSH tunnel](server-deployment.md#connect-from-the-macbook) for Django admin.
 
 Route a test number through Twilio and verify live calls in both languages when a number or SIP domain, a public HTTPS origin, and the carrier route are available. Add the Twilio Auth Token through the ignored `.env` file. The manual checks in [alpha verification](alpha-verification.md) remain pending the target microphone, hosted provider credentials, or shared calendar. Booking-platform integration depends on which platform the hotel uses.
