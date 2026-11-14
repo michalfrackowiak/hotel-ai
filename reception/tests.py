@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import Client, SimpleTestCase, TestCase
 from django.urls import reverse
@@ -89,6 +90,19 @@ class ReceptionTests(TestCase):
         current = self.turn(current, "jutro", "guests")
         current = self.turn(current, "dwie osoby", "name")
         self.assertIn("120,00 PLN", current["reply"])
+
+    @patch("django.utils.timezone.localdate", return_value=date(2027, 12, 30))
+    def test_checkout_relative_to_today_after_a_separate_arrival(self, today):
+        for language, arrival, departure, arrival_text, departure_text in (
+            ("en", "tomorrow", "in three days", "2027-12-31", "2028-01-02"),
+            ("pl", "jutro", "za trzy dni", "31.12.2027", "02.01.2028"),
+        ):
+            with self.subTest(language=language):
+                current = self.post(language=language, reset=True).json()
+                current = self.turn(current, arrival, "check_out")
+                current = self.turn(current, departure, "guests")
+                self.assertIn(arrival_text, current["reply"])
+                self.assertIn(departure_text, current["reply"])
 
     def test_unavailable_stay_recovers_in_both_languages(self):
         for language, check_in, check_out, reply in (

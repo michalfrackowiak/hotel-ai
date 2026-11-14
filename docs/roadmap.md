@@ -14,6 +14,8 @@ Each milestone has a development branch, a pull request to `main`, and independe
 - [x] Split deployment and lightweight speech. Deploy Django, SQLite, and Piper on the ARM64 server. Keep browser microphone input and playback on the MacBook. Verify private SSH access, English and Polish WAV generation, and browser voice fallback. See the [server deployment guide](server-deployment.md).
 - [x] Public browser access. Serve the reception through Nginx with HTTP-to-HTTPS redirects and automatic certificate renewal. Verify bilingual Piper replies and private administration routes. See the [server deployment guide](server-deployment.md).
 - [x] Public microphone transcription. Capture microphone turns in the browser and transcribe with private English and Polish Vosk models on the server. Verify that a spoken date advances the public booking conversation without the browser speech service.
+- [x] Relative checkout. Accept “in three days” and “za trzy dni” after check-in and read back both dates before collecting the guest count.
+- [ ] Flexible stay dates. Infer the closest upcoming date if the year is omitted and accept check-in and checkout in a single sentence.
 
 ## Later releases
 

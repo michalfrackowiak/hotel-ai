@@ -2,11 +2,13 @@
 
 ## Latest milestone
 
+Relative checkout. The shared date parser accepts relative day and week offsets in English and Polish, measured from the current date in Europe/Warsaw. After accepting checkout, the reception reads back both dates before asking how many guests are staying. Regression tests cover “tomorrow” followed by “in three days” and its Polish equivalent across a year boundary. The yearless and one-sentence stay parser work remains open.
+
+## Previous milestones
+
 Public microphone transcription. The original browser speech service could fail after Piper finished its greeting. The public reception now captures audio during each listening turn and sends bounded PCM to Django. Django matches the session revision, uses the conversation language, and relays the samples in memory to an internal Vosk service. Other deployments may continue to use their browser speech service. See [browser voice booking](browser-voice.md) and the [server deployment guide](server-deployment.md).
 
 All 56 Django tests passed. The native ARM64 stack loaded both Vosk models and kept the Piper and Django services healthy. Independent Chrome tests fed prerecorded microphone replies through the public HTTPS page, the audio worklet, and Vosk. “Tomorrow” and “jutro” both advanced the conversation to checkout. Permission denial kept chat available. Stopping a session released the microphone and ignored a late transcript. Physical microphone recognition on the target browser remains a manual check.
-
-## Previous milestones
 
 Public browser access. Nginx on the Ubuntu host forwards the reception and its static files to Django on loopback. [HTTP](http://92.5.19.10/) redirects to the [HTTPS reception](https://92.5.19.10/). The host firewall allows inbound TCP 80 and 443 before the Oracle image's reject rule. Certbot renews the short-lived IP certificate with HTTP webroot validation and reloads Nginx through its deploy hook. The admin, booking API, and phone callback paths remain behind their private or separately configured listeners. See the [server deployment guide](server-deployment.md).
 
