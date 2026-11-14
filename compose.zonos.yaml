@@ -1,0 +1,19 @@
+services:
+  web:
+    environment:
+      HOTEL_ZONOS_URL: "http://zonos:1919"
+  zonos:
+    build:
+      context: ./tts_runtime
+    volumes:
+      - type: bind
+        source: ./data/zonos
+        target: /models
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:1919/v2/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12

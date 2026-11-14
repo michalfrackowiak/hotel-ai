@@ -5,6 +5,8 @@
     const input = document.getElementById("chat-message");
     const recognitionType = window.SpeechRecognition || window.webkitSpeechRecognition;
     const synthesis = window.speechSynthesis;
+    const canSpeak = Boolean(synthesis && window.SpeechSynthesisUtterance);
+    const audioUrl = button.dataset.audioUrl;
     const polish = document.documentElement.lang === "pl";
     const locale = polish ? "pl-PL" : "en-US";
     const copy = polish ? {
@@ -13,7 +15,10 @@
         unavailable: "Ta przeglądarka nie obsługuje rozmów głosowych. Skorzystaj z czatu.",
         listening: "Słucham…",
         waiting: "Czekam na odpowiedź…",
+        preparing: "Recepcja przygotowuje odpowiedź głosową…",
         speaking: "Recepcja odpowiada…",
+        fallback: "ZONOS3-Mini jest niedostępny. Używam głosu przeglądarki…",
+        stale: "Rozmowa zmieniła się w innej karcie. Odśwież stronę, aby wznowić rozmowę głosową.",
         permission: "Zezwól na dostęp do mikrofonu, aby rozmawiać głosowo.",
         silence: "Nie usłyszano odpowiedzi. Spróbuj ponownie lub skorzystaj z czatu.",
         error: "Rozmowa głosowa została przerwana. Spróbuj ponownie lub skorzystaj z czatu.",
@@ -24,14 +29,17 @@
         unavailable: "Voice booking is unavailable in this browser. You can still use chat.",
         listening: "Listening…",
         waiting: "Waiting for a reply…",
+        preparing: "Preparing the spoken reply…",
         speaking: "Reception is speaking…",
+        fallback: "ZONOS3-Mini is unavailable. Using the browser voice…",
+        stale: "The conversation changed in another tab. Refresh to resume voice booking.",
         permission: "Allow microphone access to use voice booking.",
         silence: "No response was heard. Try again or use chat.",
         error: "Voice booking was interrupted. Try again or use chat.",
         finished: "Voice booking ended.",
     };
 
-    if (!window.isSecureContext || !recognitionType || !synthesis || !window.SpeechSynthesisUtterance) {
+    if (!window.isSecureContext || !recognitionType || (!audioUrl && !canSpeak)) {
         status.textContent = copy.unavailable;
         return;
     }
@@ -39,13 +47,29 @@
     let active = false;
     let recognition = null;
     let speech = null;
+    let playback = null;
     let stage = null;
     let lastReply = null;
+
+    function clearPlayback() {
+        if (!playback) return;
+        const current = playback;
+        playback = null;
+        current.controller.abort();
+        if (current.player) {
+            current.player.onended = null;
+            current.player.onerror = null;
+            current.player.pause();
+            current.player.removeAttribute("src");
+        }
+        if (current.objectUrl) URL.revokeObjectURL(current.objectUrl);
+    }
 
     function pauseAudio() {
         const current = recognition;
         recognition = null;
         if (current) current.abort();
+        clearPlayback();
         if (speech) {
             speech = null;
             synthesis.cancel();
@@ -112,7 +136,16 @@
         }
     }
 
-    function speak(reply) {
+    function finishReply() {
+        if (stage === "completed") stop(copy.finished);
+        else listen();
+    }
+
+    function speakWithBrowser(reply, message) {
+        if (!canSpeak) {
+            stop(copy.error);
+            return;
+        }
         const current = new SpeechSynthesisUtterance(reply);
         current.lang = locale;
         const voice = synthesis.getVoices().find((entry) =>
@@ -122,14 +155,71 @@
         current.onend = () => {
             if (speech !== current) return;
             speech = null;
-            if (stage === "completed") stop(copy.finished);
-            else listen();
+            finishReply();
         };
         current.onerror = () => {
             if (speech === current) stop(copy.error);
         };
-        status.textContent = copy.speaking;
+        status.textContent = message;
         synthesis.speak(current);
+    }
+
+    async function speak(turn) {
+        if (!audioUrl) {
+            speakWithBrowser(turn.reply, copy.speaking);
+            return;
+        }
+
+        const current = { controller: new AbortController() };
+        playback = current;
+        status.textContent = copy.preparing;
+
+        function fallback() {
+            if (playback !== current) return;
+            clearPlayback();
+            speakWithBrowser(turn.reply, copy.fallback);
+        }
+
+        try {
+            const response = await fetch(audioUrl, {
+                method: "POST",
+                credentials: "same-origin",
+                cache: "no-store",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": form.elements.csrfmiddlewaretoken.value,
+                },
+                body: JSON.stringify({ revision: turn.revision }),
+                signal: current.controller.signal,
+            });
+            if (playback !== current) return;
+            if ([404, 409].includes(response.status)) {
+                stop(copy.stale);
+                button.disabled = true;
+                return;
+            }
+            const contentType = response.headers.get("Content-Type") || "";
+            if (!response.ok || !/^audio\/(x-)?wav(?:;|$)/i.test(contentType)) {
+                fallback();
+                return;
+            }
+
+            const blob = await response.blob();
+            if (playback !== current) return;
+            current.objectUrl = URL.createObjectURL(blob);
+            const player = new Audio(current.objectUrl);
+            current.player = player;
+            player.onended = () => {
+                if (playback !== current) return;
+                clearPlayback();
+                finishReply();
+            };
+            player.onerror = fallback;
+            await player.play();
+            if (playback === current) status.textContent = copy.speaking;
+        } catch {
+            fallback();
+        }
     }
 
     button.addEventListener("click", () => {
@@ -153,7 +243,7 @@
     });
     form.addEventListener("reception:reply", (event) => {
         stage = event.detail.stage;
-        lastReply = event.detail.reply;
+        lastReply = event.detail;
         button.disabled = !active && stage === "completed";
         if (active) {
             pauseAudio();

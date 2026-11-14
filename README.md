@@ -15,6 +15,8 @@ Open [Hotel-ai reception](http://127.0.0.1:8080/) and choose **English** or **Po
 
 Click **Start voice booking** to talk to the same reception and hear its replies. See [browser voice setup](docs/browser-voice.md) for microphone access and spoken confirmation.
 
+Use the [ZONOS3-Mini setup](docs/zonos-tts.md) for local browser voice playback in English and Polish.
+
 The chat works with the built-in parser by default. To interpret more free-form dates and guest counts, [configure a hosted model or Ollama](docs/model-providers.md) in Django admin.
 
 To publish reservations to a dedicated Google Calendar for each room, follow the [room calendar setup](docs/room-calendars.md).

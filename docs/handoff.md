@@ -2,11 +2,13 @@
 
 ## Latest milestone
 
+ZONOS3-Mini browser speech, PR [#9](https://github.com/michalfrackowiak/hotel-ai/pull/9). The optional [speech sidecar](zonos-tts.md) uses SHA-256-verified public weights and serves English and Polish replies with a stock voice. The browser requests audio for its current Django session revision. Browser speech handles temporary synthesis failures. Live phone calls still use Polly.
+
+## Previous milestones
+
 Inbound phone connector, PR [#8](https://github.com/michalfrackowiak/hotel-ai/pull/8). An optional Gunicorn service accepts signed Twilio voice webhooks and shares the browser reception's SQLite booking database. The caller chooses English or Polish by keypad, hears the quote, and confirms the booking by voice. Phone calls use the built-in parser so each callback has time to finish within the Twilio deadline. See [phone booking setup](phone-booking.md) for exact configuration, call routing, and the live smoke test.
 
 All 44 Django tests passed. Independent review verified the separate listener's route restrictions and sent eight simultaneous signed confirmations against file-backed SQLite. The callbacks returned one shared reference and created one booking. A live Twilio call and carrier route are still pending.
-
-## Previous milestones
 
 Alpha verification, PR [#7](https://github.com/michalfrackowiak/hotel-ai/pull/7). A fresh Compose checkout verified local startup, dependency and migration checks, all 31 tests, and the reception, booking API, and admin paths. CI checks both language routes and chat and voice assets. A warmed local Ollama model extracted guest counts in both languages. See [alpha verification](alpha-verification.md) for the commands and the manual integration checks.
 

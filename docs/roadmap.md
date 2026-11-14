@@ -14,6 +14,7 @@ Each milestone has a development branch, a pull request to `main`, and independe
 
 ## Later releases
 
+- [x] Improve browser voice playback with locally hosted ZONOS3-Mini in English and Polish.
 - [x] Implement the inbound phone connector, including English and Polish booking flows, signed callbacks, and retry-safe confirmation.
 - [ ] Route the dedicated mobile number to the connector and place live calls in both languages. This needs a Twilio number or SIP domain, a public HTTPS endpoint, and a carrier forwarding or cellular gateway route.
 - [ ] Add integrations with hotel booking platforms as needed.

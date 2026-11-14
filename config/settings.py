@@ -95,3 +95,11 @@ if not 1 <= HOTEL_OLLAMA_TIMEOUT <= 120:
 
 HOTEL_TELEPHONY_PUBLIC_BASE_URL = os.environ.get("HOTEL_TELEPHONY_PUBLIC_BASE_URL", "").rstrip("/")
 HOTEL_TWILIO_AUTH_TOKEN = os.environ.get("HOTEL_TWILIO_AUTH_TOKEN", "")
+HOTEL_ZONOS_URL = os.environ.get("HOTEL_ZONOS_URL", "").rstrip("/")
+HOTEL_ZONOS_VOICE_ID = os.environ.get("HOTEL_ZONOS_VOICE_ID", "default_ff3654d2ba95db46")
+try:
+    HOTEL_ZONOS_TIMEOUT = int(os.environ.get("HOTEL_ZONOS_TIMEOUT", "25"))
+except ValueError as error:
+    raise ImproperlyConfigured("HOTEL_ZONOS_TIMEOUT must be an integer number of seconds.") from error
+if not 1 <= HOTEL_ZONOS_TIMEOUT <= 120:
+    raise ImproperlyConfigured("HOTEL_ZONOS_TIMEOUT must be between 1 and 120 seconds.")
