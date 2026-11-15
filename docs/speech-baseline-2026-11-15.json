@@ -1,0 +1,446 @@
+{
+  "schema_version": 1,
+  "corpus_version": 1,
+  "label": "ca543c9-arm64-warm",
+  "captured_at": "2026-11-15T23:00:21.189323+00:00",
+  "wall_seconds": 21.121283168904483,
+  "host": {
+    "machine": "aarch64",
+    "system": "Linux",
+    "python": "3.13.18"
+  },
+  "conditions": {
+    "sequential": true,
+    "repeats": 2,
+    "request_timeout_seconds": 12,
+    "semantic_reference_date": "2026-11-16",
+    "django_semantic": true,
+    "resampling": "mono PCM16 linear interpolation to 16000 Hz",
+    "limitations": [
+      "Synthetic Piper speech from fixed fictional phrases. Accuracy does not represent guest microphones, accents, noise, or networks.",
+      "The first row per language can include warmup. Repetitions run on the same live model process.",
+      "TTS latency includes buffering the complete WAV response. Time to first audio and cold process startup are unmeasured.",
+      "No recording, browser playback, speech endpointing, or user-perceived turn latency is measured.",
+      "Provider model identity and container resource limits must be recorded separately from deployment inventory.",
+      "Semantic checks use the installed deterministic parsers and current parser configuration. No booking or conversation writes occur."
+    ]
+  },
+  "summary": {
+    "en": {
+      "attempts": 12,
+      "completed": 12,
+      "errors": 0,
+      "exact_correct": 10,
+      "exact_denominator": 12,
+      "semantic_correct": 10,
+      "semantic_denominator": 12,
+      "timings": {
+        "tts_seconds": {
+          "p50": 0.28341535991057754,
+          "p95": 0.7525448799133301
+        },
+        "asr_seconds": {
+          "p50": 0.6070909299887717,
+          "p95": 0.9582359630148858
+        },
+        "pipeline_seconds": {
+          "p50": 0.8848029631190002,
+          "p95": 1.749722922919318
+        },
+        "tts_rtf": {
+          "p50": 0.1829805928823781,
+          "p95": 0.3254387212621066
+        },
+        "asr_rtf": {
+          "p50": 0.4214149701874703,
+          "p95": 0.6804636945022664
+        }
+      }
+    },
+    "pl": {
+      "attempts": 12,
+      "completed": 12,
+      "errors": 0,
+      "exact_correct": 9,
+      "exact_denominator": 12,
+      "semantic_correct": 9,
+      "semantic_denominator": 12,
+      "timings": {
+        "tts_seconds": {
+          "p50": 0.25224134395830333,
+          "p95": 0.7307626609690487
+        },
+        "asr_seconds": {
+          "p50": 0.4133971040137112,
+          "p95": 0.7028229129500687
+        },
+        "pipeline_seconds": {
+          "p50": 0.6551658830139786,
+          "p95": 1.4769770898856223
+        },
+        "tts_rtf": {
+          "p50": 0.1767043162275244,
+          "p95": 0.18624332365615534
+        },
+        "asr_rtf": {
+          "p50": 0.29261623838921236,
+          "p95": 0.39314651530893974
+        }
+      }
+    }
+  },
+  "results": [
+    {
+      "language": "en",
+      "category": "arrival",
+      "repetition": 1,
+      "input": "tomorrow",
+      "tts_seconds": 0.34004278387874365,
+      "tts_rtf": 0.3254387212621066,
+      "audio_seconds": 1.044875,
+      "transcript": "tomorrow",
+      "asr_seconds": 0.5321253158617765,
+      "asr_rtf": 0.509271746248859,
+      "pipeline_seconds": 0.8848029631190002,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "en",
+      "category": "duration",
+      "repetition": 1,
+      "input": "for three nights",
+      "tts_seconds": 0.2598066870123148,
+      "tts_rtf": 0.18805279313264134,
+      "audio_seconds": 1.3815625,
+      "transcript": "for three nights",
+      "asr_seconds": 0.6528267040848732,
+      "asr_rtf": 0.47252781114489806,
+      "pipeline_seconds": 0.9277863542083651,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "en",
+      "category": "guests",
+      "repetition": 1,
+      "input": "two guests",
+      "tts_seconds": 0.21602008794434369,
+      "tts_rtf": 0.17890788379882494,
+      "audio_seconds": 1.2074375,
+      "transcript": "two guests",
+      "asr_seconds": 0.5556199080310762,
+      "asr_rtf": 0.4601645286245261,
+      "pipeline_seconds": 0.784793864004314,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "en",
+      "category": "email",
+      "repetition": 1,
+      "input": "guest at example dot com",
+      "tts_seconds": 0.3740003809798509,
+      "tts_rtf": 0.17896360605549586,
+      "audio_seconds": 2.0898125,
+      "transcript": "guess that example dot com",
+      "asr_seconds": 0.7263916260562837,
+      "asr_rtf": 0.3475869849837169,
+      "pipeline_seconds": 1.1232212351169437,
+      "exact_match": false,
+      "semantic_correct": false
+    },
+    {
+      "language": "en",
+      "category": "phone",
+      "repetition": 1,
+      "input": "plus four eight five zero one two three four five six seven",
+      "tts_seconds": 0.7525448799133301,
+      "tts_rtf": 0.18362310827037473,
+      "audio_seconds": 4.0983125,
+      "transcript": "plus four eight five zero one two three four five six seven",
+      "asr_seconds": 0.952215394936502,
+      "asr_rtf": 0.23234328639812168,
+      "pipeline_seconds": 1.749722922919318,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "pl",
+      "category": "arrival",
+      "repetition": 1,
+      "input": "jutro",
+      "tts_seconds": 0.172241689870134,
+      "tts_rtf": 0.17661285810831479,
+      "audio_seconds": 0.97525,
+      "transcript": "i oto",
+      "asr_seconds": 0.38341613905504346,
+      "asr_rtf": 0.39314651530893974,
+      "pipeline_seconds": 0.5665346768219024,
+      "exact_match": false,
+      "semantic_correct": false
+    },
+    {
+      "language": "pl",
+      "category": "duration",
+      "repetition": 1,
+      "input": "na trzy noce",
+      "tts_seconds": 0.25644213892519474,
+      "tts_rtf": 0.1767043162275244,
+      "audio_seconds": 1.45125,
+      "transcript": "na trzy noce",
+      "asr_seconds": 0.4246593159623444,
+      "asr_rtf": 0.29261623838921236,
+      "pipeline_seconds": 0.6971499060746282,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "pl",
+      "category": "guests",
+      "repetition": 1,
+      "input": "dwie osoby",
+      "tts_seconds": 0.23055924801155925,
+      "tts_rtf": 0.1773106449500095,
+      "audio_seconds": 1.3003125,
+      "transcript": "dwie osoby",
+      "asr_seconds": 0.39801253797486424,
+      "asr_rtf": 0.30608991144425995,
+      "pipeline_seconds": 0.643104944145307,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "pl",
+      "category": "email",
+      "repetition": 1,
+      "input": "gosc małpa example kropka com",
+      "tts_seconds": 0.48133810004219413,
+      "tts_rtf": 0.17793562221420237,
+      "audio_seconds": 2.705125,
+      "transcript": "gość małpa jak sample kropka kom",
+      "asr_seconds": 0.5869226439390332,
+      "asr_rtf": 0.21696692165390996,
+      "pipeline_seconds": 1.0982922699768096,
+      "exact_match": false,
+      "semantic_correct": false
+    },
+    {
+      "language": "pl",
+      "category": "phone",
+      "repetition": 1,
+      "input": "plus cztery osiem pięć zero jeden dwa trzy cztery pięć sześć siedem",
+      "tts_seconds": 0.7286886440124363,
+      "tts_rtf": 0.18624332365615534,
+      "audio_seconds": 3.9125625,
+      "transcript": "plus cztery osiem pięć zero jeden dwa trzy cztery pięć sześć siedem",
+      "asr_seconds": 0.6868175819981843,
+      "asr_rtf": 0.1755416257243646,
+      "pipeline_seconds": 1.4589026619214565,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "en",
+      "category": "silence",
+      "repetition": 1,
+      "input": "",
+      "audio_seconds": 1.0,
+      "transcript": "",
+      "asr_seconds": 0.4214149701874703,
+      "asr_rtf": 0.4214149701874703,
+      "pipeline_seconds": 0.42148172995075583,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "pl",
+      "category": "silence",
+      "repetition": 1,
+      "input": "",
+      "audio_seconds": 1.0,
+      "transcript": "",
+      "asr_seconds": 0.32265644101426005,
+      "asr_rtf": 0.32265644101426005,
+      "pipeline_seconds": 0.32272348110564053,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "en",
+      "category": "arrival",
+      "repetition": 2,
+      "input": "tomorrow",
+      "tts_seconds": 0.28341535991057754,
+      "tts_rtf": 0.2773992633858959,
+      "audio_seconds": 1.0216875,
+      "transcript": "tomorrow",
+      "asr_seconds": 0.6952212508767843,
+      "asr_rtf": 0.6804636945022664,
+      "pipeline_seconds": 0.9896453800611198,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "en",
+      "category": "duration",
+      "repetition": 2,
+      "input": "for three nights",
+      "tts_seconds": 0.2570534241385758,
+      "tts_rtf": 0.1829805928823781,
+      "audio_seconds": 1.4048125,
+      "transcript": "for three nights",
+      "asr_seconds": 0.6070909299887717,
+      "asr_rtf": 0.43215085998221947,
+      "pipeline_seconds": 0.8793860781006515,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "en",
+      "category": "guests",
+      "repetition": 2,
+      "input": "two guests",
+      "tts_seconds": 0.2072302158921957,
+      "tts_rtf": 0.1784928646788938,
+      "audio_seconds": 1.161,
+      "transcript": "two guests",
+      "asr_seconds": 0.5068660289980471,
+      "asr_rtf": 0.43657711369340835,
+      "pipeline_seconds": 0.7266955890227109,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "en",
+      "category": "email",
+      "repetition": 2,
+      "input": "guest at example dot com",
+      "tts_seconds": 0.3768415648955852,
+      "tts_rtf": 0.17640330714831373,
+      "audio_seconds": 2.13625,
+      "transcript": "guess that example dot com",
+      "asr_seconds": 0.7082188772037625,
+      "asr_rtf": 0.33152434275190756,
+      "pipeline_seconds": 1.1083338321186602,
+      "exact_match": false,
+      "semantic_correct": false
+    },
+    {
+      "language": "en",
+      "category": "phone",
+      "repetition": 2,
+      "input": "plus four eight five zero one two three four five six seven",
+      "tts_seconds": 0.74668207205832,
+      "tts_rtf": 0.1832292437798399,
+      "audio_seconds": 4.075125,
+      "transcript": "plus four eight five zero one two three four five six seven",
+      "asr_seconds": 0.9582359630148858,
+      "asr_rtf": 0.23514271660743802,
+      "pipeline_seconds": 1.749695243081078,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "pl",
+      "category": "arrival",
+      "repetition": 2,
+      "input": "jutro",
+      "tts_seconds": 0.17764277500100434,
+      "tts_rtf": 0.17587305241111745,
+      "audio_seconds": 1.0100625,
+      "transcript": "jutro",
+      "asr_seconds": 0.3730724537745118,
+      "asr_rtf": 0.36935581092705827,
+      "pipeline_seconds": 0.5618570391088724,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "pl",
+      "category": "duration",
+      "repetition": 2,
+      "input": "na trzy noce",
+      "tts_seconds": 0.25224134395830333,
+      "tts_rtf": 0.17663959660945613,
+      "audio_seconds": 1.428,
+      "transcript": "na trzy noce",
+      "asr_seconds": 0.4133971040137112,
+      "asr_rtf": 0.28949377031772494,
+      "pipeline_seconds": 0.681681300047785,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "pl",
+      "category": "guests",
+      "repetition": 2,
+      "input": "dwie osoby",
+      "tts_seconds": 0.22724025999195874,
+      "tts_rtf": 0.17633465055877298,
+      "audio_seconds": 1.2886875,
+      "transcript": "dwie osoby",
+      "asr_seconds": 0.4134475449100137,
+      "asr_rtf": 0.3208283970396343,
+      "pipeline_seconds": 0.6551658830139786,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "pl",
+      "category": "email",
+      "repetition": 2,
+      "input": "gosc małpa example kropka com",
+      "tts_seconds": 0.4828053521923721,
+      "tts_rtf": 0.17695710897232678,
+      "audio_seconds": 2.728375,
+      "transcript": "gość małpa g sample kropka kon",
+      "asr_seconds": 0.5593974590301514,
+      "asr_rtf": 0.20502953554044123,
+      "pipeline_seconds": 1.073247625026852,
+      "exact_match": false,
+      "semantic_correct": false
+    },
+    {
+      "language": "pl",
+      "category": "phone",
+      "repetition": 2,
+      "input": "plus cztery osiem pięć zero jeden dwa trzy cztery pięć sześć siedem",
+      "tts_seconds": 0.7307626609690487,
+      "tts_rtf": 0.18622011842427222,
+      "audio_seconds": 3.9241875,
+      "transcript": "plus cztery osiem pięć zero jeden dwa trzy cztery pięć sześć siedem",
+      "asr_seconds": 0.7028229129500687,
+      "asr_rtf": 0.17910023742496217,
+      "pipeline_seconds": 1.4769770898856223,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "en",
+      "category": "silence",
+      "repetition": 2,
+      "input": "",
+      "audio_seconds": 1.0,
+      "transcript": "",
+      "asr_seconds": 0.20776710007339716,
+      "asr_rtf": 0.20776710007339716,
+      "pipeline_seconds": 0.207832622108981,
+      "exact_match": true,
+      "semantic_correct": true
+    },
+    {
+      "language": "pl",
+      "category": "silence",
+      "repetition": 2,
+      "input": "",
+      "audio_seconds": 1.0,
+      "transcript": "",
+      "asr_seconds": 0.3180536429863423,
+      "asr_rtf": 0.3180536429863423,
+      "pipeline_seconds": 0.31811844394542277,
+      "exact_match": true,
+      "semantic_correct": true
+    }
+  ]
+}
