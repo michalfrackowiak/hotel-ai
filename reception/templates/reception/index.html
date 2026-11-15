@@ -7,8 +7,8 @@
     <meta name="color-scheme" content="light">
     <title>{% if language == "pl" %}Rezerwacja pokoju{% else %}Book a room{% endif %} · Hotel-ai</title>
     <link rel="stylesheet" href="{% static 'reception/reception.css' %}">
-    <script src="{% static 'reception/chat.js' %}?v=parser-training" defer></script>
-    <script src="{% static 'reception/voice.js' %}?v=parser-training" defer></script>
+    <script src="{% static 'reception/chat.js' %}?v=voice-chat-sync" defer></script>
+    <script src="{% static 'reception/voice.js' %}?v=voice-chat-sync" defer></script>
 </head>
 <body>
     {% include "reception/_header.html" with active_page="reception" %}
@@ -61,6 +61,8 @@
                     <button class="quiet-button" type="button" data-answer="Email">E-mail</button>
                     <button class="quiet-button" type="button" data-answer="SMS">SMS</button>
                 </div>
+                <div id="chat-suggestions" class="confirmation-actions" role="group"
+                    aria-label="{% if language == 'pl' %}Proponowane odpowiedzi{% else %}Suggested replies{% endif %}" hidden></div>
                 <form id="chat-form" class="chat-form" method="post" action="{% url 'reception-message' %}">
                     {% csrf_token %}
                     <label class="sr-only" for="chat-message">{% if language == "pl" %}Twoja wiadomość{% else %}Your message{% endif %}</label>

@@ -72,13 +72,17 @@ def _result(state, *, stale=False, cursor=0):
         payload["reference"] = state["reference"]
     if state["stage"] == "welcome":
         payload["welcome_parts"] = WELCOME_PARTS
-    if parts := voice_segments(state, overrides=overrides):
+    if parts := _browser_voice_parts(state, overrides=overrides):
+        if not any(row.chat_text for row in overrides.values()):
+            payload["reply"] = " ".join(part["text"] for part in parts)
         payload["voice_parts"] = parts
         payload["voice_key"] = _voice_key(parts)
         if state["stage"] == "check_in" and any(part["listen"] for part in parts):
             payload["arrival_parts"] = parts
     elif payload["reply"] != state["reply"]:
         payload["voice_reply"] = state["reply"]
+    if suggestions := _suggestions(state):
+        payload["suggestions"] = suggestions
     if state["stage"] == "check_in" and state["language"] == "pl" and state.get("voice_welcome"):
         payload["voice_welcome"] = True
     if state["stage"] == "handover":
@@ -93,12 +97,40 @@ def _result(state, *, stale=False, cursor=0):
     return JsonResponse(payload, status=409 if stale else 200)
 
 
+def _suggestions(state):
+    language, stage = state["language"], state["stage"]
+    if stage == "check_in":
+        answers = ("Dzisiaj", "Jutro", "Pojutrze") if language == "pl" else ("Today", "Tomorrow", "Day after tomorrow")
+    elif stage == "check_out":
+        answers = ("1 noc", "2 noce", "3 noce") if language == "pl" else ("1 night", "2 nights", "3 nights")
+    elif stage == "guests":
+        answers = ("1", "2", "3", "4")
+    elif stage == "room":
+        return [
+            {"label": offer["room"], "text": str(number)}
+            for number, offer in enumerate(state["choices"], 1)
+        ]
+    else:
+        return []
+    return [{"label": answer, "text": answer} for answer in answers]
+
+
 def _invalid(status=400):
     return JsonResponse({"error": "invalid_message"}, status=status)
 
 
 def _voice_key(parts):
     return sha256(json.dumps(parts, sort_keys=True).encode("utf-8")).hexdigest()[:32]
+
+
+def _browser_voice_parts(state, *, overrides=None):
+    parts = voice_segments(state, overrides=overrides)
+    if not parts and state["stage"] == "welcome":
+        return [
+            {"language": language, "text": text, "seconds": 0, "listen": False}
+            for language, text in WELCOME_PARTS
+        ]
+    return parts
 
 
 def _new_web_conversation(language):
@@ -296,7 +328,7 @@ def audio(request):
         return HttpResponse(status=404)
     if state["revision"] != revision:
         return HttpResponse(status=409)
-    parts = voice_segments(state) if part is not None else ()
+    parts = _browser_voice_parts(state) if part is not None else ()
     if voice_key is not None and _voice_key(parts) != voice_key:
         return HttpResponse(status=409)
     if part is not None and part >= len(parts):

@@ -2,11 +2,13 @@
 
 ## Latest milestone
 
+Voice and chat synchronization. The default written prompts follow the voice script. During voice booking, chat shows each segment when it starts playing and shows the guest's recognized reply immediately. Suggested buttons cover arrival dates, durations, guest count, and available rooms. Explicit chat overrides from the scenario editor remain available for text-only booking.
+
+## Previous milestones
+
 Parser training, PR [#26](https://github.com/michalfrackowiak/hotel-ai/pull/26). **Reception → Parser training samples** lists original English and Polish chat and voice inputs, parser results, and the success flag. Staff can save validated corrections. Rules apply to matching input, source, language, and step. See [parser training](parser-training.md) for examples, activation, and retention.
 
 All 153 Django tests and migration and JavaScript checks passed. Chromium verified saving a correction in admin and using it for the next matching reply, with the expected room capacity and stay price. The live server still needs deployment and activation.
-
-## Previous milestones
 
 Booking scenario editor, PR [#25](https://github.com/michalfrackowiak/hotel-ai/pull/25). Staff can edit the English and Polish chat and voice wording in the private admin, add ordered voice segments, and set pauses in seconds. The editor validates the placeholders used to display room options, prices, dates, guest counts, and references. See [booking scenario editor](scenario-editor.md).
 

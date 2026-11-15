@@ -383,6 +383,9 @@
             const voice = synthesis.getVoices().find((entry) => entry.lang.toLowerCase().split("-")[0] === language);
             if (voice) current.voice = voice;
             speech = current;
+            current.onstart = () => {
+                if (speech === current) announceSpoken(turn, reply, voicePart + index);
+            };
             current.onend = () => {
                 if (speech !== current) return;
                 speech = null;
@@ -396,6 +399,12 @@
         }
         status.textContent = message;
         speakPart(0);
+    }
+
+    function announceSpoken(turn, text, index = voicePart) {
+        form.dispatchEvent(new CustomEvent("reception:spoken", {
+            detail: { revision: turn.revision, text, index },
+        }));
     }
 
     function requestAudio(turn, part) {
@@ -472,6 +481,7 @@
                 finishReply();
             };
             source.start();
+            announceSpoken(spokenTurn, spokenTurn.reply);
             current.source = source;
             status.textContent = copy.speaking;
             if (segment && turn.voiceParts[voicePart + 1]) {

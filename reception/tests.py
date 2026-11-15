@@ -219,8 +219,8 @@ class ReceptionTests(TestCase):
         language = page.context["language"]
         opening = self.post(language=language, start=True).json()
         self.assertEqual(opening["stage"], "check_in")
-        self.assertTrue(opening["reply"].startswith("Hi, this is Neptun Resort Jastrzębia Góra. "))
-        self.assertIn("please state your planned arrival date", opening["reply"])
+        self.assertTrue(opening["reply"].startswith("Hi, this is Neptun Resort, Pucka 2 street"))
+        self.assertIn("Specify the dates of your stay", opening["reply"])
         self.assertNotIn("welcome_parts", opening)
         self.assertNotIn("voice_welcome", opening)
         self.turn(opening, "tomorrow", "check_out", voice=True)
@@ -232,7 +232,7 @@ class ReceptionTests(TestCase):
     def test_english_arrival_saved_without_a_greeting_is_updated_on_start(self):
         opening = self.post(language="en", start=True).json()
         prior = Conversation.objects.get()
-        prior.state["reply"] = opening["reply"].removeprefix("Hi, this is Neptun Resort Jastrzębia Góra. ")
+        prior.state["reply"] = prior.state["reply"].removeprefix("Hi, this is Neptun Resort Jastrzębia Góra. ")
         prior.save(update_fields=["state"])
         refreshed = self.post(language="en", start=True).json()
         self.assertEqual(refreshed["reply"], opening["reply"])
@@ -261,9 +261,24 @@ class ReceptionTests(TestCase):
         self.assertEqual(english["language"], "en")
         self.assertEqual(self.client.session.session_key, session)
         self.assertEqual(self.client.get(reverse("reception")).context["language"], "en")
-        self.assertIn("planned arrival date", english["reply"])
+        self.assertIn("Specify the dates of your stay", english["reply"])
         self.turn(english, "tomorrow", "check_out", voice=True)
         extract.assert_not_called()
+
+    def test_bilingual_suggestions_submit_valid_dates_durations_and_rooms(self):
+        for language, tomorrow, nights in (("en", "Tomorrow", "2 nights"), ("pl", "Jutro", "2 noce")):
+            with self.subTest(language=language):
+                current = self.post(language=language, reset=True).json()
+                if language == "pl":
+                    current = self.post(language=language, revision=current["revision"], timeout=True).json()
+                self.assertIn({"label": tomorrow, "text": tomorrow}, current["suggestions"])
+                current = self.turn(current, tomorrow, "check_out")
+                self.assertIn({"label": nights, "text": nights}, current["suggestions"])
+                current = self.turn(current, nights, "guests")
+                current = self.turn(current, current["suggestions"][1]["text"], "room")
+                self.assertEqual(current["suggestions"][0], {"label": "ROOM-2", "text": "1"})
+                current = self.turn(current, current["suggestions"][0]["text"], "confirm")
+                self.assertNotIn("suggestions", current)
 
     def test_timed_welcome_defaults_to_polish_and_voice_can_replay_it(self):
         opening = self.post(language="pl", start=True).json()

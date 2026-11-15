@@ -57,6 +57,15 @@ class ReceptionAudioTests(TestCase):
         self.assertEqual(response.content, wav_fixture())
         generate.assert_called_once_with(WELCOME_PARTS)
 
+    @patch("reception.views.synthesize", return_value=wav_fixture())
+    def test_welcome_captions_use_the_same_language_and_text_as_each_voice_clip(self, generate):
+        started = self.start_conversation("reset", at_welcome=True)
+        self.assertEqual(started["reply"], " ".join(part["text"] for part in started["voice_parts"]))
+        for index, (language, text) in enumerate(WELCOME_PARTS):
+            payload = {"revision": started["revision"], "part": index, "voice_key": started["voice_key"]}
+            self.assertEqual(self.request_audio(payload, token=self.token).status_code, 200)
+            self.assertEqual(generate.call_args.args, (text, language))
+
     @patch("reception.views.synthesize")
     def test_english_page_voice_reads_the_arrival_prompt(self, generate):
         generate.return_value = wav_fixture()
@@ -67,11 +76,11 @@ class ReceptionAudioTests(TestCase):
             content_type="application/json",
             headers={"X-CSRFToken": self.token},
         ).json()
-        response = self.request_audio({"revision": started["revision"]}, token=self.token)
+        response = self.request_audio({"revision": started["revision"], "part": 0}, token=self.token)
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(started["reply"].startswith("Hi, this is Neptun Resort Jastrzębia Góra. "))
-        self.assertIn("please state your planned arrival date", started["reply"])
-        generate.assert_called_once_with(started["reply"], "en")
+        self.assertTrue(started["reply"].startswith("Hi, this is Neptun Resort, Pucka 2 street"))
+        self.assertIn("Specify the dates of your stay", started["reply"])
+        generate.assert_called_once_with(ARRIVAL_PARTS["en"][0]["text"], "en")
 
     @patch("reception.views.synthesize", return_value=wav_fixture())
     def test_arrival_audio_serves_only_the_requested_segment(self, generate):
@@ -145,7 +154,7 @@ class ReceptionAudioTests(TestCase):
         self.assertEqual(self.request_audio({"revision": "a" * 128}, token=self.token).status_code, 413)
         generate.assert_not_called()
         response = self.request_audio(self.payload, token=self.token)
-        generate.assert_called_once_with(self.started["reply"], "pl")
+        generate.assert_called_once_with(Conversation.objects.get().state["reply"], "pl")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "audio/wav")
         self.assertIn("no-store", response["Cache-Control"])

@@ -8,7 +8,8 @@
     const confirmation = document.getElementById("chat-confirmation");
     const languageChoice = document.getElementById("chat-language");
     const delivery = document.getElementById("chat-delivery");
-    const quickReplies = [confirmation, languageChoice, delivery];
+    const suggestions = document.getElementById("chat-suggestions");
+    const quickReplies = [confirmation, languageChoice, delivery, suggestions];
     const answerButtons = quickReplies.flatMap((group) => Array.from(group.querySelectorAll("button")));
     const log = document.getElementById("chat-log");
     const messages = document.getElementById("chat-messages");
@@ -75,6 +76,9 @@
     let handoverClosed = false;
     let staffReplied = false;
     let cursor = 0;
+    let suggestedAnswers = [];
+    let displayedTurn = null;
+    let transcriptShown = false;
 
     function updateControls() {
         const copy = labels[language];
@@ -102,6 +106,15 @@
         answerButtons.forEach((button) => {
             button.disabled = !canSend;
         });
+        suggestions.hidden = suggestedAnswers.length === 0 || !canSend;
+        suggestions.replaceChildren(...suggestedAnswers.map((answer) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "quiet-button";
+            button.textContent = answer.label;
+            button.addEventListener("click", () => sendMessage(answer.text));
+            return button;
+        }));
     }
 
     function appendMessage(text, role, reference) {
@@ -125,6 +138,13 @@
 
         messages.append(item);
         log.scrollTop = log.scrollHeight;
+        return item;
+    }
+
+    function displayReply(result) {
+        const item = appendMessage(result.reply, "reception", result.reference);
+        displayedTurn = { revision: result.revision, result, item, spoken: new Map() };
+        if (voiceActive) item.querySelector("p").textContent = "";
     }
 
     async function fetchChat(payload) {
@@ -184,7 +204,8 @@
                 revision = result.revision;
                 stage = result.stage;
                 lastReply = result.reply;
-                appendMessage(result.reply, "reception", result.reference);
+                displayReply(result);
+                suggestedAnswers = result.suggestions || [];
                 status.textContent = "";
                 updateControls();
                 announceReply(result);
@@ -240,7 +261,7 @@
             }
             const wasHandover = stage === "handover";
             if (payload.message && !result.stale && !wasHandover) {
-                appendMessage(payload.message, "guest");
+                if (!payload.transcript || !transcriptShown) appendMessage(payload.message, "guest");
                 if (result.stage === "handover" && result.handover_messages.length) {
                     cursor = result.handover_messages[0].id;
                 }
@@ -252,7 +273,7 @@
                 history.replaceState(null, "", address);
             }
             if (!wasHandover || result.stage !== "handover" || lastReply !== result.reply) {
-                appendMessage(result.reply, "reception", result.reference);
+                displayReply(result);
                 reply = result;
             } else if (payload.voice_start) {
                 reply = result;
@@ -262,6 +283,8 @@
             stage = result.stage;
             revision = result.revision;
             voiceWelcome = Boolean(result.voice_welcome);
+            suggestedAnswers = result.suggestions || [];
+            transcriptShown = false;
             connected = true;
             status.textContent = result.stale ? labels[language].updated : "";
             if (stage === "handover") appendHandover(result);
@@ -319,11 +342,31 @@
     document.addEventListener("visibilitychange", trackSilence);
     form.addEventListener("reception:voice-session", (event) => {
         voiceActive = event.detail.active;
+        if (displayedTurn) {
+            if (voiceActive) {
+                displayedTurn.spoken.clear();
+                displayedTurn.item.querySelector("p").textContent = "";
+            } else if (displayedTurn.spoken.size === 0) {
+                displayedTurn.item.querySelector("p").textContent = displayedTurn.result.reply;
+            }
+        }
         if (voiceActive && voiceWelcome && !pending) requestChat({ voice_start: true, revision });
         trackSilence();
     });
     form.addEventListener("reception:voice-silence", replyTimeout);
-    form.addEventListener("reception:transcript", (event) => sendMessage(event.detail, true));
+    form.addEventListener("reception:spoken", (event) => {
+        const spoken = event.detail;
+        if (!displayedTurn || spoken.revision !== displayedTurn.revision) return;
+        displayedTurn.spoken.set(spoken.index, spoken.text);
+        displayedTurn.item.querySelector("p").textContent = [...displayedTurn.spoken.values()].join(" ");
+        log.scrollTop = log.scrollHeight;
+    });
+    form.addEventListener("reception:transcript", (event) => {
+        if (!connected || pending || handoverClosed || terminalStages.has(stage)) return;
+        appendMessage(event.detail, "guest");
+        transcriptShown = true;
+        sendMessage(event.detail, true);
+    });
 
     form.addEventListener("submit", (event) => {
         event.preventDefault();

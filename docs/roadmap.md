@@ -29,6 +29,7 @@ Each milestone has a development branch, a pull request to `main`, and independe
 - [x] Voice arrival prompts. Give English callers the address and a two-second pause, then offer two five-second listening windows in English and Polish.
 - [x] Booking scenario editor. Edit bilingual chat text, voice scripts, and pauses in the private admin.
 - [x] Parser training. Review bilingual chat and voice inputs and their parsed values, then reuse validated staff corrections.
+- [x] Synchronize voice and chat. Display spoken segments as playback begins, show guest transcripts, and offer contextual reply buttons.
 
 ## Later releases
 
