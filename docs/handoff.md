@@ -2,9 +2,11 @@
 
 ## Latest milestone
 
-My booking. The reception has English and Polish booking lookup. Guests submit the confirmation number from their receipt and see the room, dates, guest count, and booked price. The lookup uses a CSRF-protected form, keeps the number out of the URL, and returns uncached responses. Nginx publishes the lookup on the guest listener with the reception rate limit.
+Room availability. The public browser tab searches the existing inventory and shows nightly and total PLN prices. Selecting a room opens a prefilled form. Signed offers expire after 30 minutes and belong to the browser session. Confirmation reuses the booking service to check capacity, availability, and price. Repeated submissions of an identical form return the same confirmation number.
 
 ## Previous milestones
+
+My booking. The reception has English and Polish booking lookup. Guests submit the confirmation number from their receipt and see the room, dates, guest count, and booked price. The lookup uses a CSRF-protected form, keeps the number out of the URL, and returns uncached responses. Nginx publishes the lookup on the guest listener with the reception rate limit.
 
 Checkout question. After check-in, the reception asks how long the guest will stay or when they plan to check out. The prompt and retry give a supported example in English and Polish. Guests can supply a checkout date or an existing relative expression such as “in three days” or “za trzy dni.” Converting lengths measured from check-in remains pending.
 

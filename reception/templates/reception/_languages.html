@@ -1,4 +1,4 @@
 <nav class="languages" aria-label="{% if language == 'pl' %}Język{% else %}Language{% endif %}">
-    <a href="{{ page_url }}" lang="en"{% if language == "en" %} aria-current="true"{% endif %}>English</a>
-    <a href="{{ page_url }}?lang=pl" lang="pl"{% if language == "pl" %} aria-current="true"{% endif %}>Polski</a>
+    <a href="{{ page_url }}{% if selection %}?token={{ selection|urlencode }}{% elif searched %}?check_in={{ search.check_in.value|urlencode }}&amp;check_out={{ search.check_out.value|urlencode }}&amp;guests={{ search.guests.value|urlencode }}{% endif %}" lang="en"{% if language == "en" %} aria-current="true"{% endif %}>English</a>
+    <a href="{{ page_url }}?lang=pl{% if selection %}&amp;token={{ selection|urlencode }}{% elif searched %}&amp;check_in={{ search.check_in.value|urlencode }}&amp;check_out={{ search.check_out.value|urlencode }}&amp;guests={{ search.guests.value|urlencode }}{% endif %}" lang="pl"{% if language == "pl" %} aria-current="true"{% endif %}>Polski</a>
 </nav>

@@ -17,6 +17,7 @@ Each milestone has a development branch, a pull request to `main`, and independe
 - [x] Relative checkout. Accept “in three days” and “za trzy dni” after check-in and read back both dates before collecting the guest count.
 - [x] Checkout question. Ask how long guests will stay or when they plan to check out, and give an example of a supported reply in both languages.
 - [x] My booking. Look up a confirmed stay by its confirmation number in English or Polish.
+- [x] Room availability. Search by dates and number of guests, then confirm a selected room through a prefilled booking form.
 - [ ] Checkout duration. Resolve lengths of stay in days, nights, weeks, and months from check-in.
 - [ ] Flexible stay dates. Infer the closest upcoming date if the year is omitted and accept check-in and checkout in a single sentence.
 

@@ -80,7 +80,7 @@ body {
     display: none;
 }
 
-button, input {
+button, input, select {
     color: inherit;
     font: inherit;
 }
@@ -250,7 +250,8 @@ button:disabled, input:disabled {
     font-weight: 650;
 }
 
-.lookup-form input[type="text"] {
+.lookup-form input:not([type="hidden"]),
+.lookup-form select {
     width: 100%;
     min-height: 48px;
     padding: 10px 12px;
@@ -299,6 +300,84 @@ button:disabled, input:disabled {
 .lookup-result dd {
     margin: 0;
     font-weight: 650;
+    overflow-wrap: anywhere;
+}
+
+.stay-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr));
+    gap: 12px;
+}
+
+.stay-field {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.room-options {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.room-option {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--assistant);
+}
+
+.room-option h3 {
+    margin: 0 0 6px;
+    font-size: 1rem;
+    overflow-wrap: anywhere;
+}
+
+.room-option p {
+    margin: 2px 0;
+    color: var(--muted);
+    font-size: .875rem;
+}
+
+.booking-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 100%;
+    margin-top: 12px;
+    text-align: center;
+    text-decoration: none;
+    white-space: normal;
+}
+
+.room-option .booking-link {
+    margin: 0;
+}
+
+.stay-summary {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+}
+
+.reserve-form {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
+}
+
+.confirmation-number {
+    display: grid;
+    gap: 4px;
+    margin: 0;
     overflow-wrap: anywhere;
 }
 
@@ -509,6 +588,8 @@ button:disabled, input:disabled {
 
     .site-tabs a {
         min-height: 44px;
+        padding-inline: clamp(5px, 2vw, 14px);
+        text-align: center;
     }
 
     .booking-layout {
