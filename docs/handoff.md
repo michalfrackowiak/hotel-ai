@@ -2,11 +2,11 @@
 
 ## Latest milestone
 
-Parser configuration and stay extraction, current PR pending. **Reception → Parser configuration** controls the English and Polish numeric date order and accepted ISO, slash, dot, dash, yearless, and two-digit-year forms. The arrival parser now accepts check-in and check-out dates together, including replies such as “check in 12/28/2026 and check out 01/02/2027” and “przyjazd 28 grudnia a wyjazd 2 stycznia.” Parser sample review remains available under **Reception → Parser training samples** for staff corrections that are reused on matching inputs. See [parser training and configuration](parser-training.md).
+Parser configuration and stay extraction, PR [#28](https://github.com/michalfrackowiak/hotel-ai/pull/28). **Reception → Parser configuration** controls the English and Polish numeric date order and accepted ISO, slash, dot, dash, yearless, and two-digit-year forms. The arrival parser now accepts check-in and check-out dates together, including replies such as “check in 12/28/2026 and check out 01/02/2027” and “przyjazd 28 grudnia a wyjazd 2 stycznia.” Parser sample review remains available under **Reception → Parser training samples** for staff corrections that are reused on matching inputs. See [parser training and configuration](parser-training.md).
 
 Browser speech training has been retired. Voice transcription still works, but incoming audio is no longer stored and the sample queue, admin audio review, and export are removed. Migration 0006 drops the old speech sample table.
 
-System and migration consistency checks, Python compilation, JavaScript syntax checks, and whitespace checks pass. Independent static review approved after fixes for ISO/dash setting independence and ambiguous conjunctions. Automated tests have not been run locally; configured CI remains pending. Next action: open a PR, wait for configured CI, merge, and deploy after merge.
+System and migration consistency checks, Python compilation, JavaScript syntax checks, and whitespace checks pass. Independent static review approved after fixes for ISO/dash setting independence and ambiguous conjunctions. Automated tests have not been run locally; configured CI is pending on PR #28. Next action: wait for CI, merge, and deploy with the SQLite backup and retired-file cleanup.
 
 ## Previous milestones
 
