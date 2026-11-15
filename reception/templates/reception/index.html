@@ -12,7 +12,7 @@
 </head>
 <body>
     {% include "reception/_header.html" with active_page="reception" %}
-    <main id="reception-app" data-language="{{ language }}" data-english-url="{% url 'reception' %}?lang=en" class="booking-layout">
+    <main id="reception-app" data-language="{{ language }}" class="booking-layout">
         <section class="intro" aria-labelledby="booking-title">
             <h1 id="booking-title">{% if language == "pl" %}Zarezerwuj pokój{% else %}Book a room{% endif %}</h1>
             <p>{% if language == "pl" %}Podaj terminy i liczbę gości. Recepcja sprawdzi dostępność i poda cenę przed potwierdzeniem rezerwacji.{% else %}Share your dates and guest count. Reception will check availability and quote the price before you confirm.{% endif %}</p>
@@ -44,15 +44,22 @@
                     <p id="chat-status" role="status"></p>
                     <button id="chat-retry" class="quiet-button" type="button" hidden>{% if language == "pl" %}Połącz ponownie{% else %}Reconnect{% endif %}</button>
                 </div>
+                <div id="chat-language" class="confirmation-actions" hidden>
+                    <button class="quiet-button" type="button" data-answer="English" lang="en">English</button>
+                </div>
                 <div id="chat-confirmation" class="confirmation-actions" hidden>
                     <button class="confirm-button" type="button" data-answer="{% if language == 'pl' %}Tak{% else %}Yes{% endif %}">{% if language == "pl" %}Tak, potwierdzam{% else %}Yes, confirm{% endif %}</button>
                     <button class="quiet-button" type="button" data-answer="{% if language == 'pl' %}Nie{% else %}No{% endif %}">{% if language == "pl" %}Nie{% else %}No{% endif %}</button>
                 </div>
-                <form id="chat-form" class="chat-form" method="post" action="/reception/message/">
+                <div id="chat-delivery" class="confirmation-actions" hidden>
+                    <button class="quiet-button" type="button" data-answer="Email">E-mail</button>
+                    <button class="quiet-button" type="button" data-answer="SMS">SMS</button>
+                </div>
+                <form id="chat-form" class="chat-form" method="post" action="{% url 'reception-message' %}">
                     {% csrf_token %}
                     <label class="sr-only" for="chat-message">{% if language == "pl" %}Twoja wiadomość{% else %}Your message{% endif %}</label>
                     <input id="chat-message" name="message" type="text" placeholder="{% if language == 'pl' %}Napisz wiadomość…{% else %}Type a message…{% endif %}" maxlength="500" autocomplete="off" disabled required>
-                    <button id="chat-send" class="send-button" type="submit" disabled>{% if language == "pl" %}Wyślij{% else %}Send{% endif %}<span aria-hidden="true"> →</span></button>
+                    <button id="chat-send" class="send-button" type="submit" disabled><span>{% if language == "pl" %}Wyślij{% else %}Send{% endif %}</span><span aria-hidden="true"> →</span></button>
                 </form>
                 <noscript><p>{% if language == "pl" %}Włącz JavaScript, aby rozpocząć rozmowę.{% else %}Enable JavaScript to start the conversation.{% endif %}</p></noscript>
             </div>

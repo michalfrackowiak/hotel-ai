@@ -99,6 +99,7 @@ if not 1 <= HOTEL_OLLAMA_TIMEOUT <= 120:
     raise ImproperlyConfigured("HOTEL_OLLAMA_TIMEOUT must be between 1 and 120 seconds.")
 
 HOTEL_TELEPHONY_PUBLIC_BASE_URL = os.environ.get("HOTEL_TELEPHONY_PUBLIC_BASE_URL", "").rstrip("/")
+HOTEL_PHONE_RECEPTION_NUMBER = os.environ.get("HOTEL_PHONE_RECEPTION_NUMBER", "").strip()
 HOTEL_TWILIO_AUTH_TOKEN = os.environ.get("HOTEL_TWILIO_AUTH_TOKEN", "")
 HOTEL_PIPER_URL = os.environ.get("HOTEL_PIPER_URL", "").rstrip("/")
 HOTEL_ASR_URL = os.environ.get("HOTEL_ASR_URL", "").rstrip("/")
@@ -108,3 +109,19 @@ except ValueError as error:
     raise ImproperlyConfigured("HOTEL_PIPER_TIMEOUT must be an integer number of seconds.") from error
 if not 1 <= HOTEL_PIPER_TIMEOUT <= 120:
     raise ImproperlyConfigured("HOTEL_PIPER_TIMEOUT must be between 1 and 120 seconds.")
+
+EMAIL_HOST = os.environ.get("HOTEL_SMTP_HOST", "").strip()
+EMAIL_HOST_USER = os.environ.get("HOTEL_SMTP_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("HOTEL_SMTP_PASSWORD", "")
+EMAIL_USE_SSL = os.environ.get("HOTEL_SMTP_SSL") == "1"
+EMAIL_USE_TLS = bool(EMAIL_HOST) and not EMAIL_USE_SSL
+EMAIL_TIMEOUT = 10
+DEFAULT_FROM_EMAIL = os.environ.get("HOTEL_CONFIRMATION_FROM", "").strip()
+try:
+    EMAIL_PORT = int(os.environ.get("HOTEL_SMTP_PORT") or ("465" if EMAIL_USE_SSL else "587"))
+except ValueError as error:
+    raise ImproperlyConfigured("HOTEL_SMTP_PORT must be an integer port number.") from error
+if not 1 <= EMAIL_PORT <= 65535:
+    raise ImproperlyConfigured("HOTEL_SMTP_PORT must be between 1 and 65535.")
+HOTEL_TWILIO_ACCOUNT_SID = os.environ.get("HOTEL_TWILIO_ACCOUNT_SID", "").strip()
+HOTEL_TWILIO_SMS_FROM = os.environ.get("HOTEL_TWILIO_SMS_FROM", "").strip()

@@ -13,10 +13,8 @@
     const canPlayPiper = Boolean(audioUrl && audioContextType);
     const canRecord = Boolean(transcribeUrl && audioContextType && offlineContextType &&
         window.AudioWorkletNode && navigator.mediaDevices?.getUserMedia);
-    const polish = document.documentElement.lang === "pl";
-    const locale = polish ? "pl-PL" : "en-US";
-    const terminalStages = new Set(["completed", "cancelled"]);
-    const copy = polish ? {
+    const terminalStages = new Set(["completed", "cancelled", "handover"]);
+    const polishCopy = {
         start: "Włącz rozmowę głosową",
         stop: "Zakończ rozmowę głosową",
         unavailable: "Ta przeglądarka nie obsługuje rozmów głosowych. Skorzystaj z czatu.",
@@ -34,7 +32,8 @@
         silence: "Nie usłyszano odpowiedzi. Spróbuj ponownie lub skorzystaj z czatu.",
         error: "Rozmowa głosowa została przerwana. Spróbuj ponownie lub skorzystaj z czatu.",
         finished: "Rozmowa głosowa zakończona.",
-    } : {
+    };
+    const englishCopy = {
         start: "Start voice booking",
         stop: "End voice booking",
         unavailable: "Voice booking is unavailable in this browser. You can still use chat.",
@@ -53,6 +52,8 @@
         error: "Voice booking was interrupted. Try again or use chat.",
         finished: "Voice booking ended.",
     };
+    let locale = document.documentElement.lang === "pl" ? "pl-PL" : "en-US";
+    let copy = locale === "pl-PL" ? polishCopy : englishCopy;
 
     if (!window.isSecureContext || (!canRecord && !recognitionType) || (!canPlayPiper && !canSpeak)) {
         status.textContent = copy.unavailable;
@@ -69,6 +70,7 @@
     let microphone = null;
     let microphoneModule = null;
     let recording = null;
+    let silenceTimer = null;
     let stage = null;
     let lastReply = null;
 
@@ -85,6 +87,8 @@
     }
 
     function pauseAudio() {
+        clearTimeout(silenceTimer);
+        silenceTimer = null;
         const current = recognition;
         recognition = null;
         if (current) current.abort();
@@ -98,6 +102,7 @@
 
     function stop(message) {
         active = false;
+        form.dispatchEvent(new CustomEvent("reception:voice-session", { detail: { active } }));
         pauseAudio();
         const stream = microphone?.stream;
         microphone = null;
@@ -110,26 +115,25 @@
         status.textContent = message;
     }
 
-    function transcribedMessage(text) {
-        if (stage !== "email") return text;
-        const normalized = text
-            .replace(/\s+(?:at|małpa)\s+/giu, "@")
-            .replace(/\s+(?:dot|kropka)\s+/giu, ".");
-        return normalized.includes("@") ? normalized.replace(/\s/g, "") : text;
+    function handleSilence() {
+        if (stage === "check_in" && !input.disabled) {
+            form.dispatchEvent(new CustomEvent("reception:voice-silence"));
+        } else {
+            stop(copy.silence);
+        }
     }
 
     function submitTranscript(text) {
         const transcript = text.trim();
         if (!transcript) {
-            stop(copy.silence);
+            handleSilence();
             return;
         }
-        const message = transcribedMessage(transcript);
-        if (input.disabled || message.length > input.maxLength) {
+        if (input.disabled || transcript.length > input.maxLength) {
             stop(copy.error);
             return;
         }
-        input.value = message;
+        input.value = transcript;
         status.textContent = copy.waiting;
         form.requestSubmit();
     }
@@ -147,19 +151,28 @@
             if (recognition !== current) return;
             transcript = event.results[event.resultIndex][0].transcript.trim();
         };
+        current.onspeechstart = () => {
+            if (recognition === current) {
+                clearTimeout(silenceTimer);
+                silenceTimer = null;
+            }
+        };
         current.onerror = (event) => {
             if (recognition !== current) return;
             if (event.error === "not-allowed") stop(copy.permission);
             else if (event.error === "audio-capture") stop(copy.microphone);
-            else stop(event.error === "no-speech" ? copy.silence : copy.recognition);
+            else if (event.error === "no-speech") {
+                if (!silenceTimer) handleSilence();
+            } else stop(copy.recognition);
         };
         current.onend = () => {
             if (recognition !== current) return;
             recognition = null;
-            submitTranscript(transcript);
+            if (transcript || !silenceTimer) submitTranscript(transcript);
         };
         try {
             current.start();
+            if (stage === "check_in") silenceTimer = setTimeout(handleSilence, 10000);
             status.textContent = copy.listening;
         } catch {
             recognition = null;
@@ -209,7 +222,7 @@
         if (recording !== current) return;
         stopCapture(current);
         if (!samples?.length) {
-            stop(copy.silence);
+            handleSilence();
             return;
         }
         status.textContent = copy.transcribing;
@@ -397,6 +410,7 @@
             stop(copy.finished);
         } else if (!input.disabled && lastReply && !terminalStages.has(stage)) {
             active = true;
+            form.dispatchEvent(new CustomEvent("reception:voice-session", { detail: { active } }));
             button.textContent = copy.stop;
             button.setAttribute("aria-pressed", "true");
             if (canPlayPiper || canRecord) {
@@ -425,6 +439,11 @@
     form.addEventListener("reception:reply", (event) => {
         stage = event.detail.stage;
         lastReply = event.detail;
+        locale = event.detail.language === "pl" ? "pl-PL" : "en-US";
+        copy = locale === "pl-PL" ? polishCopy : englishCopy;
+        button.textContent = active ? copy.stop : copy.start;
+        button.lang = event.detail.language;
+        status.lang = event.detail.language;
         button.disabled = !active && terminalStages.has(stage);
         if (active && (!canRecord || microphone?.ready)) {
             pauseAudio();

@@ -9,7 +9,7 @@ def application(environ, start_response):
         route = resolve(path).view_name
     except Resolver404:
         route = None
-    if route in {"health", "telephony:incoming", "telephony:turn"}:
+    if route in {"health", "telephony:incoming", "telephony:turn", "telephony:handover"}:
         return django_application(environ, start_response)
     start_response("404 Not Found", [("Content-Length", "0")])
     return [b""]

@@ -1,0 +1,22 @@
+services:
+  booking-confirmations:
+    build: .
+    command: ["python", "manage.py", "send_booking_confirmations", "--watch"]
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      DJANGO_DEBUG: "${DJANGO_DEBUG:-1}"
+      DJANGO_SECRET_KEY: "${DJANGO_SECRET_KEY:-}"
+      HOTEL_SMTP_HOST: "${HOTEL_SMTP_HOST:-}"
+      HOTEL_SMTP_PORT: "${HOTEL_SMTP_PORT:-}"
+      HOTEL_SMTP_USER: "${HOTEL_SMTP_USER:-}"
+      HOTEL_SMTP_PASSWORD: "${HOTEL_SMTP_PASSWORD:-}"
+      HOTEL_SMTP_SSL: "${HOTEL_SMTP_SSL:-}"
+      HOTEL_CONFIRMATION_FROM: "${HOTEL_CONFIRMATION_FROM:-}"
+      HOTEL_TWILIO_ACCOUNT_SID: "${HOTEL_TWILIO_ACCOUNT_SID:-}"
+      HOTEL_TWILIO_AUTH_TOKEN: "${HOTEL_TWILIO_AUTH_TOKEN:-}"
+      HOTEL_TWILIO_SMS_FROM: "${HOTEL_TWILIO_SMS_FROM:-}"
+    volumes:
+      - hotel-data:/app/data

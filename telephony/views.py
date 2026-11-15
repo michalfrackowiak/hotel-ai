@@ -1,3 +1,4 @@
+import re
 from functools import wraps
 from urllib.parse import urlsplit
 
@@ -13,13 +14,14 @@ from django.views.decorators.http import require_POST
 from twilio.request_validator import RequestValidator
 from twilio.twiml.voice_response import Gather, VoiceResponse
 
-from .calls import advance_call, is_call_sid, start_call
+from .calls import COPY, TERMINAL_STAGES, advance_call, finish_handover, is_call_sid, start_call
 
 
 MAX_WEBHOOK_BODY_BYTES = 16 * 1024
-CALL_FORM_FIELDS = ("CallSid", "Digits", "SpeechResult")
+CALL_FORM_FIELDS = ("CallSid", "Digits", "SpeechResult", "DialCallStatus")
 LOCALES = {"en": ("en-US", "Polly.Joanna"), "pl": ("pl-PL", "Polly.Ewa")}
-TERMINAL_STAGES = {"completed", "ended"}
+DIAL_CONNECTED = {"answered", "completed"}
+DIAL_FAILED = {"busy", "no-answer", "failed", "canceled"}
 validate_https_url = URLValidator(schemes=["https"])
 
 
@@ -79,23 +81,42 @@ def _twilio_post(view):
 def _voice_reply(result):
     response = VoiceResponse()
     locale, voice = LOCALES[result.language]
-    if result.stage in TERMINAL_STAGES:
-        response.say(result.reply, language=locale, voice=voice)
+    if result.stage == "handover":
+        number = settings.HOTEL_PHONE_RECEPTION_NUMBER
+        if re.fullmatch(r"\+[1-9][0-9]{7,14}", number):
+            action = _public_url(reverse("telephony:handover", kwargs={"revision": result.revision}))
+            response.say(result.reply, language=locale, voice=voice)
+            response.dial(number, action=action, method="POST", timeout=20)
+        else:
+            response.say(COPY[result.language]["handover_unavailable"], language=locale, voice=voice)
+            response.hangup()
+    elif result.stage in TERMINAL_STAGES:
+        if result.reply:
+            response.say(result.reply, language=locale, voice=voice)
         response.hangup()
     else:
         action = _public_url(reverse("telephony:turn", kwargs={"revision": result.revision}))
-        attributes = {"action": action, "method": "POST", "timeout": 7, "action_on_empty_result": True}
-        if result.stage == "language":
+        timeout = {"language": 2, "check_in": 10}.get(result.stage, 7)
+        attributes = {"action": action, "method": "POST", "timeout": timeout, "action_on_empty_result": True}
+        if result.stage == "language" and result.language == "en":
+            # Keep the old keypad prompt consistent for a call that began before deployment.
             gather = Gather(input="dtmf", num_digits=1, **attributes)
             gather.say(result.reply, language=locale, voice=voice)
             polish_locale, polish_voice = LOCALES["pl"]
             gather.say("Aby wybrać język polski, naciśnij dwa.", language=polish_locale, voice=polish_voice)
         else:
+            keypad = result.stage in ("language", "room")
             gather = Gather(
-                input="speech", language=locale, speech_model="experimental_utterances", speech_timeout=2,
+                input="dtmf speech" if keypad else "speech", num_digits=1 if keypad else None,
+                language=locale, speech_model="experimental_utterances", speech_timeout=2,
+                hints="English" if result.stage == "language" else None,
                 profanity_filter=False, **attributes,
             )
             gather.say(result.reply, language=locale, voice=voice)
+            if result.stage == "language":
+                english_locale, english_voice = LOCALES["en"]
+                gather.say("For English, press 2 or say English.", language=english_locale, voice=english_voice)
+                gather.say("Język polski – pozostań na linii.", language=locale, voice=voice)
         response.append(gather)
     return HttpResponse(str(response), content_type="application/xml; charset=utf-8")
 
@@ -110,3 +131,11 @@ def turn(form, call_sid, revision):
     return _voice_reply(advance_call(
         call_sid, revision, digit=form.get("Digits", ""), speech=form.get("SpeechResult", ""),
     ))
+
+
+@_twilio_post
+def handover(form, call_sid, revision):
+    status = form.get("DialCallStatus")
+    if status not in DIAL_CONNECTED | DIAL_FAILED:
+        return HttpResponseBadRequest()
+    return _voice_reply(finish_handover(call_sid, revision, connected=status in DIAL_CONNECTED))

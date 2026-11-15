@@ -29,14 +29,12 @@ class PhoneCallTests(TestCase):
         menu = start_call(call_sid)
         self.assertEqual(menu.stage, "language")
         if language == "en":
-            inputs = ("Tomorrow.", "day after tomorrow", "two guests", "Jordan Example",
-                      "Jordan DOT Example at example dot com.")
+            inputs = ("Tomorrow.", "for one night", "two guests", "one")
         else:
-            inputs = ("Jutro。", "Pojutrze!", "dwie osoby", "Anna Kowalska",
-                      "Anna kropka Kowalska MAŁPA example kropka com.")
-        current = self.turn(menu, digit="1" if language == "en" else "2", call_sid=call_sid)
+            inputs = ("Jutro。", "na jedną noc", "dwie osoby", "jeden")
+        current = self.turn(menu, digit="2" if language == "en" else "", call_sid=call_sid)
         self.assertEqual((current.language, current.stage), (language, "check_in"))
-        for text, stage in zip(inputs, ("check_out", "guests", "name", "email", "confirm"), strict=True):
+        for text, stage in zip(inputs, ("check_out", "guests", "room", "confirm"), strict=True):
             current = self.turn(current, speech=text, call_sid=call_sid)
             self.assertEqual(current.stage, stage)
         return current
@@ -44,17 +42,21 @@ class PhoneCallTests(TestCase):
     def test_english_requires_explicit_confirmation_and_replays_same_receipt(self):
         quote = self.prepare_quote()
         self.assertIn("120.00 PLN", quote.reply)
-        self.assertIn("Yes to book", quote.reply)
         self.assertFalse(Booking.objects.exists())
         ambiguous = self.turn(quote, speech="Yes, please")
         self.assertEqual(ambiguous.stage, "confirm")
         self.assertFalse(Client.objects.exists())
         self.assertEqual(self.turn(quote, speech="Yes!"), ambiguous)
-        receipt = self.turn(ambiguous, speech="Yes!")
+        delivery = self.turn(ambiguous, speech="Yes!")
+        self.assertEqual(delivery.stage, "delivery")
+        self.assertFalse(Booking.objects.exists())
+        email = self.turn(delivery, speech="email")
+        self.assertEqual(email.stage, "email")
+        receipt = self.turn(email, speech="Jordan DOT Example at example dot com.")
         booking = Booking.objects.get()
         self.assertEqual((receipt.stage, receipt.reference), ("completed", str(booking.reference)))
-        self.assertEqual(booking.client.email, "Jordan.Example@example.com")
-        self.assertEqual(self.turn(ambiguous, speech="Yes!"), receipt)
+        self.assertEqual(booking.client.email.casefold(), "jordan.example@example.com")
+        self.assertEqual(self.turn(email, speech="Jordan DOT Example at example dot com."), receipt)
         self.assertEqual(start_call(CALL_SID), receipt)
         self.assertEqual(Booking.objects.count(), 1)
         self.assertNotIn("name", PhoneCall.objects.get().state)
@@ -63,15 +65,18 @@ class PhoneCallTests(TestCase):
     def test_polish_reuses_localized_quote_and_accepts_only_polish_confirmation(self):
         quote = self.prepare_quote(language="pl")
         self.assertIn("120,00 PLN", quote.reply)
-        self.assertIn("Odpowiedz Tak", quote.reply)
         current = self.turn(quote, speech="Yes")
         self.assertEqual(current.stage, "confirm")
         self.assertFalse(Booking.objects.exists())
-        receipt = self.turn(current, speech="Tak！")
+        delivery = self.turn(current, speech="Tak！")
+        self.assertEqual(delivery.stage, "delivery")
+        phone = self.turn(delivery, speech="telefon")
+        self.assertEqual(phone.stage, "phone")
+        receipt = self.turn(phone, speech="+48 500 000 123")
         booking = Booking.objects.get()
         self.assertEqual(receipt.reference, str(booking.reference))
         self.assertIn("Numer rezerwacji", receipt.reply)
-        self.assertEqual(booking.client.email, "Anna.Kowalska@example.com")
+        self.assertEqual(booking.client.phone, "+48500000123")
 
     def test_call_keys_and_revisions_cannot_advance_another_call(self):
         first = start_call(CALL_SID)
@@ -81,16 +86,27 @@ class PhoneCallTests(TestCase):
         self.assertEqual(advance_call("CA" + "c" * 32, first.revision, digit="1").stage, "ended")
         self.assertEqual(PhoneCall.objects.count(), 2)
 
-    def test_three_invalid_menu_turns_end_the_call_without_counting_replay(self):
+    def test_menu_defaults_to_polish_and_check_in_silence_requests_handover(self):
         start = start_call(CALL_SID)
         first = self.turn(start, digit="9")
-        self.assertEqual(first.stage, "language")
+        self.assertEqual((first.stage, first.language), ("check_in", "pl"))
         self.assertEqual(self.turn(start, digit="9"), first)
         second = self.turn(first)
-        self.assertEqual(second.stage, "language")
-        ended = self.turn(second, digit="9")
-        self.assertEqual(ended.stage, "ended")
-        self.assertEqual(start_call(CALL_SID), ended)
+        self.assertEqual(second.stage, "handover")
+        self.assertEqual(start_call(CALL_SID), second)
+        self.assertFalse(Booking.objects.exists())
+
+    def test_english_by_speech_and_polish_date_in_menu(self):
+        result = self.turn(start_call(CALL_SID), speech="English.")
+        self.assertEqual((result.stage, result.language), ("check_in", "en"))
+        result = self.turn(start_call(OTHER_CALL_SID), speech="Jutro.", call_sid=OTHER_CALL_SID)
+        self.assertEqual((result.stage, result.language), ("check_out", "pl"))
+
+    def test_explicit_cancellation_ends_the_call(self):
+        quote = self.prepare_quote(language="pl")
+        cancelled = self.turn(quote, speech="Rezygnuję.")
+        self.assertEqual(cancelled.stage, "cancelled")
+        self.assertEqual(self.turn(quote, speech="Tak"), cancelled)
         self.assertFalse(Booking.objects.exists())
 
     def test_silence_after_quote_cannot_confirm_and_redacts_draft_on_third_miss(self):
@@ -117,7 +133,11 @@ class PhoneCallTests(TestCase):
     def test_expiry_command_redacts_drafts_and_prunes_terminal_receipts(self):
         quote = self.prepare_quote()
         other_quote = self.prepare_quote(call_sid=OTHER_CALL_SID)
-        self.assertEqual(self.turn(other_quote, speech="Yes", call_sid=OTHER_CALL_SID).stage, "completed")
+        delivery = self.turn(other_quote, speech="Yes", call_sid=OTHER_CALL_SID)
+        email = self.turn(delivery, speech="email", call_sid=OTHER_CALL_SID)
+        self.assertEqual(
+            self.turn(email, speech="other@example.test", call_sid=OTHER_CALL_SID).stage, "completed",
+        )
         now = timezone.now()
         with patch("telephony.calls.timezone.now", return_value=now + DRAFT_LIFETIME):
             output = StringIO()

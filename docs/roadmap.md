@@ -19,9 +19,10 @@ Each milestone has a development branch, a pull request to `main`, and independe
 - [x] My booking. Look up a confirmed stay by its confirmation number in English or Polish.
 - [x] Room availability. Search by dates and number of guests, then confirm a selected room through a prefilled booking form.
 - [x] Neptun browser booking scenario. Start in Polish, offer English, present room choices, and obtain consent before collecting contact details.
-- [ ] Configure staff handover and email/SMS confirmation delivery for the Neptun scenario.
-- [ ] Checkout duration. Resolve lengths of stay in days, nights, weeks, and months from check-in.
-- [ ] Flexible stay dates. Infer the closest upcoming date if the year is omitted and accept check-in and checkout in a single sentence.
+- [x] Neptun booking flow for chat, browser voice, and phone. Parse bilingual yearless dates and durations, offer room choices with total prices, and require consent before collecting the email address or SMS number.
+- [x] Staff handover and confirmation delivery. Route browser handovers to the reception inbox and enable configured phone transfers. Queue confirmation requests atomically with the booking and dispatch them through SMTP or Twilio.
+- [ ] Configure live SMTP, Twilio SMS, and the staff phone transfer destination. Verify each live destination with a controlled test.
+- [ ] Flexible stay dates. Accept check-in and checkout in a single sentence.
 
 ## Later releases
 
