@@ -2,7 +2,6 @@ services:
   web:
     environment:
       HOTEL_ASR_URL: "http://asr:5001"
-      HOTEL_SPEECH_TRAINING_ENABLED: "${HOTEL_SPEECH_TRAINING_ENABLED:-0}"
     networks:
       - default
       - recognition

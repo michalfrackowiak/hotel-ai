@@ -1,13 +1,13 @@
 from datetime import date
 from unittest.mock import patch
 
-from django.test import SimpleTestCase
+from django.test import TestCase
 
 from .parsing import StayDates, parse_stay_input
 
 
 @patch("reception.parsing.timezone.localdate", return_value=date(2026, 11, 15))
-class NoisyStayParsingTests(SimpleTestCase):
+class NoisyStayParsingTests(TestCase):
     def test_arrival_and_duration_in_one_sentence(self, _today):
         for language, text, expected in (
             ("en", "strike of will be the from tomorrow for three days", StayDates(date(2026, 11, 16), date(2026, 11, 19))),

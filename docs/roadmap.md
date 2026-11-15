@@ -25,11 +25,12 @@ Each milestone has a development branch, a pull request to `main`, and independe
 - [x] Start English web chat and browser voice with a Neptun Resort greeting followed immediately by Step 2.b.
 - [ ] Configure live SMTP, Twilio SMS, and the staff phone transfer destination. Verify each live destination with a controlled test.
 - [x] Flexible stay dates. Extract arrival and departure from one English or Polish message, including a spoken arrival date and stay duration amid extra words.
-- [x] Browser speech training. Let staff transcribe opted-in failed recognition clips, reuse reviewed English corrections, and export labeled audio for offline model evaluation and training.
+- [x] Retire browser speech training. Remove opt-in audio capture, sample storage, and the admin transcription/export view while keeping live voice transcription.
 - [x] Voice arrival prompts. Give English callers the address and a two-second pause, then offer two five-second listening windows in English and Polish.
 - [x] Booking scenario editor. Edit bilingual chat text, voice scripts, and pauses in the private admin.
 - [x] Parser training. Review bilingual chat and voice inputs and their parsed values, then reuse validated staff corrections.
 - [x] Synchronize voice and chat. Display spoken segments as playback begins, show guest transcripts, and offer contextual reply buttons.
+- [x] Expand parser configuration and bilingual stay dates. Configure accepted numeric formats in admin, parse check-in and check-out dates from one sentence, and retain text-based parser review and corrections.
 
 ## Later releases
 

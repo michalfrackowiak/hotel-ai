@@ -3,7 +3,7 @@ import wave
 from datetime import date
 from unittest.mock import call, patch
 
-from django.test import SimpleTestCase, TestCase
+from django.test import TestCase
 
 from bookings.models import Booking, Price, Room
 
@@ -13,7 +13,7 @@ from .parsing import parse_stay_input
 from .speech import SpeechUnavailable, synthesize_welcome, transcribe_welcome
 
 
-class ScenarioInputTests(SimpleTestCase):
+class ScenarioInputTests(TestCase):
     @patch("reception.parsing.timezone.localdate", return_value=date(2026, 11, 15))
     def test_yearless_ordinals_and_month_rollover(self, _today):
         for language, text, expected in (

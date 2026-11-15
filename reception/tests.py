@@ -4,7 +4,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from django.contrib.auth import get_user_model
-from django.test import Client, SimpleTestCase, TestCase
+from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import escape
@@ -15,7 +15,7 @@ from .models import Conversation, StaffHandover
 from .parsing import parse_stay_input
 
 
-class StayInputTests(SimpleTestCase):
+class StayInputTests(TestCase):
     @patch("django.utils.timezone.localdate", return_value=date(2026, 12, 15))
     def test_localized_month_names_roll_to_next_year_if_the_month_passed(self, today):
         self.assertEqual(parse_stay_input("check_in", "15 listopada 2027", "pl"), date(2027, 11, 15))

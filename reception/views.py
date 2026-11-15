@@ -9,7 +9,6 @@ from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.http.request import UnreadablePostError
 from django.shortcuts import render
-from django.utils.crypto import salted_hmac
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST, require_safe
@@ -18,15 +17,13 @@ from model_providers.extraction import extract_stay_value
 
 from .contacts import parse_email
 from .conversation import COPY as BOOKING_COPY
-from .conversation import TERMINAL_STAGES, WELCOME_PARTS, advance, new_conversation, recognizes_booking_answer, selects_english
+from .conversation import TERMINAL_STAGES, WELCOME_PARTS, advance, new_conversation, selects_english
 from .models import Conversation, StaffHandover
 from .parser_review import review_booking_input
 from .parsing import parse_stay_input
 from .receipt import DELIVERY_PENDING, refresh_receipt
 from .scenario import ENGLISH_WEB_GREETING, render_chat, scenario_overrides, set_prompt, voice_segments
 from .speech import MAX_PCM_BYTES, SpeechUnavailable, synthesize, synthesize_welcome, transcribe, transcribe_welcome
-from .speech_feedback import corrected_booking_transcript
-from .speech_training import TRAINABLE_STAGES, record_failed_transcript
 
 
 MAX_BODY_BYTES = 4096
@@ -59,7 +56,6 @@ def index(request):
         "language": language,
         "piper_enabled": bool(settings.HOTEL_PIPER_URL),
         "asr_enabled": bool(settings.HOTEL_ASR_URL),
-        "speech_training_enabled": bool(settings.HOTEL_ASR_URL and settings.HOTEL_SPEECH_TRAINING_ENABLED),
         "parser_training_enabled": settings.HOTEL_PARSER_TRAINING_ENABLED,
     })
 
@@ -387,22 +383,6 @@ def transcript(request):
     except SpeechUnavailable:
         text = None
     current = conversation.filter(state__revision=revision)
-    if (
-        text is not None and settings.HOTEL_SPEECH_TRAINING_ENABLED
-        and state["stage"] in TRAINABLE_STAGES and not recognizes_booking_answer(state, text)
-    ):
-        original = text
-        text = corrected_booking_transcript(state, original)
-        share_clip = request.headers.get("X-Reception-Speech-Training") == "1"
-        if share_clip and any(pcm):
-            with transaction.atomic():
-                if not current.exists():
-                    return HttpResponse(status=409)
-                record_failed_transcript(
-                    turn_key=salted_hmac("reception.speech_training", revision, algorithm="sha256").hexdigest(),
-                    language=state["language"], stage=state["stage"], pcm=pcm, transcript=original,
-                )
-            return JsonResponse({"text": text})
     if not current.exists():
         return HttpResponse(status=409)
     if text is None:

@@ -13,8 +13,8 @@ NUMBER_WORDS = {
 NUMBER_WORDS["en"].update(a=1, an=1)
 NUMBER_WORDS["pl"].update(jedna=1, jedną=1, dwie=2, dwóch=2)
 DATE_FORMATS = {
-    "en": ("%Y-%m-%d", "%m/%d/%Y", "%d %B %Y", "%B %d, %Y", "%B %d %Y"),
-    "pl": ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y"),
+    "en": ("%d %B %Y", "%B %d, %Y", "%B %d %Y"),
+    "pl": (),
 }
 POLISH_MONTHS = (
     "stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca",
@@ -95,7 +95,7 @@ def _date_pattern(language):
     months = _alternatives(MONTHS[language])
     ordinals = _alternatives(ORDINALS[language]).replace(r"\ ", "[- ]")
     relative = _alternatives(RELATIVE_DATES[language])
-    numeric = r"[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}|[0-9]{1,2}[./][0-9]{1,2}(?:[./][0-9]{4})?"
+    numeric = r"[0-9]{4}[./-][0-9]{1,2}[./-][0-9]{1,2}|[0-9]{1,2}[./-][0-9]{1,2}(?:[./-][0-9]{2,4})?"
     if language == "en":
         ordinal = r"[0-9]{1,2}(?:st|nd|rd|th)"
         day = rf"(?:{ordinal}|[0-9]{{1,2}}|{ordinals})"
@@ -132,14 +132,35 @@ def parse_stay_input(
     if stage in ("check_in", "check_out"):
         today = timezone.localdate()
         anchor = check_in if stage == "check_out" else None
+        config = _date_config(language)
         try:
-            return _parse_date(value, language, anchor, today) or _extract_dates(stage, value, language, anchor, today)
+            return _parse_date(value, language, anchor, today, config=config) or _extract_dates(
+                stage, value, language, anchor, today, config,
+            )
         except (OverflowError, ValueError):
             return None
     return None
 
 
-def _extract_dates(stage, value, language, check_in, today):
+def _date_config(language):
+    defaults = {
+        "numeric_date_order": "mdy" if language == "en" else "dmy",
+        "allow_iso_dates": True,
+        "allow_slash_dates": True,
+        "allow_dot_dates": True,
+        "allow_dash_dates": True,
+        "allow_yearless_dates": True,
+        "allow_two_digit_years": True,
+    }
+    from .models import ParserConfiguration
+
+    config = ParserConfiguration.objects.filter(language=language).first()
+    if config is None:
+        return defaults
+    return {key: getattr(config, key) for key in defaults}
+
+
+def _extract_dates(stage, value, language, check_in, today, config):
     if AMBIGUITY_MARKERS[language].search(value):
         return None
     matches = list(DATE_FRAGMENTS[language].finditer(value))
@@ -147,35 +168,40 @@ def _extract_dates(stage, value, language, check_in, today):
         if stage == "check_out" and check_in:
             durations = _duration_fragments(value, language)
             if len(durations) == 1:
-                return _parse_date(durations[0], language, check_in, today)
+                return _parse_date(durations[0], language, check_in, today, config=config)
         return None
     first, *others = matches
     if others:
         if stage != "check_in" or len(others) != 1:
             return None
         second = others[0]
-        separator = value[first.end():second.start()].strip(" ,")
-        if not re.fullmatch(RANGE_LINK[language], separator):
+        gap = value[first.end():second.start()].strip(" ,")
+        direct_link = bool(re.fullmatch(RANGE_LINK[language], gap))
+        contextual_pair = (
+            DATE_CONTEXT["check_in"][language].search(value[:first.start()])
+            and DATE_CONTEXT["check_out"][language].search(gap)
+        )
+        if not (direct_link or contextual_pair):
             return None
-        arrival = _parse_date(first[0], language, None, today)
+        arrival = _parse_date(first[0], language, None, today, config=config)
         if arrival is None:
             return None
         if _duration_fragments(value[second.end():], language):
             return arrival
-        departure = _parse_date(second[0], language, None, today, calendar_anchor=arrival)
+        departure = _parse_date(second[0], language, None, today, calendar_anchor=arrival, config=config)
         return _stay_dates(arrival, departure, today)
 
     if stage == "check_in":
         durations = _duration_fragments(value[first.end():], language)
         if durations:
-            arrival = _parse_date(first[0], language, None, today)
+            arrival = _parse_date(first[0], language, None, today, config=config)
             if arrival is not None and len(durations) == 1:
-                departure = _parse_date(durations[0], language, arrival, today)
+                departure = _parse_date(durations[0], language, arrival, today, config=config)
                 return _stay_dates(arrival, departure, today)
             return arrival
     remainder = f"{value[:first.start()]} {value[first.end():]}"
     if DATE_CONTEXT[stage][language].search(remainder) or not DATE_FILLERS[language].sub("", remainder).strip(" ,.!?"):
-        return _parse_date(first[0], language, None, today)
+        return _parse_date(first[0], language, None, today, config=config)
     return None
 
 
@@ -193,7 +219,8 @@ def _stay_dates(arrival, departure, today):
     return arrival
 
 
-def _parse_date(value, language, check_in, today, *, calendar_anchor=None):
+def _parse_date(value, language, check_in, today, *, calendar_anchor=None, config=None):
+    config = config or _date_config(language)
     days = RELATIVE_DATES[language].get(value)
     offset = re.fullmatch(RELATIVE_OFFSETS[language], value)
     if offset and (amount := _number(offset[1], language)) is not None:
@@ -213,12 +240,49 @@ def _parse_date(value, language, check_in, today, *, calendar_anchor=None):
     if language == "en":
         value = re.sub(r"(?<=[0-9])(?:st|nd|rd|th)\b", "", value)
         value = value.removeprefix("the ").replace(" of ", " ")
+    if parsed := _numeric_date(value, language, today, config, calendar_anchor):
+        return parsed
     for fmt in DATE_FORMATS[language]:
         try:
             return datetime.strptime(value, fmt).date()
         except ValueError:
             continue
     return _calendar_date(value, language, calendar_anchor or today)
+
+
+def _numeric_date(value, language, today, config, calendar_anchor):
+    match = re.fullmatch(r"([0-9]{1,4})([./-])([0-9]{1,2})(?:\2([0-9]{2,4}))?", value)
+    if not match:
+        return None
+    first, separator, second, year_text = match.groups()
+    allowed_separator = {
+        "/": config["allow_slash_dates"],
+        ".": config["allow_dot_dates"],
+        "-": config["allow_dash_dates"],
+    }[separator]
+    if len(first) == 4:
+        if not config["allow_iso_dates"] or year_text is None or (separator != "-" and not allowed_separator):
+            return None
+        year, month, day = int(first), int(second), int(year_text)
+    else:
+        if not allowed_separator:
+            return None
+        if not year_text and not config["allow_yearless_dates"]:
+            return None
+        if year_text and len(year_text) == 2 and not config["allow_two_digit_years"]:
+            return None
+        day, month = (int(first), int(second)) if config["numeric_date_order"] == "dmy" else (int(second), int(first))
+        if year_text:
+            year = int(year_text)
+            if len(year_text) == 2:
+                year += 2000 if year <= 68 else 1900
+        else:
+            anchor = calendar_anchor or today
+            year = anchor.year + (month < anchor.month)
+    try:
+        return date(year, month, day)
+    except ValueError:
+        return None
 
 
 def _add_duration(check_in, amount, unit):
@@ -231,12 +295,6 @@ def _add_duration(check_in, amount, unit):
 
 
 def _calendar_date(value, language, anchor):
-    parts = re.fullmatch(r"([0-9]{1,2})[./]([0-9]{1,2})", value)
-    if parts:
-        first, second = map(int, parts.groups())
-        month, day = (first, second) if language == "en" else (second, first)
-        return date(anchor.year + (month < anchor.month), month, day)
-
     year = re.search(r"\s+([0-9]{4})(?:\s+(?:r|roku))?$", value)
     if year:
         value = value[:year.start()].rstrip(", ")

@@ -26,12 +26,6 @@
                 {% if asr_enabled %}
                 <p id="voice-privacy" hidden>{% if language == "pl" %}Odpowiedzi głosowe są wysyłane na serwer hotelu w celu zamiany na tekst.{% else %}Spoken replies are sent to the hotel server for transcription.{% endif %}</p>
                 {% endif %}
-                {% if speech_training_enabled %}
-                <label id="voice-training" hidden>
-                    <input id="voice-training-opt-in" type="checkbox" autocomplete="off">
-                    {% if language == "pl" %}Zgadzam się na zapis nierozpoznanych odpowiedzi głosowych do ręcznej transkrypcji i ulepszania rozpoznawania mowy. Odpowiedzi na pytania o dane kontaktowe są pomijane.{% else %}Allow the hotel to keep unrecognized voice replies for staff transcription and speech recognition training. Replies to contact-detail questions are excluded.{% endif %}
-                </label>
-                {% endif %}
             </div>
         </section>
         <section class="chat-panel" aria-labelledby="reception-title">
