@@ -69,6 +69,7 @@ class ReceptionAudioTests(TestCase):
         ).json()
         response = self.request_audio({"revision": started["revision"]}, token=self.token)
         self.assertEqual(response.status_code, 200)
+        self.assertTrue(started["reply"].startswith("Hi, this is Neptun Resort Jastrzębia Góra. "))
         self.assertIn("please state your planned arrival date", started["reply"])
         generate.assert_called_once_with(started["reply"], "en")
 

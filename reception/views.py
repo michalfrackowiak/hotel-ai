@@ -15,6 +15,7 @@ from django.views.decorators.http import require_POST, require_safe
 from model_providers.extraction import extract_stay_value
 
 from .contacts import parse_email
+from .conversation import COPY as BOOKING_COPY
 from .conversation import TERMINAL_STAGES, WELCOME_PARTS, advance, new_conversation, selects_english
 from .models import Conversation, StaffHandover
 from .parsing import parse_stay_input
@@ -32,7 +33,9 @@ OLD_ARRIVAL_PROMPTS = (
     "Welcome to Resort Neptun Jastrzębia Góra.",
     "Aby sprawdzić dostępność, ceny lub dokonać rezerwacji, podaj planowaną datę przyjazdu.",
     "To check availability, prices, or make a reservation, please give your planned arrival date.",
+    BOOKING_COPY["en"]["check_in"],
 )
+ENGLISH_WEB_GREETING = "Hi, this is Neptun Resort Jastrzębia Góra."
 
 
 @never_cache
@@ -79,7 +82,11 @@ def _invalid(status=400):
 
 
 def _new_web_conversation(language):
-    return new_conversation(language, "check_in" if language == "en" else "welcome")
+    if language == "pl":
+        return new_conversation(language)
+    state = new_conversation("en", "check_in")
+    state["reply"] = f"{ENGLISH_WEB_GREETING} {state['reply']}"
+    return state
 
 
 def _save_state(conversation, state):

@@ -198,6 +198,7 @@ class ReceptionTests(TestCase):
         language = page.context["language"]
         opening = self.post(language=language, start=True).json()
         self.assertEqual(opening["stage"], "check_in")
+        self.assertTrue(opening["reply"].startswith("Hi, this is Neptun Resort Jastrzębia Góra. "))
         self.assertIn("please state your planned arrival date", opening["reply"])
         self.assertNotIn("welcome_parts", opening)
         self.assertNotIn("voice_welcome", opening)
@@ -205,6 +206,16 @@ class ReceptionTests(TestCase):
         restarted = self.post(language=language, reset=True).json()
         self.assertEqual(restarted["stage"], "check_in")
         self.assertEqual(restarted["reply"], opening["reply"])
+        self.assertEqual(self.post(language=language, start=True).json(), restarted)
+
+    def test_english_arrival_saved_without_a_greeting_is_updated_on_start(self):
+        opening = self.post(language="en", start=True).json()
+        prior = Conversation.objects.get()
+        prior.state["reply"] = opening["reply"].removeprefix("Hi, this is Neptun Resort Jastrzębia Góra. ")
+        prior.save(update_fields=["state"])
+        refreshed = self.post(language="en", start=True).json()
+        self.assertEqual(refreshed["reply"], opening["reply"])
+        self.assertNotEqual(refreshed["revision"], prior.state["revision"])
 
     def test_selecting_english_on_the_page_skips_the_polish_welcome(self):
         polish = self.post(language="pl", start=True).json()
