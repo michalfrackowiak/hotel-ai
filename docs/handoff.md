@@ -2,7 +2,7 @@
 
 ## Latest milestone
 
-Parser configuration and stay extraction, PR [#28](https://github.com/michalfrackowiak/hotel-ai/pull/28), merged as `ca543c9` and deployed to `https://92.5.19.10/`. **Reception → Parser configuration** controls the English and Polish numeric date order and accepted ISO, slash, dot, dash, yearless, and two-digit-year forms. The arrival parser accepts check-in and check-out dates together, including “check in 12/28/2026 and check out 01/02/2027” and “przyjazd 28 grudnia a wyjazd 2 stycznia.” Parser sample review remains available under **Reception → Parser training samples** for staff corrections reused on matching inputs. See [parser training and configuration](parser-training.md).
+Parser configuration and stay extraction, PR [#28](https://github.com/michalfrackowiak/hotel-ai/pull/28), merged as `ca543c9` and deployed to the [public reception](https://92.5.19.10/). **Reception → Parser configuration** controls the English and Polish numeric date order and accepted ISO, slash, dot, dash, yearless, and two-digit-year forms. The arrival parser accepts check-in and check-out dates together, including “check in 12/28/2026 and check out 01/02/2027” and “przyjazd 28 grudnia a wyjazd 2 stycznia.” Parser sample review remains available under **Reception → Parser training samples** for staff corrections reused on matching inputs. See [parser training and configuration](parser-training.md).
 
 Browser speech training has been retired. Voice transcription still works, but incoming audio is no longer stored and the sample queue, admin audio review, and export are removed. Migration 0006 dropped the old speech sample table. The speech-expiry systemd timer and its retired source files were removed. A private SQLite backup is stored at `/app/data/pre-parser-admin-expansion-2d14274.sqlite3` with mode 600; its `quick_check` passed.
 
@@ -12,7 +12,7 @@ All 142 Django tests and Django system and migration checks passed in CI. Local 
 
 Voice and chat synchronization, PR [#27](https://github.com/michalfrackowiak/hotel-ai/pull/27). The default chat text follows the voice script, voice playback captions appear segment by segment, recognized guest replies appear once, and contextual answer buttons support dates, durations, guest counts, and room selection.
 
-Parser training, PR [#26](https://github.com/michalfrackowiak/hotel-ai/pull/26). **Reception → Parser training samples** lists original English and Polish chat and voice inputs, parser results, and the success flag. Staff can save validated corrections. Rules apply to matching input, source, language, and step. See [parser training](parser-training.md) for examples, activation, and retention.
+Parser training, PR [#26](https://github.com/michalfrackowiak/hotel-ai/pull/26). **Reception → Parser training samples** lists original English and Polish chat and voice inputs, parser results, and the success flag. Staff can save validated corrections. Rules apply to matching input, source, language, and step. See [parser training](parser-training.md) for examples, activation, and retention. Live deployment and parser-training activation were completed in later milestones.
 
 All 153 Django tests and migration and JavaScript checks passed. Chromium verified saving a correction in admin and using it for the next matching reply, with the expected room capacity and stay price. The live server still needs deployment and activation.
 
