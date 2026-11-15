@@ -2,9 +2,13 @@
 
 ## Latest milestone
 
-English web greeting. The [English reception](https://92.5.19.10/?lang=en) opens chat and browser voice with “Hi, this is Neptun Resort Jastrzębia Góra.” followed immediately by the arrival question. Existing drafts at the old opening pick up the greeting when reopened. All 103 Django tests, the system check, and the migration check passed.
+Noisy stay dates, PR [#22](https://github.com/michalfrackowiak/hotel-ai/pull/22). Chat, browser voice, and phone can extract a stay from one English or Polish message. “From tomorrow for three days” and “od jutra na trzy dni” set arrival to tomorrow and departure three days after arrival, even with extra words. The reception reads both dates back before asking for the guest count. When a recognized arrival has conflicting durations, reception asks for departure.
+
+All 110 Django tests, system checks, and migration checks passed. Independent Chromium verification used Piper, AudioWorklet capture, and Vosk with synthetic English and Polish utterances. Both languages advanced from the noisy arrival reply to the guest-count prompt and quoted three nights at the expected rate.
 
 ## Previous milestones
+
+English web greeting. The [English reception](https://92.5.19.10/?lang=en) opens chat and browser voice with “Hi, this is Neptun Resort Jastrzębia Góra.” followed immediately by the arrival question. Existing drafts at the old opening pick up the greeting when reopened. All 103 Django tests, the system check, and the migration check passed.
 
 English web entry, PR [#20](https://github.com/michalfrackowiak/hotel-ai/pull/20). The English page starts new chat and voice conversations at Step 2.b and uses the same entry point after **Start over**. The Polish page starts at the bilingual greeting. Returning guests resume an in-progress booking, and older English welcome drafts advance directly to the arrival prompt on refresh.
 

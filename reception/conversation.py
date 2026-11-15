@@ -8,7 +8,7 @@ from bookings.services import BookingError, available_rooms, confirm_booking
 
 from . import legacy_conversation
 from .contacts import parse_email, parse_phone
-from .parsing import NUMBER_WORDS, ORDINALS
+from .parsing import NUMBER_WORDS, ORDINALS, StayDates
 from .receipt import DELIVERY_PENDING, start_receipt
 
 
@@ -27,6 +27,7 @@ COPY = {
         "check_out": "Please enter your departure date or the number of nights for your stay.",
         "check_out_retry": "Please give a departure date after arrival or the length of your stay. For example, say for three nights.",
         "guests": "Please tell me the total number of guests (adults and children) for the reservation.",
+        "stay_dates": "Check-in is {check_in} and check-out is {check_out}.",
         "guests_retry": "Please give the total number of adults and children as a positive whole number.",
         "rooms": "I have checked availability. For your dates, we have the following rooms available: {options}. Which option would you like to select?",
         "option": "room {room} for {total} PLN total",
@@ -49,6 +50,7 @@ COPY = {
         "check_out": "Podaj datę wyjazdu lub informację, na ile nocy planujesz pobyt.",
         "check_out_retry": "Podaj datę wyjazdu po dacie przyjazdu lub długość pobytu, na przykład na trzy noce.",
         "guests": "Podaj łączną liczbę osób (dorosłych i dzieci), dla których mamy przygotować rezerwację.",
+        "stay_dates": "Przyjazd {check_in}, wyjazd {check_out}.",
         "guests_retry": "Podaj łączną liczbę dorosłych i dzieci jako dodatnią liczbę całkowitą.",
         "rooms": "Sprawdziłam dostępność. Na wybrany termin mamy następujące wolne pokoje: {options}. Którą opcję chciałbyś wybrać?",
         "option": "pokój {room} w cenie {total} PLN za pobyt",
@@ -118,7 +120,7 @@ def advance(state, message, parsed, *, voice=False):
         return new_conversation("en", "check_in")
     if stage == "welcome":
         state = new_conversation(language, "check_in")
-        if type(parsed) is not date:
+        if not isinstance(parsed, (date, StayDates)):
             return state
         stage = "check_in"
     if state.get("flow") != "neptun":
@@ -129,7 +131,13 @@ def advance(state, message, parsed, *, voice=False):
     state = {**state, "revision": uuid4().hex}
     copy = COPY[language]
     if stage == "check_in":
-        if type(parsed) is date:
+        if isinstance(parsed, StayDates):
+            if timezone.localdate() <= parsed.check_in < parsed.check_out:
+                state.update(stage="guests", check_in=parsed.check_in.isoformat(), check_out=parsed.check_out.isoformat())
+                state["reply"] = f"{copy['stay_dates'].format(**_display_dates(state))} {copy['guests']}"
+            else:
+                state["reply"] = copy["check_in"]
+        elif type(parsed) is date:
             if parsed >= timezone.localdate():
                 state.update(stage="check_out", check_in=parsed.isoformat(), reply=copy["check_out"])
             else:

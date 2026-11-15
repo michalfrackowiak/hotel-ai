@@ -9,7 +9,7 @@ from django.utils import timezone
 from reception.contacts import parse_email
 from reception.conversation import TERMINAL_STAGES as CONVERSATION_TERMINAL_STAGES
 from reception.conversation import WELCOME_PARTS, advance, new_conversation, selects_english
-from reception.parsing import parse_stay_input
+from reception.parsing import StayDates, parse_stay_input
 from reception.receipt import DELIVERY_PENDING, refresh_receipt
 
 from .models import PhoneCall
@@ -112,7 +112,8 @@ def _arrive_from_menu(digit, speech):
         return new_conversation("en", "check_in")
     state = new_conversation("pl", "check_in")
     parsed = parse_stay_input("check_in", speech, "pl")
-    if parsed is not None and parsed >= timezone.localdate():
+    arrival = parsed.check_in if isinstance(parsed, StayDates) else parsed
+    if arrival is not None and arrival >= timezone.localdate():
         return advance(state, speech, parsed, voice=True)
     return state
 

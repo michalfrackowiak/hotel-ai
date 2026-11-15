@@ -24,7 +24,7 @@ Each milestone has a development branch, a pull request to `main`, and independe
 - [x] Match the Resort Neptun scenario prompts and timing. Open with a bilingual greeting and a two-second language window, wait ten seconds for an arrival date, quote room prices before consent, and use the selected delivery closing after provider acceptance.
 - [x] Start English web chat and browser voice with a Neptun Resort greeting followed immediately by Step 2.b.
 - [ ] Configure live SMTP, Twilio SMS, and the staff phone transfer destination. Verify each live destination with a controlled test.
-- [ ] Flexible stay dates. Accept check-in and checkout in a single sentence.
+- [x] Flexible stay dates. Extract arrival and departure from one English or Polish message, including a spoken arrival date and stay duration amid extra words.
 
 ## Later releases
 
