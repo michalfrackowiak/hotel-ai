@@ -28,7 +28,7 @@ STAY_STAGES = ("check_in", "check_out", "guests")
 @ensure_csrf_cookie
 @require_safe
 def index(request):
-    language = "pl" if request.GET.get("lang") == "pl" else "en"
+    language = "en" if request.GET.get("lang") == "en" else "pl"
     request.session.setdefault("reception", True)
     return render(request, "reception/index.html", {
         "language": language,
@@ -93,11 +93,11 @@ def message(request):
         if request.session.session_key is None:
             request.session.create()
         conversation, _ = Conversation.objects.get_or_create(
-            session_id=request.session.session_key, defaults={"state": new_conversation(language)}
+            session_id=request.session.session_key, defaults={"state": new_conversation(language, scenario=True)}
         )
         state = conversation.state
         if reset or (start and state["language"] != language):
-            state = new_conversation(language)
+            state = new_conversation(language, scenario=True)
         elif start:
             return _result(state)
         elif state["revision"] != revision or state["language"] != language:
@@ -166,7 +166,7 @@ def transcript(request):
     state = conversation.values_list("state", flat=True).first()
     if state is None:
         return HttpResponse(status=404)
-    if state["revision"] != revision or state["stage"] == "completed":
+    if state["revision"] != revision or state["stage"] in ("completed", "cancelled"):
         return HttpResponse(status=409)
 
     try:

@@ -11,6 +11,7 @@
     const messages = document.getElementById("chat-messages");
     const status = document.getElementById("chat-status");
     const language = app.dataset.language;
+    const terminalStages = new Set(["completed", "cancelled"]);
     const labels = {
         en: {
             guest: "You",
@@ -43,7 +44,7 @@
 
     function updateControls() {
         const ready = connected && !pending;
-        const canSend = ready && stage !== "completed";
+        const canSend = ready && !terminalStages.has(stage);
         resetButton.disabled = pending;
         retryButton.disabled = pending;
         messageInput.disabled = !canSend;
@@ -151,9 +152,15 @@
     }
 
     function sendMessage(message) {
-        if (connected && stage !== "completed" && message) {
-            return requestChat({ message, revision });
+        if (!connected || pending || terminalStages.has(stage) || !message) return;
+        if (language === "pl" && (stage === "welcome" || stage === "check_in")) {
+            const selection = message.toLowerCase().replace(/[.!?]+$/, "").trim();
+            if (["english", "2", "dwa", "angielski", "po angielsku"].includes(selection)) {
+                window.location.assign(app.dataset.englishUrl);
+                return;
+            }
         }
+        return requestChat({ message, revision });
     }
 
     form.addEventListener("submit", (event) => {

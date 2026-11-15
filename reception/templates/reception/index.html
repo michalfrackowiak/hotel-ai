@@ -12,7 +12,7 @@
 </head>
 <body>
     {% include "reception/_header.html" with active_page="reception" %}
-    <main id="reception-app" data-language="{{ language }}" class="booking-layout">
+    <main id="reception-app" data-language="{{ language }}" data-english-url="{% url 'reception' %}?lang=en" class="booking-layout">
         <section class="intro" aria-labelledby="booking-title">
             <h1 id="booking-title">{% if language == "pl" %}Zarezerwuj pokój{% else %}Book a room{% endif %}</h1>
             <p>{% if language == "pl" %}Podaj terminy i liczbę gości. Recepcja sprawdzi dostępność i poda cenę przed potwierdzeniem rezerwacji.{% else %}Share your dates and guest count. Reception will check availability and quote the price before you confirm.{% endif %}</p>
@@ -45,7 +45,7 @@
                     <button id="chat-retry" class="quiet-button" type="button" hidden>{% if language == "pl" %}Połącz ponownie{% else %}Reconnect{% endif %}</button>
                 </div>
                 <div id="chat-confirmation" class="confirmation-actions" hidden>
-                    <button class="confirm-button" type="button" data-answer="{% if language == 'pl' %}Tak{% else %}Yes{% endif %}">{% if language == "pl" %}Tak, rezerwuję{% else %}Yes, book it{% endif %}</button>
+                    <button class="confirm-button" type="button" data-answer="{% if language == 'pl' %}Tak{% else %}Yes{% endif %}">{% if language == "pl" %}Tak, potwierdzam{% else %}Yes, confirm{% endif %}</button>
                     <button class="quiet-button" type="button" data-answer="{% if language == 'pl' %}Nie{% else %}No{% endif %}">{% if language == "pl" %}Nie{% else %}No{% endif %}</button>
                 </div>
                 <form id="chat-form" class="chat-form" method="post" action="/reception/message/">

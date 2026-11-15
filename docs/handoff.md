@@ -2,9 +2,13 @@
 
 ## Latest milestone
 
-Room availability. The public browser tab searches the existing inventory and shows nightly and total PLN prices. Selecting a room opens a prefilled form. Signed offers expire after 30 minutes and belong to the browser session. Confirmation reuses the booking service to check capacity, availability, and price. Repeated submissions of an identical form return the same confirmation number.
+Neptun browser scenario. New browser conversations default to Polish, offer English at the opening, summarize dates and guest count, present up to two available rooms with total prices, and request explicit confirmation before collecting the booking name and email. A declined offer ends the conversation. Confirmed bookings return the reference in chat and voice. Existing drafts retain their original step order.
+
+Staff handover, email/SMS delivery, and the Twilio language menu still need channel or provider configuration. Date parsing remains as recorded on the roadmap.
 
 ## Previous milestones
+
+Room availability. The public browser tab searches the existing inventory and shows nightly and total PLN prices. Selecting a room opens a prefilled form. Signed offers expire after 30 minutes and belong to the browser session. Confirmation reuses the booking service to check capacity, availability, and price. Repeated submissions of an identical form return the same confirmation number.
 
 My booking. The reception has English and Polish booking lookup. Guests submit the confirmation number from their receipt and see the room, dates, guest count, and booked price. The lookup uses a CSRF-protected form, keeps the number out of the URL, and returns uncached responses. Nginx publishes the lookup on the guest listener with the reception rate limit.
 

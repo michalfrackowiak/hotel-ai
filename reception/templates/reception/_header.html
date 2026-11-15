@@ -6,7 +6,7 @@
     <div class="site-bar">
         <span class="wordmark"><span class="brand-mark" aria-hidden="true"></span>Hotel-ai</span>
         <nav class="site-tabs" aria-label="{% if language == 'pl' %}Nawigacja główna{% else %}Main navigation{% endif %}">
-            <a href="{{ reception_url }}{% if language == 'pl' %}?lang=pl{% endif %}"{% if active_page == 'reception' %} aria-current="page"{% endif %}>{% if language == "pl" %}Recepcja{% else %}Reception{% endif %}</a>
+            <a href="{{ reception_url }}?lang={{ language }}"{% if active_page == 'reception' %} aria-current="page"{% endif %}>{% if language == "pl" %}Recepcja{% else %}Reception{% endif %}</a>
             <a href="{{ availability_url }}{% if language == 'pl' %}?lang=pl{% endif %}"{% if active_page == 'availability' %} aria-current="page"{% endif %}>{% if language == "pl" %}Dostępność pokoi{% else %}Room availability{% endif %}</a>
             <a href="{{ booking_url }}{% if language == 'pl' %}?lang=pl{% endif %}"{% if active_page == 'booking' %} aria-current="page"{% endif %}>{% if language == "pl" %}Moja rezerwacja{% else %}My booking{% endif %}</a>
         </nav>
