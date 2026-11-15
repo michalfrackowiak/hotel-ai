@@ -165,7 +165,7 @@ class ReceptionTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(other.status_code, 409)
-        self.assertEqual(other.json()["stage"], "welcome")
+        self.assertEqual(other.json()["stage"], "check_in")
         self.assertNotIn("reference", other.json())
         self.assertFalse(Booking.objects.exists())
 
@@ -192,6 +192,33 @@ class ReceptionTests(TestCase):
         conversation.save(update_fields=["state"])
         self.turn(quote, "Yes", "completed")
         self.assertEqual(Booking.objects.count(), 1)
+
+    def test_english_page_starts_and_restarts_at_arrival(self):
+        page = self.client.get(reverse("reception"), {"lang": "en"})
+        language = page.context["language"]
+        opening = self.post(language=language, start=True).json()
+        self.assertEqual(opening["stage"], "check_in")
+        self.assertIn("please state your planned arrival date", opening["reply"])
+        self.assertNotIn("welcome_parts", opening)
+        self.assertNotIn("voice_welcome", opening)
+        self.turn(opening, "tomorrow", "check_out", voice=True)
+        restarted = self.post(language=language, reset=True).json()
+        self.assertEqual(restarted["stage"], "check_in")
+        self.assertEqual(restarted["reply"], opening["reply"])
+
+    def test_selecting_english_on_the_page_skips_the_polish_welcome(self):
+        polish = self.post(language="pl", start=True).json()
+        self.assertEqual(polish["stage"], "welcome")
+        self.assertEqual(self.post(language="en", start=True).json()["stage"], "check_in")
+
+    def test_start_skips_an_english_welcome_saved_before_the_update(self):
+        self.post(language="en", start=True)
+        prior = Conversation.objects.get()
+        prior.state.update(stage="welcome")
+        prior.save(update_fields=["state"])
+        started = self.post(language="en", start=True).json()
+        self.assertEqual(started["stage"], "check_in")
+        self.assertNotEqual(started["revision"], prior.state["revision"])
 
     @patch("reception.views.extract_stay_value")
     def test_english_switch_preserves_the_browser_session(self, extract):
@@ -238,7 +265,7 @@ class ReceptionTests(TestCase):
                 prior.state.update(stage="check_in", reply=old_reply)
                 prior.save(update_fields=["state"])
                 started = self.post(language=language, start=True).json()
-                self.assertEqual(started["stage"], "welcome")
+                self.assertEqual(started["stage"], "check_in" if language == "en" else "welcome")
                 self.assertEqual(started["language"], language)
 
     def test_voice_room_options_are_limited_to_two(self):
@@ -307,8 +334,7 @@ class ReceptionHandoverTests(TestCase):
         self.assertEqual(self.post(revision=opening["revision"], timeout=True).status_code, 409)
         self.assertFalse(StaffHandover.objects.exists())
 
-        opening = self.post(reset=True).json()
-        arrival = self.post(revision=opening["revision"], timeout=True, voice=True).json()
+        arrival = self.post(reset=True).json()
         forwarded = self.post(revision=arrival["revision"], timeout=True, voice=True).json()
         self.assertEqual(forwarded["stage"], "handover")
         self.assertEqual(forwarded["handover_messages"], [])
@@ -320,10 +346,9 @@ class ReceptionHandoverTests(TestCase):
         self.assertEqual(self.post(revision=current["revision"], voice_start=True).json()["stage"], "handover")
 
     def test_voice_can_start_after_empty_silence_handover(self):
-        opening = self.post(start=True).json()
-        arrival = self.post(revision=opening["revision"], timeout=True).json()
+        arrival = self.post(start=True).json()
         forwarded = self.post(revision=arrival["revision"], timeout=True).json()
         self.assertTrue(forwarded["voice_welcome"])
         voice = self.post(revision=forwarded["revision"], voice_start=True).json()
-        self.assertEqual(voice["stage"], "welcome")
+        self.assertEqual(voice["stage"], "check_in")
         self.assertTrue(StaffHandover.objects.get().closed)

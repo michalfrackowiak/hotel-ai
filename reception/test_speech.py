@@ -58,6 +58,21 @@ class ReceptionAudioTests(TestCase):
         generate.assert_called_once_with(WELCOME_PARTS)
 
     @patch("reception.views.synthesize")
+    def test_english_page_voice_reads_the_arrival_prompt(self, generate):
+        generate.return_value = wav_fixture()
+        self.client.get("/?lang=en")
+        started = self.client.post(
+            reverse("reception-message"),
+            {"language": "en", "start": True},
+            content_type="application/json",
+            headers={"X-CSRFToken": self.token},
+        ).json()
+        response = self.request_audio({"revision": started["revision"]}, token=self.token)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("please state your planned arrival date", started["reply"])
+        generate.assert_called_once_with(started["reply"], "en")
+
+    @patch("reception.views.synthesize")
     def test_audio_uses_current_server_reply_and_requires_csrf(self, generate):
         generate.return_value = wav_fixture()
         self.assertEqual(self.request_audio(self.payload).status_code, 403)
