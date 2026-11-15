@@ -3,10 +3,11 @@ from io import StringIO
 from unittest.mock import patch
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from bookings.models import Booking, Client
+from reception.models import ParserSample
 
 from .calls import DRAFT_LIFETIME, TERMINAL_LIFETIME, advance_call, expire_calls, start_call
 from .models import PhoneCall
@@ -90,6 +91,20 @@ class PhoneCallTests(TestCase):
         self.assertEqual(start_call("CA" + "A" * 32), first)
         self.assertEqual(advance_call("CA" + "c" * 32, first.revision, digit="1").stage, "ended")
         self.assertEqual(PhoneCall.objects.count(), 2)
+
+    @override_settings(HOTEL_PARSER_TRAINING_ENABLED=True)
+    def test_phone_turns_record_voice_input_once_and_use_a_reviewed_rule(self):
+        arrival = self.turn(start_call(CALL_SID), digit="2")
+        checkout = self.turn(arrival, speech="Tomorrow.")
+        retry = self.turn(checkout, speech="A weak.")
+        self.assertEqual(retry.stage, "check_out")
+        sample = ParserSample.objects.get(stage="check_out")
+        self.assertEqual((sample.language, sample.source, sample.succeeded), ("en", "voice", False))
+        sample.corrected_result = "a week"
+        sample.save(update_fields=["corrected_result"])
+        self.assertEqual(self.turn(checkout, speech="A weak."), retry)
+        self.assertEqual(ParserSample.objects.filter(stage="check_out").count(), 1)
+        self.assertEqual(self.turn(retry, speech="A weak.").stage, "guests")
 
     def test_menu_defaults_to_polish_and_check_in_silence_requests_handover(self):
         start = start_call(CALL_SID)

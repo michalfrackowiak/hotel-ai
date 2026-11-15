@@ -292,10 +292,12 @@
         }
     }
 
-    function sendMessage(message) {
+    function sendMessage(message, transcript = false) {
         if (!connected || pending || terminalStages.has(stage) || !message) return;
         if (handoverClosed) return;
-        return requestChat({ message, revision, ...(voiceActive ? { voice: true } : {}) });
+        return requestChat({
+            message, revision, ...(voiceActive ? { voice: true } : {}), ...(transcript ? { transcript: true } : {}),
+        });
     }
 
     function replyTimeout() {
@@ -321,6 +323,7 @@
         trackSilence();
     });
     form.addEventListener("reception:voice-silence", replyTimeout);
+    form.addEventListener("reception:transcript", (event) => sendMessage(event.detail, true));
 
     form.addEventListener("submit", (event) => {
         event.preventDefault();

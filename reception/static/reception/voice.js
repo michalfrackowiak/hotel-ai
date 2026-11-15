@@ -164,7 +164,7 @@
         }
         input.value = transcript;
         status.textContent = copy.waiting;
-        form.requestSubmit();
+        form.dispatchEvent(new CustomEvent("reception:transcript", { detail: transcript }));
     }
 
     function listenWithBrowser(silenceLimit) {

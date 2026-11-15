@@ -104,6 +104,7 @@ HOTEL_TWILIO_AUTH_TOKEN = os.environ.get("HOTEL_TWILIO_AUTH_TOKEN", "")
 HOTEL_PIPER_URL = os.environ.get("HOTEL_PIPER_URL", "").rstrip("/")
 HOTEL_ASR_URL = os.environ.get("HOTEL_ASR_URL", "").rstrip("/")
 HOTEL_SPEECH_TRAINING_ENABLED = os.environ.get("HOTEL_SPEECH_TRAINING_ENABLED") == "1"
+HOTEL_PARSER_TRAINING_ENABLED = os.environ.get("HOTEL_PARSER_TRAINING_ENABLED") == "1"
 try:
     HOTEL_PIPER_TIMEOUT = int(os.environ.get("HOTEL_PIPER_TIMEOUT", "10"))
 except ValueError as error:

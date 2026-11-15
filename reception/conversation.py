@@ -132,7 +132,7 @@ def selects_english(message):
     return _answer(message) in ENGLISH_SELECTIONS
 
 
-def advance(state, message, parsed, *, voice=False):
+def advance(state, message, parsed, *, voice=False, input_parsed=False):
     stage = state["stage"]
     if stage in TERMINAL_STAGES or stage == DELIVERY_PENDING:
         return state
@@ -177,7 +177,7 @@ def advance(state, message, parsed, *, voice=False):
             return _offer_rooms(state, parsed, voice)
         set_prompt(state, "guests_retry")
     elif stage == "room":
-        return _select_room(state, answer)
+        return _select_room(state, parsed if input_parsed else _room_choice(state, answer))
     elif stage == "confirm":
         if answer in CANCEL[language]:
             return _terminal(state, "cancelled")
@@ -193,12 +193,12 @@ def advance(state, message, parsed, *, voice=False):
             state["stage"] = "phone"
             set_prompt(state, "phone")
     elif stage == "email":
-        email = parse_email(message)
+        email = parsed if input_parsed else parse_email(message)
         if email is not None:
             return _book(state, email=email, phone="", method="email")
         set_prompt(state, "invalid_email")
     elif stage == "phone":
-        phone = parse_phone(message)
+        phone = parsed if input_parsed else parse_phone(message)
         if phone is not None:
             return _book(state, email="", phone=phone, method="sms")
         set_prompt(state, "invalid_phone")
@@ -227,8 +227,7 @@ def _offer_rooms(state, guests, voice):
     return set_prompt(state, "rooms", {"options": room_options(state, voice=voice)})
 
 
-def _select_room(state, answer):
-    choice = _room_choice(state, answer)
+def _select_room(state, choice):
     if choice is None:
         return state
     state.update(choice, stage="confirm")
@@ -236,16 +235,20 @@ def _select_room(state, answer):
     return set_prompt(state, "confirm", {"room": state["room"], "guests": state["guests"], **_display_dates(state)})
 
 
-def _room_choice(state, answer):
-    language = state["language"]
-    room_prefix = "room " if language == "en" else "pokój "
+def _room_option_number(language, answer):
     label = answer.removeprefix("option " if language == "en" else "opcja ")
     label = label.removeprefix("number " if language == "en" else "numer ")
     feminine = {"pierwsza": 1, "pierwszą": 1, "druga": 2, "drugą": 2}
-    number = int(label) if label.isascii() and label.isdecimal() else (
+    return int(label) if label.isascii() and label.isdecimal() else (
         NUMBER_WORDS[language].get(label) or ORDINALS[language].get(label)
         or (feminine.get(label) if language == "pl" else None)
     )
+
+
+def _room_choice(state, answer):
+    language = state["language"]
+    room_prefix = "room " if language == "en" else "pokój "
+    number = _room_option_number(language, answer)
     choices = state["choices"]
     if number is not None:
         return choices[number - 1] if 1 <= number <= len(choices) else None
