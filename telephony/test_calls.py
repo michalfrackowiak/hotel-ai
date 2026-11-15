@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 from io import StringIO
 from unittest.mock import patch
 
@@ -106,6 +106,18 @@ class PhoneCallTests(TestCase):
         self.assertEqual((result.stage, result.language), ("check_in", "en"))
         result = self.turn(start_call(OTHER_CALL_SID), speech="Jutro.", call_sid=OTHER_CALL_SID)
         self.assertEqual((result.stage, result.language), ("check_out", "pl"))
+
+    @patch("django.utils.timezone.localdate", return_value=date(2027, 12, 30))
+    def test_noisy_stay_is_understood_at_arrival_and_in_the_polish_menu(self, _today):
+        english = self.turn(start_call(CALL_SID), digit="2")
+        english = self.turn(english, speech="strike of will be the from tomorrow for three days")
+        self.assertEqual((english.language, english.stage), ("en", "guests"))
+        self.assertIn("Check-in is 2027-12-31 and check-out is 2028-01-03.", english.reply)
+
+        polish = self.turn(start_call(OTHER_CALL_SID), speech="trzask od jutra przez trzy dni", call_sid=OTHER_CALL_SID)
+        self.assertEqual((polish.language, polish.stage), ("pl", "guests"))
+        self.assertIn("Przyjazd 31.12.2027, wyjazd 03.01.2028.", polish.reply)
+        self.assertFalse(Booking.objects.exists())
 
     def test_explicit_cancellation_ends_the_call(self):
         quote = self.prepare_quote(language="pl")

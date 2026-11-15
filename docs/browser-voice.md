@@ -2,7 +2,7 @@
 
 Open the reception in a modern browser, such as desktop Chrome, at `http://127.0.0.1:8080/` or a secure HTTPS deployment. Pick **English** or **Polski** and click **Start voice booking** or **Włącz rozmowę głosową**. Allow microphone access when prompted. Wait for **Listening…** or **Słucham…**, then answer and pause briefly to send your reply. The text chat shows the conversation and stays available for corrections.
 
-Say “tomorrow” or “jutro” for check-in. When asked about checkout, you can say “in three days” or “za trzy dni,” which means three calendar days from today in the hotel's time zone. The reception reads back both dates before asking for the number of guests. You can also give a calendar date with the year in English or Polish.
+Say “from tomorrow for three days” or “od jutra na trzy dni” to give both dates in one reply. The stay starts tomorrow and lasts three nights. Reception reads back the dates before asking for the guest count. For separate replies, give “tomorrow” or “jutro” for check-in, then a checkout date or the length of the stay. “In three days” and “za trzy dni” mean three calendar days from today in the hotel's time zone.
 
 For email, try “guest at example dot com” or “gosc małpa example kropka com.” You can type the address if recognition gets it wrong. Review the quoted room, dates, and price. Say “Yes” or “Tak,” or use the confirmation button, to book. The reception reads the booking reference and closes the voice session.
 

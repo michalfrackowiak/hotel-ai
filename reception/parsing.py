@@ -1,5 +1,6 @@
 import re
 from calendar import monthrange
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from django.utils import timezone
@@ -21,7 +22,7 @@ POLISH_MONTHS = (
 )
 RELATIVE_DATES = {
     "en": {"today": 0, "tomorrow": 1, "day after tomorrow": 2, "the day after tomorrow": 2},
-    "pl": {"dzisiaj": 0, "dziś": 0, "jutro": 1, "pojutrze": 2},
+    "pl": {"dzisiaj": 0, "dziś": 0, "jutro": 1, "jutra": 1, "pojutrze": 2, "pojutrza": 2},
 }
 RELATIVE_OFFSETS = {
     "en": r"in ([0-9]{1,5}|[a-z]+) (day|days|week|weeks)",
@@ -58,13 +59,68 @@ ORDINALS = {
         range(1, 32),
     )),
 }
+RANGE_LINK = {"en": r"to|until|through", "pl": r"do"}
+DURATION_START = {"en": r"for", "pl": r"na|przez"}
+AMBIGUITY_MARKERS = {
+    "en": re.compile(r"\b(?:or|not|never|instead|maybe|perhaps)\b|n['’]t\b"),
+    "pl": re.compile(r"\b(?:lub|albo|bądź|nie|zamiast|może)\b"),
+}
+DATE_CONTEXT = {
+    "check_in": {
+        "en": re.compile(r"\b(?:from|arriv\w*|check(?:ing)?[ -]?in|start\w*)\b"),
+        "pl": re.compile(r"\b(?:od|przyjazd\w*|przyjad\w*|przyjed\w*|zameld\w*|zakwater\w*)\b"),
+    },
+    "check_out": {
+        "en": re.compile(r"\b(?:until|check(?:ing)?[ -]?out|depart\w*|leav\w*|stay\w*)\b"),
+        "pl": re.compile(r"\b(?:do|wyjazd\w*|wyjad\w*|wyjed\w*|wymeld\w*|pobyt\w*|zost\w*)\b"),
+    },
+}
+DATE_FILLERS = {
+    "en": re.compile(r"\b(?:uh|um|erm|hmm|on|the|please|thanks|thank you)\b"),
+    "pl": re.compile(r"\b(?:yyy|hmm|proszę|dzięki|dziękuję)\b"),
+}
+
+
+@dataclass(frozen=True)
+class StayDates:
+    check_in: date
+    check_out: date
+
+
+def _alternatives(values):
+    return "|".join(re.escape(value) for value in sorted(values, key=len, reverse=True))
+
+
+def _date_pattern(language):
+    months = _alternatives(MONTHS[language])
+    ordinals = _alternatives(ORDINALS[language]).replace(r"\ ", "[- ]")
+    relative = _alternatives(RELATIVE_DATES[language])
+    numeric = r"[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}|[0-9]{1,2}[./][0-9]{1,2}(?:[./][0-9]{4})?"
+    if language == "en":
+        ordinal = r"[0-9]{1,2}(?:st|nd|rd|th)"
+        day = rf"(?:{ordinal}|[0-9]{{1,2}}|{ordinals})"
+        named = rf"(?:the )?(?:(?:{months}) {day}|{day} (?:of )?(?:{months}))(?:,? [0-9]{{4}})?"
+    else:
+        day = rf"(?:[0-9]{{1,2}}|{ordinals})"
+        named = rf"{day} (?:{months})(?: [0-9]{{4}}(?: r\.?| roku)?)?"
+        ordinal = ordinals
+    return re.compile(rf"(?<![\w./-])(?:{numeric}|{named}|{relative}|{RELATIVE_OFFSETS[language]}|{ordinal})(?![\w/-]|\.[0-9])")
+
+
+DATE_FRAGMENTS = {language: _date_pattern(language) for language in MONTHS}
+DURATION_FRAGMENTS = {
+    language: re.compile(rf"(?<![\w+/.-]){pattern}(?![\w/-]|\.[0-9])")
+    for language, pattern in DURATIONS.items()
+}
 
 
 def _number(token, language):
     return int(token) if token.isdecimal() else NUMBER_WORDS[language].get(token)
 
 
-def parse_stay_input(stage: str, text: str, language: str, *, check_in: date | None = None) -> date | int | None:
+def parse_stay_input(
+    stage: str, text: str, language: str, *, check_in: date | None = None,
+) -> StayDates | date | int | None:
     value = " ".join(text.casefold().strip().rstrip(".!?。！？").split())
     if stage == "guests":
         number = re.fullmatch(
@@ -74,15 +130,70 @@ def parse_stay_input(stage: str, text: str, language: str, *, check_in: date | N
         return _number(number[1], language) if number else None
 
     if stage in ("check_in", "check_out"):
+        today = timezone.localdate()
+        anchor = check_in if stage == "check_out" else None
         try:
-            return _parse_date(value, language, check_in if stage == "check_out" else None)
+            return _parse_date(value, language, anchor, today) or _extract_dates(stage, value, language, anchor, today)
         except (OverflowError, ValueError):
             return None
     return None
 
 
-def _parse_date(value, language, check_in):
-    today = timezone.localdate()
+def _extract_dates(stage, value, language, check_in, today):
+    if AMBIGUITY_MARKERS[language].search(value):
+        return None
+    matches = list(DATE_FRAGMENTS[language].finditer(value))
+    if not matches:
+        if stage == "check_out" and check_in:
+            durations = _duration_fragments(value, language)
+            if len(durations) == 1:
+                return _parse_date(durations[0], language, check_in, today)
+        return None
+    first, *others = matches
+    if others:
+        if stage != "check_in" or len(others) != 1:
+            return None
+        second = others[0]
+        separator = value[first.end():second.start()].strip(" ,")
+        if not re.fullmatch(RANGE_LINK[language], separator):
+            return None
+        arrival = _parse_date(first[0], language, None, today)
+        if arrival is None:
+            return None
+        if _duration_fragments(value[second.end():], language):
+            return arrival
+        departure = _parse_date(second[0], language, None, today, calendar_anchor=arrival)
+        return _stay_dates(arrival, departure, today)
+
+    if stage == "check_in":
+        durations = _duration_fragments(value[first.end():], language)
+        if durations:
+            arrival = _parse_date(first[0], language, None, today)
+            if arrival is not None and len(durations) == 1:
+                departure = _parse_date(durations[0], language, arrival, today)
+                return _stay_dates(arrival, departure, today)
+            return arrival
+    remainder = f"{value[:first.start()]} {value[first.end():]}"
+    if DATE_CONTEXT[stage][language].search(remainder) or not DATE_FILLERS[language].sub("", remainder).strip(" ,.!?"):
+        return _parse_date(first[0], language, None, today)
+    return None
+
+
+def _duration_fragments(value, language):
+    prefix = re.compile(rf"^(?:{DURATION_START[language]}) ")
+    return [
+        match[0] for match in DURATION_FRAGMENTS[language].finditer(value)
+        if prefix.match(match[0]) or (match[1] and _number(match[1], language) is not None)
+    ]
+
+
+def _stay_dates(arrival, departure, today):
+    if departure and arrival >= today and departure > arrival:
+        return StayDates(arrival, departure)
+    return arrival
+
+
+def _parse_date(value, language, check_in, today, *, calendar_anchor=None):
     days = RELATIVE_DATES[language].get(value)
     offset = re.fullmatch(RELATIVE_OFFSETS[language], value)
     if offset and (amount := _number(offset[1], language)) is not None:
@@ -107,7 +218,7 @@ def _parse_date(value, language, check_in):
             return datetime.strptime(value, fmt).date()
         except ValueError:
             continue
-    return _calendar_date(value, language, today)
+    return _calendar_date(value, language, calendar_anchor or today)
 
 
 def _add_duration(check_in, amount, unit):

@@ -16,11 +16,12 @@ class ModelProviderTests(TestCase):
         extract.return_value = timezone.localdate()
         endpoint = reverse("reception-message")
         started = self.client.post(endpoint, {"language": "en", "start": True}, content_type="application/json").json()
+        input_requiring_provider = "I want to arrive on the next public holiday."
         next_turn = self.client.post(endpoint, {
-            "language": "en", "revision": started["revision"], "message": "I want to arrive today, please.",
+            "language": "en", "revision": started["revision"], "message": input_requiring_provider,
         }, content_type="application/json").json()
         self.assertEqual(next_turn["stage"], "check_out")
-        extract.assert_called_once_with("check_in", "I want to arrive today, please.", "en")
+        extract.assert_called_once_with("check_in", input_requiring_provider, "en")
         self.client.post(endpoint, {
             "language": "en", "revision": next_turn["revision"], "message": "tomorrow",
         }, content_type="application/json")

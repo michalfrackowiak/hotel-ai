@@ -108,6 +108,27 @@ class ReceptionTests(TestCase):
         quote = self.turn(current, "opcja dwa", "confirm")
         self.assertIn("ROOM-6", quote["reply"])
 
+    @patch("reception.views.extract_stay_value")
+    @patch("django.utils.timezone.localdate", return_value=date(2027, 12, 30))
+    def test_noisy_stay_collects_both_dates_and_prices_three_nights(self, _today, extract):
+        for language, voice, phrase, guests, displayed_dates, total in (
+            ("en", False, "strike of will be the from tomorrow for three days", "two guests",
+             ("2027-12-31", "2028-01-03"), "360.00 PLN"),
+            ("pl", True, "trzask będzie chyba od jutra na trzy dni", "dwie osoby",
+             ("31.12.2027", "03.01.2028"), "360,00 PLN"),
+        ):
+            with self.subTest(language=language):
+                opening = self.post(language=language, reset=True).json()
+                current = self.turn(opening, phrase, "guests", **({"voice": True} if voice else {}))
+                for displayed_date in displayed_dates:
+                    self.assertIn(displayed_date, current["reply"])
+                state = Conversation.objects.get().state
+                self.assertEqual((state["check_in"], state["check_out"]), ("2027-12-31", "2028-01-03"))
+                offers = self.turn(current, guests, "room")
+                self.assertIn(total, offers["reply"])
+        extract.assert_not_called()
+        self.assertFalse(Booking.objects.exists())
+
     @patch("django.utils.timezone.localdate", return_value=date(2027, 12, 30))
     def test_checkout_relative_to_today_after_a_separate_arrival(self, today):
         for language, arrival, departure, question in (
