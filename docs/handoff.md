@@ -6,7 +6,7 @@ Parser configuration and stay extraction, PR [#28](https://github.com/michalfrac
 
 Browser speech training has been retired. Voice transcription still works, but incoming audio is no longer stored and the sample queue, admin audio review, and export are removed. Migration 0006 drops the old speech sample table.
 
-System and migration consistency checks, Python compilation, JavaScript syntax checks, and whitespace checks pass. Independent static review approved after fixes for ISO/dash setting independence and ambiguous conjunctions. Automated tests have not been run locally; configured CI is pending on PR #28. Next action: wait for CI, merge, and deploy with the SQLite backup and retired-file cleanup.
+All 142 Django tests, Django system and migration checks, Python compilation, JavaScript syntax checks, and whitespace checks pass. Independent static review approved the parser, privacy filters, migration, and the corrected invalid-checkout fallback. CI first caught a malformed checkout being reduced to an arrival-only result; departure validation now runs before the duration fallback. Next action: merge PR #28, back up SQLite, stop and remove the speech-expiry timer and retired files on the server, then deploy.
 
 ## Previous milestones
 
