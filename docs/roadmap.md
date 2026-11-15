@@ -16,6 +16,7 @@ Each milestone has a development branch, a pull request to `main`, and independe
 - [x] Public microphone transcription. Capture microphone turns in the browser and transcribe with private English and Polish Vosk models on the server. Verify that a spoken date advances the public booking conversation without the browser speech service.
 - [x] Relative checkout. Accept “in three days” and “za trzy dni” after check-in and read back both dates before collecting the guest count.
 - [x] Checkout question. Ask how long guests will stay or when they plan to check out, and give an example of a supported reply in both languages.
+- [x] My booking. Look up a confirmed stay by its confirmation number in English or Polish.
 - [ ] Checkout duration. Resolve lengths of stay in days, nights, weeks, and months from check-in.
 - [ ] Flexible stay dates. Infer the closest upcoming date if the year is omitted and accept check-in and checkout in a single sentence.
 

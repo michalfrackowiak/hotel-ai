@@ -14,6 +14,11 @@ location = /healthz/ {
     proxy_pass http://127.0.0.1:8080/healthz/;
 }
 
+location = /my-booking/ {
+    limit_req zone=hotel_ai_chat burst=15 nodelay;
+    proxy_pass http://127.0.0.1:8080/my-booking/;
+}
+
 location = /reception/message/ {
     limit_req zone=hotel_ai_chat burst=15 nodelay;
     proxy_pass http://127.0.0.1:8080/reception/message/;

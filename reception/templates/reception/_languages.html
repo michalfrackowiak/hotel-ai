@@ -1,0 +1,4 @@
+<nav class="languages" aria-label="{% if language == 'pl' %}Język{% else %}Language{% endif %}">
+    <a href="{{ page_url }}" lang="en"{% if language == "en" %} aria-current="true"{% endif %}>English</a>
+    <a href="{{ page_url }}?lang=pl" lang="pl"{% if language == "pl" %} aria-current="true"{% endif %}>Polski</a>
+</nav>
