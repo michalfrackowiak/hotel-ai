@@ -14,6 +14,9 @@ from django.views.decorators.http import require_POST
 from twilio.request_validator import RequestValidator
 from twilio.twiml.voice_response import Gather, VoiceResponse
 
+from reception.conversation import WELCOME_PARTS
+from reception.receipt import DELIVERY_PENDING
+
 from .calls import COPY, TERMINAL_STAGES, advance_call, finish_handover, is_call_sid, start_call
 
 
@@ -78,7 +81,7 @@ def _twilio_post(view):
     return signed
 
 
-def _voice_reply(result):
+def _voice_reply(result, *, announce_pending=False):
     response = VoiceResponse()
     locale, voice = LOCALES[result.language]
     if result.stage == "handover":
@@ -94,6 +97,12 @@ def _voice_reply(result):
         if result.reply:
             response.say(result.reply, language=locale, voice=voice)
         response.hangup()
+    elif result.stage == DELIVERY_PENDING:
+        if announce_pending:
+            response.say(result.reply, language=locale, voice=voice)
+        response.pause(length=2)
+        path = reverse("telephony:turn", kwargs={"revision": result.revision})
+        response.redirect(_public_url(path), method="POST")
     else:
         action = _public_url(reverse("telephony:turn", kwargs={"revision": result.revision}))
         timeout = {"language": 2, "check_in": 10}.get(result.stage, 7)
@@ -106,17 +115,19 @@ def _voice_reply(result):
             gather.say("Aby wybrać język polski, naciśnij dwa.", language=polish_locale, voice=polish_voice)
         else:
             keypad = result.stage in ("language", "room")
+            recognition_locale = LOCALES["en"][0] if result.stage == "language" else locale
             gather = Gather(
                 input="dtmf speech" if keypad else "speech", num_digits=1 if keypad else None,
-                language=locale, speech_model="experimental_utterances", speech_timeout=2,
+                language=recognition_locale, speech_model="experimental_utterances", speech_timeout=2,
                 hints="English" if result.stage == "language" else None,
                 profanity_filter=False, **attributes,
             )
-            gather.say(result.reply, language=locale, voice=voice)
             if result.stage == "language":
-                english_locale, english_voice = LOCALES["en"]
-                gather.say("For English, press 2 or say English.", language=english_locale, voice=english_voice)
-                gather.say("Język polski – pozostań na linii.", language=locale, voice=voice)
+                for segment_language, text in WELCOME_PARTS:
+                    segment_locale, segment_voice = LOCALES[segment_language]
+                    gather.say(text, language=segment_locale, voice=segment_voice)
+            else:
+                gather.say(result.reply, language=locale, voice=voice)
         response.append(gather)
     return HttpResponse(str(response), content_type="application/xml; charset=utf-8")
 
@@ -128,9 +139,9 @@ def incoming(form, call_sid):
 
 @_twilio_post
 def turn(form, call_sid, revision):
-    return _voice_reply(advance_call(
-        call_sid, revision, digit=form.get("Digits", ""), speech=form.get("SpeechResult", ""),
-    ))
+    speech = form.get("SpeechResult", "")
+    result = advance_call(call_sid, revision, digit=form.get("Digits", ""), speech=speech)
+    return _voice_reply(result, announce_pending=bool(speech))
 
 
 @_twilio_post

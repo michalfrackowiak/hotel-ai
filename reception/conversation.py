@@ -9,52 +9,59 @@ from bookings.services import BookingError, available_rooms, confirm_booking
 from . import legacy_conversation
 from .contacts import parse_email, parse_phone
 from .parsing import NUMBER_WORDS, ORDINALS
+from .receipt import DELIVERY_PENDING, start_receipt
 
 
 TERMINAL_STAGES = ("completed", "cancelled", "handover")
-ENGLISH_SELECTIONS = {"2", "two", "dwa", "english", "angielski", "po angielsku"}
+ENGLISH_SELECTIONS = {"2", "two", "dwa", "english", "english please", "angielski", "po angielsku"}
+WELCOME_PARTS = (
+    ("pl", "Dzień dobry, Resort Neptun Jastrzębia Góra."),
+    ("en", "For English press 2 or say 'English'."),
+    ("pl", "Język polski – pozostań na linii lub napisz wiadomość."),
+)
+WELCOME = " ".join(text for _, text in WELCOME_PARTS)
 COPY = {
     "en": {
-        "welcome": "Welcome to Resort Neptun Jastrzębia Góra.",
-        "check_in": "To check availability, prices, or make a reservation, please give your planned arrival date. For anything else, ask for reception.",
-        "check_out": "Please give your departure date or the number of nights you plan to stay. For example, say for three nights.",
+        "welcome": WELCOME,
+        "check_in": "If you would like to check availability, prices, or make a reservation, please state your planned arrival date. If you are calling regarding another matter, please stay on the line and I will connect you with a receptionist.",
+        "check_out": "Please enter your departure date or the number of nights for your stay.",
         "check_out_retry": "Please give a departure date after arrival or the length of your stay. For example, say for three nights.",
-        "guests": "Check-in is {check_in} and checkout is {check_out}. How many guests, including adults and children, will stay?",
+        "guests": "Please tell me the total number of guests (adults and children) for the reservation.",
         "guests_retry": "Please give the total number of adults and children as a positive whole number.",
-        "rooms": "I checked availability. {options} Which option would you like? Give the option number or say room followed by its code.",
-        "option": "Option {number}, room {room}, for {total} PLN total.",
-        "confirm": "You selected room {room} from {check_in} to {check_out} for {guests} guests. The total is {total} PLN. Would you like to confirm your reservation?",
-        "delivery": "How would you like to receive your booking confirmation, by email or by SMS?",
-        "email": "Please dictate or type your email address. When dictating, say at and dot.",
-        "phone": "Please give the phone number where we should send the SMS confirmation.",
-        "invalid_email": "Please give a valid email address.",
-        "invalid_phone": "Please give a Polish mobile number or include the international country code.",
-        "confirmed_email": "Your reservation is confirmed. Your reference is {reference}. We have requested confirmation by email. Thank you for choosing Resort Neptun!",
-        "confirmed_sms": "Your reservation is confirmed. Your reference is {reference}. We have requested confirmation by SMS. Thank you for choosing Resort Neptun!",
-        "cancelled": "Thank you for contacting Resort Neptun. Goodbye!",
-        "handover": "I’m forwarding your request to reception.",
+        "rooms": "I have checked availability. For your dates, we have the following rooms available: {options}. Which option would you like to select?",
+        "option": "room {room} for {total} PLN total",
+        "voice_option": "option {number}, room {room} for {total} PLN total",
+        "and": "and",
+        "confirm": "You have selected room {room} from {check_in} to {check_out} for {guests} guests. Would you like to confirm your reservation?",
+        "delivery": "Your reservation has been tentatively created! Would you like your booking confirmation sent to your email address or via SMS to your phone number?",
+        "email": "Please dictate or type your email address.",
+        "phone": "Please provide the phone number where we should send the SMS confirmation.",
+        "invalid_email": "Please give a valid email address. If you are dictating it, spell it and say at and dot.",
+        "invalid_phone": "Please give a Polish mobile number or include the international country code. If you are speaking, say the digits one at a time.",
+        "cancelled": "Thank you for your call, and feel free to contact Neptun Resort again. Goodbye!",
+        "handover": "Redirecting you to a reception employee. Please hold.",
         "unavailable": "No room is available for that stay. What arrival date would you like to try?",
         "offer_changed": "That room or rate has changed. Please give your arrival date for a fresh quote.",
     },
     "pl": {
-        "welcome": "Dzień dobry, Resort Neptun Jastrzębia Góra. For English, choose English or say English.",
-        "check_in": "Aby sprawdzić dostępność, ceny lub dokonać rezerwacji, podaj planowaną datę przyjazdu. W innej sprawie poproś o kontakt z recepcją.",
-        "check_out": "Podaj datę wyjazdu lub informację, na ile nocy planujesz pobyt. Możesz powiedzieć na przykład na trzy noce.",
+        "welcome": WELCOME,
+        "check_in": "Jeżeli chcesz dowiedzieć się o dostępność, ceny lub dokonać rezerwacji, proszę podaj planowany termin przyjazdu. Jeżeli dzwonisz w innej sprawie, pozostań na linii lub napisz, a połączę Cię z pracownikiem recepcji.",
+        "check_out": "Podaj datę wyjazdu lub informację, na ile nocy planujesz pobyt.",
         "check_out_retry": "Podaj datę wyjazdu po dacie przyjazdu lub długość pobytu, na przykład na trzy noce.",
-        "guests": "Przyjazd {check_in}, wyjazd {check_out}. Podaj łączną liczbę osób, dorosłych i dzieci.",
+        "guests": "Podaj łączną liczbę osób (dorosłych i dzieci), dla których mamy przygotować rezerwację.",
         "guests_retry": "Podaj łączną liczbę dorosłych i dzieci jako dodatnią liczbę całkowitą.",
-        "rooms": "Sprawdziłam dostępność. {options} Którą opcję wybierasz? Podaj numer opcji lub powiedz pokój i jego kod.",
-        "option": "Opcja {number}, pokój {room}, za {total} PLN za pobyt.",
-        "confirm": "Wybrano pokój {room} w terminie od {check_in} do {check_out} dla {guests} osób. Cena za pobyt to {total} PLN. Czy chcesz potwierdzić rezerwację?",
-        "delivery": "Jak chcesz otrzymać potwierdzenie rezerwacji, e-mailem czy SMS-em?",
-        "email": "Podyktuj lub wpisz swój adres e-mail. Podczas dyktowania wypowiedz małpa i kropka.",
-        "phone": "Podaj numer telefonu, na który mamy wysłać potwierdzenie SMS-em.",
-        "invalid_email": "Podaj poprawny adres e-mail.",
-        "invalid_phone": "Podaj polski numer komórkowy lub numer z międzynarodowym kodem kraju.",
-        "confirmed_email": "Twoja rezerwacja jest potwierdzona. Numer rezerwacji to {reference}. Zleciliśmy wysłanie potwierdzenia e-mailem. Dziękujemy za wybór Resortu Neptun!",
-        "confirmed_sms": "Twoja rezerwacja jest potwierdzona. Numer rezerwacji to {reference}. Zleciliśmy wysłanie potwierdzenia SMS-em. Dziękujemy za wybór Resortu Neptun!",
+        "rooms": "Sprawdziłam dostępność. Na wybrany termin mamy następujące wolne pokoje: {options}. Którą opcję chciałbyś wybrać?",
+        "option": "pokój {room} w cenie {total} PLN za pobyt",
+        "voice_option": "opcja {number}, pokój {room} w cenie {total} PLN za pobyt",
+        "and": "oraz",
+        "confirm": "Wybrałeś pokój {room} w terminie od {check_in} do {check_out} dla {guests} osób. Czy chcesz potwierdzić rezerwację?",
+        "delivery": "Rezerwacja została wstępnie utworzona! Czy chcesz, aby potwierdzenie rezerwacji zostało wysłane na adres e-mail, czy na numer telefonu przez SMS?",
+        "email": "Proszę, podyktuj lub wpisz swój adres e-mail.",
+        "phone": "Proszę, podaj numer telefonu, na który mamy wysłać potwierdzenie SMS-em.",
+        "invalid_email": "Podaj poprawny adres e-mail. Jeśli dyktujesz, przeliteruj go i powiedz małpa oraz kropka.",
+        "invalid_phone": "Podaj polski numer komórkowy lub numer z międzynarodowym kodem kraju. Jeśli dyktujesz, podawaj cyfry pojedynczo.",
         "cancelled": "Dziękuję za rozmowę i zapraszam do ponownego kontaktu z Resortem Neptun. Do widzenia!",
-        "handover": "Przekazuję Twoją sprawę do recepcji.",
+        "handover": "Przekierowuję do pracownika recepcji. Proszę czekać.",
         "unavailable": "Brak dostępnych pokoi na ten pobyt. Jaką datę przyjazdu chcesz sprawdzić?",
         "offer_changed": "Dostępność pokoju lub cena uległa zmianie. Podaj datę przyjazdu, aby otrzymać nową ofertę.",
     },
@@ -69,9 +76,10 @@ SMS_ANSWERS = {
 
 
 def new_conversation(language, prompt="welcome"):
-    copy = COPY[language]
-    reply = f"{copy['welcome']} {copy['check_in']}" if prompt == "welcome" else copy[prompt]
-    return {"language": language, "stage": "check_in", "revision": uuid4().hex, "reply": reply, "flow": "neptun"}
+    return {
+        "language": language, "stage": "welcome" if prompt == "welcome" else "check_in",
+        "revision": uuid4().hex, "reply": COPY[language][prompt], "flow": "neptun",
+    }
 
 
 def _terminal(state, stage, reply, **fields):
@@ -102,12 +110,17 @@ def selects_english(message):
 
 def advance(state, message, parsed, *, voice=False):
     stage = state["stage"]
-    if stage in TERMINAL_STAGES:
+    if stage in TERMINAL_STAGES or stage == DELIVERY_PENDING:
         return state
     language = state["language"]
     answer = _answer(message)
-    if stage == "check_in" and language == "pl" and answer in ENGLISH_SELECTIONS:
+    if stage in ("welcome", "check_in") and language == "pl" and answer in ENGLISH_SELECTIONS:
         return new_conversation("en", "check_in")
+    if stage == "welcome":
+        state = new_conversation(language, "check_in")
+        if type(parsed) is not date:
+            return state
+        stage = "check_in"
     if state.get("flow") != "neptun":
         if stage != "check_in":
             return legacy_conversation.advance(state, message, parsed)
@@ -125,8 +138,7 @@ def advance(state, message, parsed, *, voice=False):
             return _terminal(state, "handover", copy["handover"])
     elif stage == "check_out":
         if type(parsed) is date and parsed > date.fromisoformat(state["check_in"]):
-            state.update(stage="guests", check_out=parsed.isoformat())
-            state["reply"] = copy["guests"].format(**_display_dates(state))
+            state.update(stage="guests", check_out=parsed.isoformat(), reply=copy["guests"])
         else:
             state["reply"] = copy["check_out_retry"]
     elif stage == "guests":
@@ -140,6 +152,7 @@ def advance(state, message, parsed, *, voice=False):
             return _terminal(state, "cancelled", copy["cancelled"])
         if answer in CONFIRM[language]:
             state.update(stage="delivery", reply=copy["delivery"])
+            state.setdefault("booking_key", str(uuid4()))
     elif stage == "delivery":
         if answer in EMAIL_ANSWERS:
             state.update(stage="email", reply=copy["email"])
@@ -170,14 +183,16 @@ def _offer_rooms(state, guests, voice):
     if voice:
         offers = offers[:2]
     copy = COPY[language]
+    option = copy["voice_option" if voice else "option"]
     options = [
-        copy["option"].format(
+        option.format(
             number=number, room=offer.room_code, total=legacy_conversation._price(offer.total_price, language),
         )
         for number, offer in enumerate(offers, 1)
     ]
+    room_list = options[0] if len(options) == 1 else f"{', '.join(options[:-1])}, {copy['and']} {options[-1]}"
     state.update(
-        stage="room", guests=guests, reply=copy["rooms"].format(options=" ".join(options)),
+        stage="room", guests=guests, reply=copy["rooms"].format(options=room_list),
         choices=[
             {"room_id": offer.room_id, "room": offer.room_code,
              "nightly_rate": str(offer.nightly_rate), "total_price": str(offer.total_price)}
@@ -205,11 +220,10 @@ def _select_room(state, answer):
         choice = next((offer for offer in choices if offer["room"].casefold() == room_code), None)
     if choice is None:
         return state
-    state.update(choice, stage="confirm", booking_key=str(uuid4()))
+    state.update(choice, stage="confirm")
     state.pop("choices")
     state["reply"] = COPY[language]["confirm"].format(
-        room=state["room"], guests=state["guests"],
-        total=legacy_conversation._price(Decimal(state["total_price"]), language), **_display_dates(state),
+        room=state["room"], guests=state["guests"], **_display_dates(state),
     )
     return state
 
@@ -228,6 +242,4 @@ def _book(state, *, email, phone, method):
             state["reply"] = COPY[language][error.code]
             return state
         return new_conversation(language, "offer_changed")
-    reference = str(booking.reference)
-    reply = COPY[language][f"confirmed_{method}"].format(reference=reference)
-    return _terminal(state, "completed", reply, reference=reference)
+    return start_receipt(state, str(booking.reference), method)

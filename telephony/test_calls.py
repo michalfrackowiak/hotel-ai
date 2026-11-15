@@ -37,11 +37,13 @@ class PhoneCallTests(TestCase):
         for text, stage in zip(inputs, ("check_out", "guests", "room", "confirm"), strict=True):
             current = self.turn(current, speech=text, call_sid=call_sid)
             self.assertEqual(current.stage, stage)
+            if stage == "room":
+                self.assertIn("120.00 PLN" if language == "en" else "120,00 PLN", current.reply)
         return current
 
     def test_english_requires_explicit_confirmation_and_replays_same_receipt(self):
         quote = self.prepare_quote()
-        self.assertIn("120.00 PLN", quote.reply)
+        self.assertIn("You have selected room ROOM-2", quote.reply)
         self.assertFalse(Booking.objects.exists())
         ambiguous = self.turn(quote, speech="Yes, please")
         self.assertEqual(ambiguous.stage, "confirm")
@@ -49,12 +51,14 @@ class PhoneCallTests(TestCase):
         self.assertEqual(self.turn(quote, speech="Yes!"), ambiguous)
         delivery = self.turn(ambiguous, speech="Yes!")
         self.assertEqual(delivery.stage, "delivery")
+        self.assertTrue(delivery.reply.startswith("Your reservation has been tentatively created!"))
         self.assertFalse(Booking.objects.exists())
         email = self.turn(delivery, speech="email")
         self.assertEqual(email.stage, "email")
         receipt = self.turn(email, speech="Jordan DOT Example at example dot com.")
         booking = Booking.objects.get()
         self.assertEqual((receipt.stage, receipt.reference), ("completed", str(booking.reference)))
+        self.assertIn("awaiting dispatch", receipt.reply)
         self.assertEqual(booking.client.email.casefold(), "jordan.example@example.com")
         self.assertEqual(self.turn(email, speech="Jordan DOT Example at example dot com."), receipt)
         self.assertEqual(start_call(CALL_SID), receipt)
@@ -64,12 +68,13 @@ class PhoneCallTests(TestCase):
 
     def test_polish_reuses_localized_quote_and_accepts_only_polish_confirmation(self):
         quote = self.prepare_quote(language="pl")
-        self.assertIn("120,00 PLN", quote.reply)
+        self.assertIn("Wybrałeś pokój ROOM-2", quote.reply)
         current = self.turn(quote, speech="Yes")
         self.assertEqual(current.stage, "confirm")
         self.assertFalse(Booking.objects.exists())
         delivery = self.turn(current, speech="Tak！")
         self.assertEqual(delivery.stage, "delivery")
+        self.assertTrue(delivery.reply.startswith("Rezerwacja została wstępnie utworzona!"))
         phone = self.turn(delivery, speech="telefon")
         self.assertEqual(phone.stage, "phone")
         receipt = self.turn(phone, speech="+48 500 000 123")

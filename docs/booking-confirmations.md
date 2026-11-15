@@ -1,6 +1,6 @@
 # Booking confirmations
 
-Chat, browser voice and inbound phone bookings save the guest's selected email address or SMS number with the confirmed reservation. The booking and its delivery request commit together. The guest receives their booking reference immediately and the worker submits the confirmation afterward. Direct booking forms and the bearer API continue to use the existing name and email requirements.
+Chat, browser voice and inbound phone bookings save the guest's selected email address or SMS number with the confirmed reservation. The booking and its delivery request commit together. With a configured sender, the conversation waits up to 25 seconds for provider acceptance before closing. The guest receives their booking reference in the closing. Direct booking forms and the bearer API continue to require a name and email.
 
 Add the chosen provider settings to the deployment's ignored `.env` file.
 
@@ -16,5 +16,7 @@ docker compose -f compose.yaml -f compose.confirmations.yaml up -d --build booki
 For the private server, keep `-f compose.server.yaml` and any Piper, Vosk or phone overrides in the command. For a Python deployment, run `python manage.py send_booking_confirmations --watch` under its process supervisor with the same Django database configuration.
 
 Django admin lists **Booking confirmations**. Pending confirmations for an unconfigured channel remain queued. **Accepted by provider** records SMTP or Twilio acceptance. Inspect rejected, uncertain or interrupted submissions and follow up with the guest after checking the provider. The worker skips attempted submissions on subsequent runs to avoid duplicate messages if the original provider response was lost.
+
+The scenario's “we sent” closing follows provider acceptance. If the sender is unavailable, the worker is still processing the request, or the provider rejects it, the guest receives a booking reference and the current dispatch status. The reception and phone containers use sender presence to decide whether to wait. Provider credentials remain with the confirmation worker, with the phone webhook token also used for signature verification.
 
 To check the live setup, make one test booking per configured channel with a recipient you control. Verify the confirmation contains the reference shown to the guest and check the provider acceptance status in Django admin. Automated tests exercise provider submissions with local mail and a simulated Twilio client.

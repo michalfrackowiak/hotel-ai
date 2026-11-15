@@ -1,6 +1,7 @@
 import io
 import json
 import wave
+from functools import lru_cache
 from http.client import HTTPException
 from threading import BoundedSemaphore
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
@@ -60,6 +61,30 @@ def synthesize(reply, language):
     return audio
 
 
+@lru_cache(maxsize=1)
+def synthesize_welcome(parts):
+    pcm = bytearray()
+    sample_rate = None
+    for language, text in parts:
+        audio = synthesize(text, language)
+        with wave.open(io.BytesIO(audio), "rb") as segment:
+            if sample_rate is None:
+                sample_rate = segment.getframerate()
+            elif segment.getframerate() != sample_rate:
+                raise SpeechUnavailable("Welcome voices use different sample rates.")
+            frames = segment.readframes(segment.getnframes())
+            if 44 + len(pcm) + len(frames) > MAX_AUDIO_BYTES:
+                raise SpeechUnavailable("The welcome exceeded the audio size limit.")
+            pcm.extend(frames)
+    output = io.BytesIO()
+    with wave.open(output, "wb") as merged:
+        merged.setnchannels(1)
+        merged.setsampwidth(2)
+        merged.setframerate(sample_rate)
+        merged.writeframes(pcm)
+    return output.getvalue()
+
+
 def transcribe(pcm, language):
     if language not in {"en", "pl"} or not transcription_slot.acquire(blocking=False):
         raise SpeechUnavailable("The speech recognizer is unavailable.")
@@ -84,3 +109,17 @@ def transcribe(pcm, language):
     finally:
         transcription_slot.release()
     return text.strip()
+
+
+def transcribe_welcome(pcm, language):
+    text = transcribe(pcm, language)
+    if language != "pl":
+        return text
+    try:
+        english = transcribe(pcm, "en").casefold().strip().rstrip(".!?")
+        if english in {"english", "english please"}:
+            return "English"
+    except SpeechUnavailable:
+        # A failed second pass still leaves the Polish transcript usable.
+        pass
+    return text

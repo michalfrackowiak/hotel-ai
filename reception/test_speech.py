@@ -8,6 +8,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from .conversation import WELCOME_PARTS
 from .models import Conversation
 from .speech import MAX_AUDIO_BYTES, SpeechUnavailable, synthesize
 
@@ -28,10 +29,18 @@ class ReceptionAudioTests(TestCase):
         self.started = self.start_conversation()
         self.payload = {"revision": self.started["revision"]}
 
-    def start_conversation(self, action="start"):
-        return self.client.post(
+    def start_conversation(self, action="start", *, at_welcome=False):
+        started = self.client.post(
             reverse("reception-message"),
             {"language": "pl", action: True},
+            content_type="application/json",
+            headers={"X-CSRFToken": self.token},
+        ).json()
+        if at_welcome:
+            return started
+        return self.client.post(
+            reverse("reception-message"),
+            {"language": "pl", "revision": started["revision"], "timeout": True},
             content_type="application/json",
             headers={"X-CSRFToken": self.token},
         ).json()
@@ -39,6 +48,14 @@ class ReceptionAudioTests(TestCase):
     def request_audio(self, payload, *, token=None):
         headers = {} if token is None else {"X-CSRFToken": token}
         return self.client.post(reverse("reception-audio"), payload, content_type="application/json", headers=headers)
+
+    @patch("reception.views.synthesize_welcome", return_value=wav_fixture())
+    def test_welcome_audio_uses_bilingual_parts(self, generate):
+        started = self.start_conversation("reset", at_welcome=True)
+        response = self.request_audio({"revision": started["revision"]}, token=self.token)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, wav_fixture())
+        generate.assert_called_once_with(WELCOME_PARTS)
 
     @patch("reception.views.synthesize")
     def test_audio_uses_current_server_reply_and_requires_csrf(self, generate):

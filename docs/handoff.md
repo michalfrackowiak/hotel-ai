@@ -2,15 +2,19 @@
 
 ## Latest milestone
 
-Resort Neptun booking scenario, PR [#18](https://github.com/michalfrackowiak/hotel-ai/pull/18). Chat, browser voice, and the phone connector share the bilingual booking flow. Polish is the default. The browser presents the arrival question and English choice together. Phone callers have two seconds after the welcome to choose English or stay in Polish, then ten seconds to give an arrival date or transfer to staff. Browser silence routes to staff during an active turn.
+Resort Neptun scenario wording and timing, PR [#19](https://github.com/michalfrackowiak/hotel-ai/pull/19). The attachment's bilingual greeting is a separate step with a two-second language selection window. The localized arrival prompt starts a ten-second handover window in visible chat or while voice is listening. Piper uses each language's voice in the greeting. Vosk recognizes the English selection in the Polish opening and continues with the selected language.
+
+The shared flow uses the supplied prompts through room selection, a tentative booking after consent, and the selected contact detail. A bare checkout number means nights, while an ordinal means a calendar day in the current month. The confirmed booking has a reference before delivery completes. The scenario's closing reports an email or SMS sent after provider acceptance. The fallback gives the booking reference and the available status when dispatch is pending or unverifiable. The server still needs live delivery settings and a staff phone destination.
+
+All 98 Django tests, migration checks, and JavaScript syntax checks passed. Independent Chromium verification measured 2.35 seconds from greeting to arrival and 10.02 seconds from arrival to staff handover. An AudioWorklet test used Piper and Vosk to recognize “English” in the Polish greeting, then “tomorrow” in the English arrival prompt.
+
+## Previous milestones
+
+Omnichannel booking, PR [#18](https://github.com/michalfrackowiak/hotel-ai/pull/18). Chat, browser voice, and the phone connector share the bilingual booking flow. Staff respond to browser handovers in Django admin under **Staff handovers**. See [booking confirmations](booking-confirmations.md) to configure SMTP and SMS dispatch and [phone booking](phone-booking.md) to configure the transfer destination.
 
 The flow accepts relative and yearless dates, ordinals, and stay durations. Guests choose a quoted room and confirm before providing one contact detail. Confirmation and the delivery request commit together. The guest receives the reference immediately. Existing drafts past arrival can finish with their original step order.
 
-Staff respond to browser handovers in Django admin under **Staff handovers**. See [booking confirmations](booking-confirmations.md) to configure SMTP and SMS dispatch and [phone booking](phone-booking.md) to configure the transfer destination.
-
 Django system and migration checks, all 86 tests, and JavaScript syntax checks passed. Independent reviews covered the shared flow, browser inbox and voice, signed phone callbacks, and delivery queue. Playwright completed an English chat booking, a Polish browser voice booking with simulated speech, and the chat inactivity handover. A file-backed SQLite check with eight workers submitted one confirmation. The private Compose worker reached Twilio over HTTPS with a simulated sender configuration.
-
-## Previous milestones
 
 Neptun browser scenario, PR [#17](https://github.com/michalfrackowiak/hotel-ai/pull/17). New browser drafts began in Polish, offered English, quoted room choices, and collected contact details after explicit consent.
 

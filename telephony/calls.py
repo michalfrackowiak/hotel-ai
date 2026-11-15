@@ -8,8 +8,9 @@ from django.utils import timezone
 
 from reception.contacts import parse_email
 from reception.conversation import TERMINAL_STAGES as CONVERSATION_TERMINAL_STAGES
-from reception.conversation import advance, new_conversation, selects_english
+from reception.conversation import WELCOME_PARTS, advance, new_conversation, selects_english
 from reception.parsing import parse_stay_input
+from reception.receipt import DELIVERY_PENDING, refresh_receipt
 
 from .models import PhoneCall
 
@@ -20,16 +21,14 @@ MAX_MISSED_TURNS = 3
 MAX_SPEECH_LENGTH = 500
 TERMINAL_STAGES = (*CONVERSATION_TERMINAL_STAGES, "ended")
 STAY_STAGES = ("check_in", "check_out", "guests")
-MENU = "Dzień dobry, Resort Neptun Jastrzębia Góra."
+MENU = WELCOME_PARTS[0][1]
 COPY = {
     "en": {
-        "stay_on_line": "You can also stay on the line for reception.",
         "handover_unavailable": "Reception is unavailable by phone right now. Please try again later. Goodbye.",
         "silence": "I didn't hear an answer. Please try again.",
         "ended": "This call has ended. Please call again to make a booking. Goodbye.",
     },
     "pl": {
-        "stay_on_line": "Aby połączyć się z recepcją, możesz również pozostać na linii.",
         "handover_unavailable": "Recepcja jest teraz niedostępna przez telefon. Spróbuj ponownie później. Do widzenia.",
         "silence": "Nie usłyszałem odpowiedzi. Spróbuj ponownie.",
         "ended": "Połączenie zostało zakończone. Zadzwoń ponownie, aby dokonać rezerwacji. Do widzenia.",
@@ -60,8 +59,6 @@ def _reply(state, missed_turns=0):
     stage = state["stage"]
     language = state["language"]
     reply = state["reply"]
-    if stage == "check_in":
-        reply = f"{reply} {COPY[language]['stay_on_line']}"
     if missed_turns and stage != "language":
         reply = f"{COPY[language]['silence']} {reply}"
     return CallReply(state["revision"], stage, language, reply, state.get("reference"))
@@ -130,6 +127,9 @@ def advance_call(call_sid: str, revision: str, *, digit: str = "", speech: str =
     current = _current_reply(call, now)
     if current.stage in TERMINAL_STAGES or current.revision != revision:
         return current
+    if current.stage == DELIVERY_PENDING:
+        state = refresh_receipt(call.state)
+        return current if state == call.state else _save(call, state, now)
 
     speech = speech.strip()
     if len(speech) > MAX_SPEECH_LENGTH:

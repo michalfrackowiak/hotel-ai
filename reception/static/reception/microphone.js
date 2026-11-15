@@ -1,6 +1,7 @@
 class ReceptionMicrophone extends AudioWorkletProcessor {
-    constructor() {
+    constructor(options) {
         super();
+        this.silenceLimit = sampleRate * (options.processorOptions?.silenceSeconds ?? 10);
         this.samples = new Float32Array(Math.round(sampleRate * 14));
         this.preRoll = new Float32Array(Math.round(sampleRate * 0.25));
         this.preRollIndex = 0;
@@ -31,7 +32,7 @@ class ReceptionMicrophone extends AudioWorkletProcessor {
                 this.samples.set(this.preRoll.subarray(this.preRollIndex));
                 this.samples.set(this.preRoll.subarray(0, this.preRollIndex), this.preRoll.length - this.preRollIndex);
                 this.length = this.preRoll.length;
-            } else if (this.total >= sampleRate * 10) {
+            } else if (this.total >= this.silenceLimit) {
                 this.port.postMessage(null);
                 return false;
             }

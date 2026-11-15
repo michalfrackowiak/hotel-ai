@@ -15,10 +15,11 @@ from django.views.decorators.http import require_POST, require_safe
 from model_providers.extraction import extract_stay_value
 
 from .contacts import parse_email
-from .conversation import TERMINAL_STAGES, advance, new_conversation, selects_english
+from .conversation import TERMINAL_STAGES, WELCOME_PARTS, advance, new_conversation, selects_english
 from .models import Conversation, StaffHandover
 from .parsing import parse_stay_input
-from .speech import MAX_PCM_BYTES, SpeechUnavailable, synthesize, transcribe
+from .receipt import DELIVERY_PENDING, refresh_receipt
+from .speech import MAX_PCM_BYTES, SpeechUnavailable, synthesize, synthesize_welcome, transcribe, transcribe_welcome
 
 
 MAX_BODY_BYTES = 4096
@@ -26,6 +27,12 @@ MAX_AUDIO_REQUEST_BYTES = 128
 MAX_MESSAGE_LENGTH = 500
 STAY_STAGES = ("check_in", "check_out", "guests")
 HANDOVER_PAGE_SIZE = 25
+OLD_ARRIVAL_PROMPTS = (
+    "Dzień dobry, Resort Neptun Jastrzębia Góra.",
+    "Welcome to Resort Neptun Jastrzębia Góra.",
+    "Aby sprawdzić dostępność, ceny lub dokonać rezerwacji, podaj planowaną datę przyjazdu.",
+    "To check availability, prices, or make a reservation, please give your planned arrival date.",
+)
 
 
 @never_cache
@@ -49,11 +56,16 @@ def index(request):
 
 def _result(state, *, stale=False, cursor=0):
     payload = {field: state[field] for field in ("language", "stage", "revision", "reply")}
-    if state["stage"] == "completed":
+    if state["stage"] in ("completed", DELIVERY_PENDING):
         payload["reference"] = state["reference"]
+    if state["stage"] == "welcome":
+        payload["welcome_parts"] = WELCOME_PARTS
+    if state["stage"] == "check_in" and state.get("voice_welcome"):
+        payload["voice_welcome"] = True
     if state["stage"] == "handover":
         handover = StaffHandover.objects.get(pk=state["handover_id"])
         payload["handover_closed"] = handover.closed
+        payload["voice_welcome"] = not handover.closed and not handover.messages.exists()
         payload["handover_messages"] = list(
             handover.messages.filter(id__gt=cursor).order_by("id").values("id", "staff", "text")[:HANDOVER_PAGE_SIZE]
         )
@@ -64,6 +76,25 @@ def _result(state, *, stale=False, cursor=0):
 
 def _invalid(status=400):
     return JsonResponse({"error": "invalid_message"}, status=status)
+
+
+def _save_state(conversation, state):
+    if state != conversation.state:
+        conversation.state = state
+        conversation.save(update_fields=["state"])
+
+
+@transaction.atomic
+def _poll_receipt(session_id, language, revision):
+    conversation = Conversation.objects.filter(session_id=session_id).first()
+    if conversation is None:
+        return HttpResponse(status=404)
+    state = conversation.state
+    if state["stage"] != DELIVERY_PENDING or state["revision"] != revision or state["language"] != language:
+        return _result(state, stale=True)
+    state = refresh_receipt(state)
+    _save_state(conversation, state)
+    return _result(state)
 
 
 @never_cache
@@ -83,6 +114,7 @@ def message(request):
     language = payload["language"]
     start = payload.get("start") is True and payload.keys() == {"language", "start"}
     reset = payload.get("reset") is True and payload.keys() == {"language", "reset"}
+    voice_start = payload.get("voice_start") is True and payload.keys() == {"language", "voice_start", "revision"}
     poll = payload.get("poll") is True and payload.keys() == {"language", "poll", "revision", "cursor"}
     voice = payload.get("voice") is True
     required_timeout_fields = {"language", "timeout", "revision"}
@@ -101,7 +133,7 @@ def message(request):
             if not isinstance(text, str) or not 1 <= len(text.strip()) <= MAX_MESSAGE_LENGTH:
                 return _invalid()
             text = text.strip()
-        elif not (poll or timeout):
+        elif not (poll or timeout or voice_start):
             return _invalid()
         if poll and (type(cursor) is not int or not 0 <= cursor < 2**63):
             return _invalid()
@@ -114,18 +146,22 @@ def message(request):
     if poll:
         if not preview:
             return HttpResponse(status=404)
+        if preview["stage"] == DELIVERY_PENDING:
+            return _poll_receipt(request.session.session_key, language, revision)
         if preview["stage"] != "handover" or preview["language"] != language:
             return _result(preview, stale=True)
         return _result(preview, stale=preview["revision"] != revision, cursor=cursor)
     parsed = None
     if (
         turn and preview and preview["revision"] == revision and preview["language"] == language
-        and preview["stage"] in STAY_STAGES
+        and preview["stage"] in (*STAY_STAGES, "welcome")
     ):
-        check_in = date.fromisoformat(preview["check_in"]) if preview["stage"] == "check_out" else None
-        parsed = parse_stay_input(preview["stage"], text, language, check_in=check_in)
-        if parsed is None and not (preview["stage"] == "check_in" and language == "pl" and selects_english(text)):
-            parsed = extract_stay_value(preview["stage"], text, language)
+        stage = "check_in" if preview["stage"] == "welcome" else preview["stage"]
+        check_in = date.fromisoformat(preview["check_in"]) if stage == "check_out" else None
+        if not (stage == "check_in" and language == "pl" and selects_english(text)):
+            parsed = parse_stay_input(stage, text, language, check_in=check_in)
+            if parsed is None:
+                parsed = extract_stay_value(stage, text, language)
 
     # Recheck the revision under SQLite's write lock after parsing. Booking and
     # conversation updates commit together, including a retried confirmation.
@@ -142,9 +178,20 @@ def message(request):
                 StaffHandover.objects.filter(pk=state["handover_id"]).update(closed=True)
             state = new_conversation(language)
         elif start:
-            return _result(state)
+            if state["stage"] != "check_in" or not state["reply"].startswith(OLD_ARRIVAL_PROMPTS):
+                return _result(state)
+            state = new_conversation(language)
         elif state["revision"] != revision or state["language"] != language:
             return _result(state, stale=True)
+        elif voice_start:
+            if state["stage"] == "check_in" and state.get("voice_welcome"):
+                state = new_conversation(language)
+            elif state["stage"] == "handover":
+                handover = StaffHandover.objects.get(pk=state["handover_id"])
+                if not handover.closed and not handover.messages.exists():
+                    handover.closed = True
+                    handover.save(update_fields=["closed"])
+                    state = new_conversation(language)
         elif state["stage"] == "handover":
             handover = StaffHandover.objects.get(pk=state["handover_id"])
             if turn:
@@ -152,20 +199,21 @@ def message(request):
                     return _result(state, stale=True)
                 handover.messages.create(text=text)
                 state = {**state, "revision": uuid4().hex}
-        elif timeout and state["stage"] != "check_in":
+        elif timeout and state["stage"] not in ("welcome", "check_in"):
             return _result(state, stale=True)
         else:
             if voice and state["stage"] == "email" and state.get("flow") != "neptun":
                 text = parse_email(text) or text
+            was_welcome = state["stage"] == "welcome"
             state = advance(state, text or "", parsed, voice=voice)
+            if was_welcome and state["stage"] == "check_in" and not voice:
+                state["voice_welcome"] = True
             if state["stage"] == "handover":
                 handover = StaffHandover.objects.create(conversation=conversation, language=state["language"])
                 if text:
                     handover.messages.create(text=text)
                 state["handover_id"] = handover.pk
-        if state != conversation.state:
-            conversation.state = state
-            conversation.save(update_fields=["state"])
+        _save_state(conversation, state)
         return _result(state)
 
 
@@ -198,7 +246,10 @@ def audio(request):
     if state["revision"] != revision:
         return HttpResponse(status=409)
     try:
-        speech = synthesize(state["reply"], state["language"])
+        if state["stage"] == "welcome":
+            speech = synthesize_welcome(WELCOME_PARTS)
+        else:
+            speech = synthesize(state["reply"], state["language"])
     except SpeechUnavailable:
         speech = None
     if not conversation.filter(state__revision=revision).exists():
@@ -225,7 +276,7 @@ def transcript(request):
     state = conversation.values_list("state", flat=True).first()
     if state is None:
         return HttpResponse(status=404)
-    if state["revision"] != revision or state["stage"] in TERMINAL_STAGES:
+    if state["revision"] != revision or state["stage"] in (*TERMINAL_STAGES, DELIVERY_PENDING):
         return HttpResponse(status=409)
 
     try:
@@ -238,7 +289,10 @@ def transcript(request):
         return _invalid()
 
     try:
-        text = transcribe(pcm, state["language"])
+        if state["stage"] == "welcome":
+            text = transcribe_welcome(pcm, state["language"])
+        else:
+            text = transcribe(pcm, state["language"])
     except SpeechUnavailable:
         text = None
     if not conversation.filter(state__revision=revision).exists():

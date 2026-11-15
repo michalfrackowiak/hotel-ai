@@ -65,7 +65,7 @@ def _number(token, language):
 
 
 def parse_stay_input(stage: str, text: str, language: str, *, check_in: date | None = None) -> date | int | None:
-    value = " ".join(text.casefold().strip().rstrip(".!。！").split())
+    value = " ".join(text.casefold().strip().rstrip(".!?。！？").split())
     if stage == "guests":
         number = re.fullmatch(
             r"([a-ząćęłńóśźż]+|[0-9]{1,5})(?:\s+(?:people|persons?|guests?|osob[ayę]|osób|gość|gości))?",
@@ -89,6 +89,10 @@ def _parse_date(value, language, check_in):
         days = amount * (7 if offset[2] in WEEK_UNITS else 1)
     if days is not None:
         return today + timedelta(days=days)
+    if check_in and value not in {"a", "an"}:
+        nights = _number(value, language) if len(value) <= 12 else None
+        if nights is not None:
+            return check_in + timedelta(days=nights) if nights else None
     duration = re.fullmatch(DURATIONS[language], value) if check_in else None
     if duration:
         amount = _number(duration[1], language) if duration[1] else 1
@@ -97,12 +101,13 @@ def _parse_date(value, language, check_in):
         return None
     if language == "en":
         value = re.sub(r"(?<=[0-9])(?:st|nd|rd|th)\b", "", value)
+        value = value.removeprefix("the ").replace(" of ", " ")
     for fmt in DATE_FORMATS[language]:
         try:
             return datetime.strptime(value, fmt).date()
         except ValueError:
             continue
-    return _calendar_date(value, language, check_in or today)
+    return _calendar_date(value, language, today)
 
 
 def _add_duration(check_in, amount, unit):

@@ -14,6 +14,7 @@
     const canRecord = Boolean(transcribeUrl && audioContextType && offlineContextType &&
         window.AudioWorkletNode && navigator.mediaDevices?.getUserMedia);
     const terminalStages = new Set(["completed", "cancelled", "handover"]);
+    const silenceLimits = { welcome: 2000, check_in: 10000 };
     const polishCopy = {
         start: "Włącz rozmowę głosową",
         stop: "Zakończ rozmowę głosową",
@@ -73,6 +74,12 @@
     let silenceTimer = null;
     let stage = null;
     let lastReply = null;
+    let voiceWelcome = false;
+
+    function canStart() {
+        return !input.disabled && Boolean(lastReply) && stage !== "delivery_pending" &&
+            (!terminalStages.has(stage) || (stage === "handover" && voiceWelcome));
+    }
 
     function clearPlayback() {
         if (!playback) return;
@@ -109,14 +116,14 @@
         if (stream) {
             for (const track of stream.getTracks()) track.stop();
         }
-        button.disabled = input.disabled || terminalStages.has(stage);
+        button.disabled = !canStart();
         button.textContent = copy.start;
         button.setAttribute("aria-pressed", "false");
         status.textContent = message;
     }
 
     function handleSilence() {
-        if (stage === "check_in" && !input.disabled) {
+        if (stage in silenceLimits && !input.disabled) {
             form.dispatchEvent(new CustomEvent("reception:voice-silence"));
         } else {
             stop(copy.silence);
@@ -142,7 +149,7 @@
         if (!active) return;
         const current = new recognitionType();
         recognition = current;
-        current.lang = locale;
+        current.lang = stage === "welcome" ? "en-US" : locale;
         current.continuous = false;
         current.interimResults = false;
         let transcript = "";
@@ -150,6 +157,10 @@
         current.onresult = (event) => {
             if (recognition !== current) return;
             transcript = event.results[event.resultIndex][0].transcript.trim();
+            if (transcript) {
+                clearTimeout(silenceTimer);
+                silenceTimer = null;
+            }
         };
         current.onspeechstart = () => {
             if (recognition === current) {
@@ -172,7 +183,7 @@
         };
         try {
             current.start();
-            if (stage === "check_in") silenceTimer = setTimeout(handleSilence, 10000);
+            if (stage in silenceLimits) silenceTimer = setTimeout(handleSilence, silenceLimits[stage]);
             status.textContent = copy.listening;
         } catch {
             recognition = null;
@@ -263,7 +274,10 @@
             return;
         }
         try {
-            const node = new AudioWorkletNode(audioContext, "reception-microphone", { channelCount: 1 });
+            const node = new AudioWorkletNode(audioContext, "reception-microphone", {
+                channelCount: 1,
+                processorOptions: { silenceSeconds: (silenceLimits[stage] || 10000) / 1000 },
+            });
             const source = audioContext.createMediaStreamSource(stream);
             const current = { source, node, track, revision: lastReply.revision, controller: new AbortController() };
             recording = current;
@@ -301,7 +315,7 @@
             await microphoneModule;
             if (microphone === current) {
                 current.ready = true;
-                if (!input.disabled || terminalStages.has(stage)) speak(lastReply);
+                if (!input.disabled || terminalStages.has(stage) || stage === "delivery_pending") speak(lastReply);
             }
         } catch (error) {
             microphoneModule = null;
@@ -313,37 +327,43 @@
 
     function finishReply() {
         if (terminalStages.has(stage)) stop(copy.finished);
+        else if (stage === "delivery_pending") status.textContent = copy.waiting;
         else if (canRecord) listenWithMicrophone();
         else listenWithBrowser();
     }
 
-    function speakWithBrowser(reply, message) {
+    function speakWithBrowser(turn, message) {
         if (!canSpeak) {
             stop(copy.error);
             return;
         }
-        const current = new SpeechSynthesisUtterance(reply);
-        current.lang = locale;
-        const voice = synthesis.getVoices().find((entry) =>
-            entry.lang.toLowerCase().split("-")[0] === locale.toLowerCase().split("-")[0]);
-        if (voice) current.voice = voice;
-        speech = current;
-        current.onend = () => {
-            if (speech !== current) return;
-            speech = null;
-            finishReply();
-        };
-        current.onerror = () => {
-            if (speech === current) stop(copy.error);
-        };
+        const parts = turn.welcomeParts || [[turn.language, turn.reply]];
+        function speakPart(index) {
+            const [language, reply] = parts[index];
+            const current = new SpeechSynthesisUtterance(reply);
+            current.lang = language === "pl" ? "pl-PL" : "en-US";
+            const voice = synthesis.getVoices().find((entry) => entry.lang.toLowerCase().split("-")[0] === language);
+            if (voice) current.voice = voice;
+            speech = current;
+            current.onend = () => {
+                if (speech !== current) return;
+                speech = null;
+                if (index + 1 < parts.length) speakPart(index + 1);
+                else finishReply();
+            };
+            current.onerror = () => {
+                if (speech === current) stop(copy.error);
+            };
+            synthesis.speak(current);
+        }
         status.textContent = message;
-        synthesis.speak(current);
+        speakPart(0);
     }
 
     async function speak(turn) {
         const context = audioContext;
         if (!canPlayPiper || !context) {
-            speakWithBrowser(turn.reply, audioUrl ? copy.fallback : copy.speaking);
+            speakWithBrowser(turn, audioUrl ? copy.fallback : copy.speaking);
             return;
         }
 
@@ -354,7 +374,7 @@
         function fallback() {
             if (playback !== current) return;
             clearPlayback();
-            speakWithBrowser(turn.reply, copy.fallback);
+            speakWithBrowser(turn, copy.fallback);
         }
 
         try {
@@ -371,6 +391,11 @@
             });
             if (playback !== current) return;
             if ([404, 409].includes(response.status)) {
+                if (response.status === 409 && turn.stage === "delivery_pending") {
+                    clearPlayback();
+                    status.textContent = copy.waiting;
+                    return;
+                }
                 stop(copy.stale);
                 button.disabled = true;
                 return;
@@ -408,7 +433,7 @@
     button.addEventListener("click", () => {
         if (active) {
             stop(copy.finished);
-        } else if (!input.disabled && lastReply && !terminalStages.has(stage)) {
+        } else if (canStart()) {
             active = true;
             form.dispatchEvent(new CustomEvent("reception:voice-session", { detail: { active } }));
             button.textContent = copy.stop;
@@ -424,7 +449,7 @@
             }
             if (canRecord && audioContext) openMicrophone();
             else if (canRecord) stop(copy.microphone);
-            else speak(lastReply);
+            else if (!input.disabled) speak(lastReply);
         }
     });
     form.addEventListener("reception:request", (event) => {
@@ -439,16 +464,21 @@
     form.addEventListener("reception:reply", (event) => {
         stage = event.detail.stage;
         lastReply = event.detail;
+        voiceWelcome = event.detail.voiceWelcome;
         locale = event.detail.language === "pl" ? "pl-PL" : "en-US";
         copy = locale === "pl-PL" ? polishCopy : englishCopy;
         button.textContent = active ? copy.stop : copy.start;
         button.lang = event.detail.language;
         status.lang = event.detail.language;
-        button.disabled = !active && terminalStages.has(stage);
+        button.disabled = !active && !canStart();
         if (active && (!canRecord || microphone?.ready)) {
             pauseAudio();
             speak(lastReply);
         }
+    });
+    form.addEventListener("reception:voice-welcome", (event) => {
+        voiceWelcome = event.detail.allowed;
+        if (!active) button.disabled = !canStart();
     });
     form.addEventListener("reception:error", () => {
         if (active) stop(copy.error);
