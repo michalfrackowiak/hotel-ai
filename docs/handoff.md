@@ -2,9 +2,15 @@
 
 ## Latest milestone
 
-Voice and chat synchronization. The default written prompts follow the voice script. During voice booking, chat shows each segment when it starts playing and shows the guest's recognized reply immediately. Suggested buttons cover arrival dates, durations, guest count, and available rooms. Explicit chat overrides from the scenario editor remain available for text-only booking.
+Parser configuration and stay extraction, PR [#28](https://github.com/michalfrackowiak/hotel-ai/pull/28). **Reception → Parser configuration** controls the English and Polish numeric date order and accepted ISO, slash, dot, dash, yearless, and two-digit-year forms. The arrival parser now accepts check-in and check-out dates together, including replies such as “check in 12/28/2026 and check out 01/02/2027” and “przyjazd 28 grudnia a wyjazd 2 stycznia.” Parser sample review remains available under **Reception → Parser training samples** for staff corrections that are reused on matching inputs. See [parser training and configuration](parser-training.md).
+
+Browser speech training has been retired. Voice transcription still works, but incoming audio is no longer stored and the sample queue, admin audio review, and export are removed. Migration 0006 drops the old speech sample table.
+
+All 142 Django tests, Django system and migration checks, Python compilation, JavaScript syntax checks, and whitespace checks pass. Independent static review approved the parser, privacy filters, migration, and the corrected invalid-checkout fallback. CI first caught a malformed checkout being reduced to an arrival-only result; departure validation now runs before the duration fallback. Next action: merge PR #28, back up SQLite, stop and remove the speech-expiry timer and retired files on the server, then deploy.
 
 ## Previous milestones
+
+Voice and chat synchronization, PR [#27](https://github.com/michalfrackowiak/hotel-ai/pull/27). The default chat text follows the voice script, voice playback captions appear segment by segment, recognized guest replies appear once, and contextual answer buttons support dates, durations, guest counts, and room selection.
 
 Parser training, PR [#26](https://github.com/michalfrackowiak/hotel-ai/pull/26). **Reception → Parser training samples** lists original English and Polish chat and voice inputs, parser results, and the success flag. Staff can save validated corrections. Rules apply to matching input, source, language, and step. See [parser training](parser-training.md) for examples, activation, and retention.
 
@@ -18,7 +24,7 @@ Voice arrival pauses, PR [#24](https://github.com/michalfrackowiak/hotel-ai/pull
 
 All 127 Django tests, system checks, migration checks, and JavaScript syntax checks passed. Independent Chromium playback with Piper measured English gaps of 2.02 and 5.03 seconds between clips, confirmed both listening windows, and reached handover after silence. Signed phone tests verify prompt order and timing in the webhook responses. Live phone calls remain a manual check.
 
-Speech training, PR [#23](https://github.com/michalfrackowiak/hotel-ai/pull/23). The private admin queue accepts failed browser clips from guests who opt in. Staff can listen, enter the correct transcript, delete samples, and export labeled audio. Reviewed English corrections improve repeat failures on arrival, departure, and guest-count turns. See [speech training](speech-training.md) for activation, retention, and offline use.
+Browser speech training, PR [#23](https://github.com/michalfrackowiak/hotel-ai/pull/23), shipped as an earlier milestone and was retired in the latest change. Its audio storage and admin review features are no longer active.
 
 The 60-utterance synthetic benchmark favored the existing English model for latency. The larger Vosk 0.22-lgraph decoded one additional booking answer correctly, with 3.94 s median latency versus 1.06 s for small 0.15. The benchmark used x86-64 Docker. All 123 Django tests passed, including staff authorization, bounded export, intake opt-in, stale revisions, correction reuse, and expiry. The live site still needs deployment and activation of training.
 

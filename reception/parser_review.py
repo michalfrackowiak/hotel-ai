@@ -1,18 +1,33 @@
+import re
 from datetime import date
 
 from django.utils import timezone
 
-from .contacts import parse_email, parse_phone
+from .contacts import PHONE_DIGITS, parse_email, parse_phone
 from .conversation import _answer, _room_choice, selects_english
 from .models import ParserSample
 from .parser_training import learned_result, rule_key
 from .parsing import StayDates
-from .speech_training import training_text_allowed
 
 
 MAX_PARSER_SAMPLES = 1000
 REVIEW_STAGES = {"check_in", "check_out", "guests", "room", "email", "phone"}
 CONTACT_STAGES = {"email", "phone"}
+CONTACT_DIGITS = re.compile(r"(?<![\w/.-])\+?\d(?:[\s().-]*\d){7,14}(?![\w/.-])")
+CALENDAR_DIGITS = re.compile(r"\b(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\b")
+
+
+def _review_text_allowed(text):
+    if not isinstance(text, str) or len(text) > 500 or not text.isprintable():
+        return False
+    if "@" in text or parse_email(text):
+        return False
+    digits = re.sub(
+        r"\b[^\W\d_]+\b",
+        lambda match: PHONE_DIGITS.get(match[0], match[0]),
+        CALENDAR_DIGITS.sub(" ", text.casefold()),
+    )
+    return not CONTACT_DIGITS.search(digits)
 
 
 def delete_expired_samples():
@@ -61,7 +76,7 @@ def review_booking_input(state, text, parsed, *, source):
     if stage == "check_in" and language == "pl" and selects_english(text):
         return parsed, False
     original = _extracted_value(state, text, parsed)
-    if stage not in CONTACT_STAGES and not training_text_allowed(text):
+    if stage not in CONTACT_STAGES and not _review_text_allowed(text):
         return original, True
     corrected = learned_result(state, text, original, source=source)
     result, succeeded = _result_text(state, original)
