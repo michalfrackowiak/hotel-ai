@@ -1,0 +1,75 @@
+{% load i18n static %}
+<!doctype html>
+<html lang="{{ language }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>{% if language == "pl" %}Rezerwacja pokoju{% else %}Book a room{% endif %} · Hotel-ai</title>
+    <link rel="stylesheet" href="{% static 'reception/reception.css' %}">
+</head>
+<body>
+    {% include "reception/_header.html" with active_page="availability" %}
+    <main class="booking-layout">
+        <section class="intro" aria-labelledby="reserve-title">
+            <h1 id="reserve-title">
+                {% if booking %}
+                    {% if language == "pl" %}Rezerwacja potwierdzona{% else %}Booking confirmed{% endif %}
+                {% else %}
+                    {% if language == "pl" %}Zarezerwuj pokój{% else %}Book a room{% endif %}
+                {% endif %}
+            </h1>
+            {% if stay and not booking and not error %}
+                <p>{% if language == "pl" %}Sprawdź dane pobytu i podaj dane kontaktowe, aby potwierdzić rezerwację.{% else %}Review your stay and enter your contact details to confirm your booking.{% endif %}</p>
+            {% endif %}
+        </section>
+        <section class="booking-lookup" aria-labelledby="reserve-title">
+            {% if booking %}
+                <p class="confirmation-number">
+                    <strong>{% if language == "pl" %}Numer potwierdzenia{% else %}Confirmation number{% endif %}</strong>
+                    <span>{{ booking.reference }}</span>
+                </p>
+                <a class="confirm-button booking-link" href="{% url 'reception-booking' %}{% if language == 'pl' %}?lang=pl{% endif %}">{% if language == "pl" %}Moja rezerwacja{% else %}My booking{% endif %}</a>
+            {% elif error %}
+                <p class="lookup-error" role="alert">
+                    {% if error == "room_unavailable" %}
+                        {% if language == "pl" %}Ten pokój nie jest już dostępny na wybrany pobyt.{% else %}This room is no longer available for your stay.{% endif %}
+                    {% elif error == "stale_price" %}
+                        {% if language == "pl" %}Cena tego pokoju uległa zmianie.{% else %}The price for this room has changed.{% endif %}
+                    {% else %}
+                        {% if language == "pl" %}Nie można potwierdzić rezerwacji z tej oferty.{% else %}This offer could not be used to confirm a booking.{% endif %}
+                    {% endif %}
+                </p>
+                <a class="confirm-button booking-link" href="{% url 'reception-availability' %}?lang={{ language }}{% if stay %}&amp;check_in={{ stay.check_in|urlencode }}&amp;check_out={{ stay.check_out|urlencode }}&amp;guests={{ stay.guests|urlencode }}{% endif %}">{% if language == "pl" %}Sprawdź dostępność ponownie{% else %}Check availability again{% endif %}</a>
+            {% elif stay %}
+                <section class="lookup-result stay-summary" aria-labelledby="stay-summary">
+                    <h2 id="stay-summary">{% if language == "pl" %}Szczegóły pobytu{% else %}Stay details{% endif %}</h2>
+                    <dl>
+                        <div><dt>{% if language == "pl" %}Pokój{% else %}Room{% endif %}</dt><dd>{{ stay.room_code }}</dd></div>
+                        <div><dt>{% if language == "pl" %}Zameldowanie{% else %}Check-in{% endif %}</dt><dd><time datetime="{{ stay.check_in }}">{{ stay.check_in }}</time></dd></div>
+                        <div><dt>{% if language == "pl" %}Wymeldowanie{% else %}Check-out{% endif %}</dt><dd><time datetime="{{ stay.check_out }}">{{ stay.check_out }}</time></dd></div>
+                        <div><dt>{% if language == "pl" %}Liczba gości{% else %}Guests{% endif %}</dt><dd>{{ stay.guests }}</dd></div>
+                        {% language language %}
+                            <div><dt>{% if language == "pl" %}Cena za noc{% else %}Price per night{% endif %}</dt><dd>{{ stay.nightly_rate|floatformat:2 }} PLN</dd></div>
+                            <div><dt>{% if language == "pl" %}Cena za pobyt{% else %}Total price{% endif %}</dt><dd>{{ stay.total_price|floatformat:2 }} PLN</dd></div>
+                        {% endlanguage %}
+                    </dl>
+                </section>
+                <form method="post" action="{% url 'reception-reserve' %}" class="lookup-form reserve-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="lang" value="{{ language }}">
+                    <input type="hidden" name="token" value="{{ token }}">
+                    {% if contact.errors %}
+                        <p class="lookup-error" role="alert">{% if language == "pl" %}Podaj imię i nazwisko oraz poprawny adres e-mail.{% else %}Enter your name and a valid email address.{% endif %}</p>
+                    {% endif %}
+                    <label for="{{ contact.name.id_for_label }}">{% if language == "pl" %}Imię i nazwisko{% else %}Full name{% endif %}</label>
+                    {{ contact.name }}
+                    <label for="{{ contact.email.id_for_label }}">{% if language == "pl" %}Adres e-mail{% else %}Email address{% endif %}</label>
+                    {{ contact.email }}
+                    <button type="submit" class="send-button">{% if language == "pl" %}Potwierdź rezerwację{% else %}Confirm booking{% endif %}</button>
+                </form>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>

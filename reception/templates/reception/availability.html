@@ -1,0 +1,67 @@
+{% load i18n static %}
+<!doctype html>
+<html lang="{{ language }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>{% if language == "pl" %}Dostępność pokoi{% else %}Room availability{% endif %} · Hotel-ai</title>
+    <link rel="stylesheet" href="{% static 'reception/reception.css' %}">
+</head>
+<body>
+    {% include "reception/_header.html" with active_page="availability" %}
+    <main class="booking-layout">
+        <section class="intro" aria-labelledby="availability-title">
+            <h1 id="availability-title">{% if language == "pl" %}Dostępność pokoi{% else %}Room availability{% endif %}</h1>
+            <p>{% if language == "pl" %}Wybierz daty pobytu i liczbę gości, aby zobaczyć dostępne pokoje i ceny.{% else %}Choose your dates and guest count to see available rooms and prices.{% endif %}</p>
+        </section>
+        <section class="booking-lookup" aria-labelledby="availability-title">
+            <form method="get" action="{% url 'reception-availability' %}" class="lookup-form availability-search">
+                <input type="hidden" name="lang" value="{{ language }}">
+                <div class="stay-fields">
+                    <div class="stay-field">
+                        <label for="{{ search.check_in.id_for_label }}">{% if language == "pl" %}Zameldowanie{% else %}Check-in{% endif %}</label>
+                        {{ search.check_in }}
+                    </div>
+                    <div class="stay-field">
+                        <label for="{{ search.check_out.id_for_label }}">{% if language == "pl" %}Wymeldowanie{% else %}Check-out{% endif %}</label>
+                        {{ search.check_out }}
+                    </div>
+                    <div class="stay-field">
+                        <label for="{{ search.guests.id_for_label }}">{% if language == "pl" %}Liczba gości{% else %}Guests{% endif %}</label>
+                        {{ search.guests }}
+                    </div>
+                </div>
+                {% if search.errors or error %}
+                    <p class="lookup-error" role="alert">{% if language == "pl" %}Podaj liczbę gości i daty pobytu. Zameldowanie może nastąpić najwcześniej dziś, a wymeldowanie musi być późniejsze.{% else %}Enter a guest count and stay dates. Check-in can be today or later, and checkout must be after check-in.{% endif %}</p>
+                {% endif %}
+                <button class="send-button" type="submit">{% if language == "pl" %}Sprawdź dostępność{% else %}Check availability{% endif %}</button>
+            </form>
+            {% if searched and not error %}
+                <section class="lookup-result" aria-labelledby="available-rooms">
+                    <h2 id="available-rooms">{% if language == "pl" %}Dostępne pokoje{% else %}Available rooms{% endif %}</h2>
+                    {% if choices %}
+                        <ul class="room-options">
+                            {% for offer, token in choices %}
+                                <li class="room-option">
+                                    <div>
+                                        <h3>{{ offer.room_code }}</h3>
+                                        <p>{% if language == "pl" %}Maksymalna liczba gości{% else %}Maximum guests{% endif %}: {{ offer.capacity }}</p>
+                                        {% language language %}
+                                            <p>{{ offer.nightly_rate|floatformat:2 }} PLN {% if language == "pl" %}za noc{% else %}per night{% endif %}</p>
+                                            <p><strong>{{ offer.total_price|floatformat:2 }} PLN</strong> {% if language == "pl" %}za pobyt{% else %}total{% endif %}</p>
+                                        {% endlanguage %}
+                                    </div>
+                                    <a class="send-button booking-link" href="{% url 'reception-reserve' %}?lang={{ language }}&amp;token={{ token|urlencode }}">{% if language == "pl" %}Wybierz pokój{% else %}Select room{% endif %}<span class="sr-only"> {{ offer.room_code }}</span></a>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p>{% if language == "pl" %}Nie ma dostępnych pokoi dla tych dat i liczby gości.{% else %}There are no available rooms for these dates and guest count.{% endif %}</p>
+                    {% endif %}
+                </section>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>

@@ -19,6 +19,16 @@ location = /my-booking/ {
     proxy_pass http://127.0.0.1:8080/my-booking/;
 }
 
+location = /availability/ {
+    limit_req zone=hotel_ai_chat burst=15 nodelay;
+    proxy_pass http://127.0.0.1:8080/availability/;
+}
+
+location = /reserve/ {
+    limit_req zone=hotel_ai_chat burst=15 nodelay;
+    proxy_pass http://127.0.0.1:8080/reserve/;
+}
+
 location = /reception/message/ {
     limit_req zone=hotel_ai_chat burst=15 nodelay;
     proxy_pass http://127.0.0.1:8080/reception/message/;
