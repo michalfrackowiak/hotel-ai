@@ -39,7 +39,7 @@ class ReceptionTests(TestCase):
         self.assertEqual(payload["stage"], expected_stage)
         return payload
 
-    def quote(self, language="en", *, guests="two guests"):
+    def quote(self, language="en", *, guests="two guests", option="1"):
         today = timezone.localdate()
         check_in = today + timedelta(days=3)
         check_out = check_in + timedelta(days=2)
@@ -47,9 +47,8 @@ class ReceptionTests(TestCase):
         current = self.post(language=language, reset=True).json()
         current = self.turn(current, check_in.strftime(fmt), "check_out")
         current = self.turn(current, check_out.strftime(fmt), "guests")
-        current = self.turn(current, guests, "name")
-        current = self.turn(current, "Ada Example", "email")
-        return self.turn(current, "ada@example.com", "confirm")
+        current = self.turn(current, guests, "select")
+        return self.turn(current, option, "confirm")
 
     def test_english_quote_and_explicit_confirmation(self):
         quote = self.quote()
@@ -62,7 +61,10 @@ class ReceptionTests(TestCase):
         self.assertIn("240.00 PLN", quote["reply"])
         self.assertFalse(Booking.objects.exists())
 
-        confirmed = self.turn(quote, "Yes.", "completed")
+        name = self.turn(quote, "Yes.", "name")
+        email = self.turn(name, "Ada Example", "email")
+        self.assertFalse(Booking.objects.exists())
+        confirmed = self.turn(email, "ada@example.com", "completed")
         self.assertIn(confirmed["reference"], confirmed["reply"])
         self.assertEqual(str(Booking.objects.get().reference), confirmed["reference"])
         self.assertNotIn("email", Conversation.objects.get().state)
@@ -80,16 +82,21 @@ class ReceptionTests(TestCase):
         self.assertIn("400,00 PLN", quote["reply"])
         quote = self.turn(quote, "Yes", "confirm")
         self.assertFalse(Booking.objects.exists())
-        confirmed = self.turn(quote, "Tak", "completed")
-        self.assertIn("Twoja rezerwacja jest potwierdzona", confirmed["reply"])
+        name = self.turn(quote, "Potwierdzam", "name")
+        email = self.turn(name, "Ada Example", "email")
+        confirmed = self.turn(email, "ada@example.com", "completed")
+        self.assertIn("Twoja rezerwacja została potwierdzona", confirmed["reply"])
         self.assertEqual(Booking.objects.get().guests, 6)
 
     def test_polish_uses_natural_number_words_for_two_guests(self):
         current = self.post(language="pl", start=True).json()
         current = self.turn(current, "dzisiaj", "check_out")
         current = self.turn(current, "jutro", "guests")
-        current = self.turn(current, "dwie osoby", "name")
+        current = self.turn(current, "dwie osoby", "select")
         self.assertIn("120,00 PLN", current["reply"])
+        self.assertIn("200,00 PLN", current["reply"])
+        quote = self.turn(current, "opcja dwa", "confirm")
+        self.assertIn("ROOM-6", quote["reply"])
 
     @patch("django.utils.timezone.localdate", return_value=date(2027, 12, 30))
     def test_checkout_relative_to_today_after_a_separate_arrival(self, today):
@@ -129,15 +136,17 @@ class ReceptionTests(TestCase):
 
     def test_rejecting_a_quote_clears_the_contact_details(self):
         quote = self.quote()
-        current = self.turn(quote, "No", "check_in")
-        self.assertIn("cancelled", current["reply"])
+        current = self.turn(quote, "No", "cancelled")
+        self.assertIn("Goodbye", current["reply"])
         self.assertNotIn("name", Conversation.objects.get().state)
         self.assertFalse(Booking.objects.exists())
 
     def test_changed_price_requires_fresh_quote(self):
         quote = self.quote()
         Price.objects.filter(room=self.double_room).update(nightly_rate=Decimal("130"))
-        current = self.turn(quote, "Yes", "check_in")
+        name = self.turn(quote, "Confirm", "name")
+        email = self.turn(name, "Ada Example", "email")
+        current = self.turn(email, "ada@example.com", "check_in")
         self.assertIn("fresh quote", current["reply"])
         self.assertFalse(Booking.objects.exists())
 
@@ -155,9 +164,11 @@ class ReceptionTests(TestCase):
 
     def test_homepage_sets_csrf_cookie_and_endpoint_requires_it(self):
         client = Client(enforce_csrf_checks=True)
-        response = client.get(reverse("reception"), {"lang": "pl"})
+        response = client.get(reverse("reception"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["language"], "pl")
+        english = client.get(reverse("reception"), {"lang": "en"})
+        self.assertEqual(english.context["language"], "en")
         csrf = client.cookies["csrftoken"].value
         path = reverse("reception-message")
         payload = {"language": "pl", "start": True}
@@ -165,6 +176,15 @@ class ReceptionTests(TestCase):
         response = client.post(path, payload, content_type="application/json", headers={"x-csrftoken": csrf})
         self.assertEqual(response.status_code, 200)
         self.assertIn("Dzień dobry", response.json()["reply"])
+
+    def test_existing_quote_can_finish_after_upgrade(self):
+        quote = self.quote()
+        conversation = Conversation.objects.get()
+        conversation.state.pop("scenario")
+        conversation.state.update(name="Ada Example", email="ada@example.com")
+        conversation.save(update_fields=["state"])
+        self.turn(quote, "Yes", "completed")
+        self.assertEqual(Booking.objects.count(), 1)
 
     def test_rejects_invalid_protocol_data(self):
         self.assertEqual(self.post(language="de", start=True).status_code, 400)

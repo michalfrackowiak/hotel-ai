@@ -15,6 +15,7 @@
         window.AudioWorkletNode && navigator.mediaDevices?.getUserMedia);
     const polish = document.documentElement.lang === "pl";
     const locale = polish ? "pl-PL" : "en-US";
+    const terminalStages = new Set(["completed", "cancelled"]);
     const copy = polish ? {
         start: "Włącz rozmowę głosową",
         stop: "Zakończ rozmowę głosową",
@@ -103,7 +104,7 @@
         if (stream) {
             for (const track of stream.getTracks()) track.stop();
         }
-        button.disabled = input.disabled || stage === "completed";
+        button.disabled = input.disabled || terminalStages.has(stage);
         button.textContent = copy.start;
         button.setAttribute("aria-pressed", "false");
         status.textContent = message;
@@ -287,7 +288,7 @@
             await microphoneModule;
             if (microphone === current) {
                 current.ready = true;
-                if (!input.disabled || stage === "completed") speak(lastReply);
+                if (!input.disabled || terminalStages.has(stage)) speak(lastReply);
             }
         } catch (error) {
             microphoneModule = null;
@@ -298,7 +299,7 @@
     }
 
     function finishReply() {
-        if (stage === "completed") stop(copy.finished);
+        if (terminalStages.has(stage)) stop(copy.finished);
         else if (canRecord) listenWithMicrophone();
         else listenWithBrowser();
     }
@@ -394,7 +395,7 @@
     button.addEventListener("click", () => {
         if (active) {
             stop(copy.finished);
-        } else if (!input.disabled && lastReply && stage !== "completed") {
+        } else if (!input.disabled && lastReply && !terminalStages.has(stage)) {
             active = true;
             button.textContent = copy.stop;
             button.setAttribute("aria-pressed", "true");
@@ -424,7 +425,7 @@
     form.addEventListener("reception:reply", (event) => {
         stage = event.detail.stage;
         lastReply = event.detail;
-        button.disabled = !active && stage === "completed";
+        button.disabled = !active && terminalStages.has(stage);
         if (active && (!canRecord || microphone?.ready)) {
             pauseAudio();
             speak(lastReply);

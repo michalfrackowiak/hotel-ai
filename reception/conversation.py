@@ -52,15 +52,40 @@ COPY = {
     },
 }
 CONFIRMATIONS = {"en": ("yes", "no"), "pl": ("tak", "nie")}
+BROWSER_COPY = {
+    "en": {
+        "welcome": "Welcome to Resort Neptun Jastrzębia Góra. To check availability, prices, or make a reservation, please give your planned arrival date.",
+        "ask_guests": "Check-in is {check_in} and checkout is {check_out}. How many guests will stay, including adults and children?",
+        "select": "I found these rooms. {options} Which option would you like?",
+        "choice": "Option {number}, {room}, for {total} PLN total.",
+        "ask_name": "Thank you. What name should I put on the booking?",
+        "ask_email": "Please say or type the email address for the booking.",
+        "goodbye": "Thank you for contacting Resort Neptun. Goodbye!",
+        "confirmed": "Your booking is confirmed. Your reference is {reference}. Thank you for choosing Resort Neptun!",
+    },
+    "pl": {
+        "welcome": "Dzień dobry, Resort Neptun Jastrzębia Góra. For English, choose English or say English. Aby sprawdzić dostępność, ceny lub dokonać rezerwacji, podaj planowaną datę przyjazdu.",
+        "ask_guests": "Zameldowanie {check_in}, wymeldowanie {check_out}. Podaj łączną liczbę dorosłych i dzieci.",
+        "select": "Sprawdziłam dostępność. {options} Którą opcję wybierasz?",
+        "choice": "Opcja {number}, {room}, za {total} PLN za pobyt.",
+        "ask_name": "Dziękuję. Na kogo mam zapisać rezerwację?",
+        "ask_email": "Podyktuj lub wpisz adres e-mail do rezerwacji.",
+        "goodbye": "Dziękuję za kontakt z Resortem Neptun. Do widzenia!",
+        "confirmed": "Twoja rezerwacja została potwierdzona. Numer rezerwacji to {reference}. Dziękujemy za wybór Resortu Neptun!",
+    },
+}
 
 
-def new_conversation(language, prompt="welcome"):
-    return {
+def new_conversation(language, prompt="welcome", *, scenario=False):
+    state = {
         "language": language,
         "stage": "check_in",
         "revision": uuid4().hex,
-        "reply": COPY[language][prompt],
+        "reply": BROWSER_COPY[language].get(prompt, COPY[language][prompt]) if scenario else COPY[language][prompt],
     }
+    if scenario:
+        state["scenario"] = True
+    return state
 
 
 def _display_date(value, language):
@@ -76,10 +101,12 @@ def advance(state, message, parsed):
     language = state["language"]
     copy = COPY[language]
     stage = state["stage"]
-    if stage == "completed":
+    scenario = state.get("scenario", False)
+    prompts = BROWSER_COPY[language] if scenario else copy
+    if stage in ("completed", "cancelled"):
         return state
     state = {**state, "revision": uuid4().hex}
-    if stage != "confirm":
+    if stage not in ("confirm", "select"):
         state["reply"] = copy[stage]
 
     if stage == "check_in":
@@ -88,7 +115,7 @@ def advance(state, message, parsed):
     elif stage == "check_out":
         if type(parsed) is date and parsed > date.fromisoformat(state["check_in"]):
             check_out = parsed.isoformat()
-            reply = copy["ask_guests"].format(
+            reply = prompts["ask_guests"].format(
                 check_in=_display_date(state["check_in"], language),
                 check_out=_display_date(check_out, language),
             )
@@ -96,9 +123,11 @@ def advance(state, message, parsed):
     elif stage == "guests":
         if type(parsed) is int and 1 <= parsed <= 32767:
             return _find_room(state, parsed)
+    elif stage == "select":
+        return _select_room(state, message)
     elif stage == "name":
         if 1 <= len(message) <= 150 and message.isprintable():
-            state.update(stage="email", name=message, reply=copy["ask_email"])
+            state.update(stage="email", name=message, reply=prompts["ask_email"])
     elif stage == "email":
         try:
             if len(message) > 254 or not message.isprintable():
@@ -106,17 +135,24 @@ def advance(state, message, parsed):
             validate_email(message)
         except ValidationError:
             return state
-        reply = copy["quote"].format(
-            room=state["room"], guests=state["guests"],
-            check_in=_display_date(state["check_in"], language),
-            check_out=_display_date(state["check_out"], language),
-            rate=_price(Decimal(state["nightly_rate"]), language),
-            total=_price(Decimal(state["total_price"]), language),
-        )
-        state.update(stage="confirm", email=message, reply=reply)
+        state["email"] = message
+        if scenario:
+            return _book(state)
+        state.update(stage="confirm", reply=_quote(state))
     elif stage == "confirm":
         return _confirm(state, message)
     return state
+
+
+def _quote(state):
+    language = state["language"]
+    return COPY[language]["quote"].format(
+        room=state["room"], guests=state["guests"],
+        check_in=_display_date(state["check_in"], language),
+        check_out=_display_date(state["check_out"], language),
+        rate=_price(Decimal(state["nightly_rate"]), language),
+        total=_price(Decimal(state["total_price"]), language),
+    )
 
 
 def _find_room(state, guests):
@@ -128,9 +164,22 @@ def _find_room(state, guests):
             guests=guests,
         )
     except BookingError:
-        return new_conversation(language, "offer_changed")
+        return new_conversation(language, "offer_changed", scenario=state.get("scenario", False))
     if not offers:
-        return new_conversation(language, "unavailable")
+        return new_conversation(language, "unavailable", scenario=state.get("scenario", False))
+    if state.get("scenario"):
+        prompts = BROWSER_COPY[language]
+        choices = [
+            {"room_id": offer.room_id, "room": offer.room_code,
+             "nightly_rate": str(offer.nightly_rate), "total_price": str(offer.total_price)}
+            for offer in offers[:2]
+        ]
+        spoken = " ".join(
+            prompts["choice"].format(number=number, room=offer.room_code, total=_price(offer.total_price, language))
+            for number, offer in enumerate(offers[:2], start=1)
+        )
+        state.update(stage="select", guests=guests, choices=choices, reply=prompts["select"].format(options=spoken))
+        return state
     offer = offers[0]
     state.update(
         stage="name", guests=guests, room_id=offer.room_id, room=offer.room_code,
@@ -143,14 +192,48 @@ def _find_room(state, guests):
     return state
 
 
+def _select_room(state, message):
+    answer = message.casefold().rstrip(".!").strip()
+    if state["language"] == "en":
+        labels = (("one", "first"), ("two", "second"))
+        prefix = "option"
+    else:
+        labels = (("jeden", "pierwsza"), ("dwa", "druga"))
+        prefix = "opcja"
+    for number, choice in enumerate(state["choices"], start=1):
+        choices = (str(number), *labels[number - 1])
+        if answer == choice["room"].casefold() or answer.removeprefix(f"{prefix} ") in choices:
+            state.update(choice, stage="confirm", booking_key=str(uuid4()))
+            state.pop("choices")
+            state["reply"] = _quote(state)
+            return state
+    return state
+
+
 def _confirm(state, message):
     language = state["language"]
     yes, no = CONFIRMATIONS[language]
     answer = message.casefold().rstrip(".!").strip()
+    if state.get("scenario"):
+        accept, decline = ("confirm", "cancel") if language == "en" else ("potwierdzam", "rezygnuję")
+        if answer in (no, decline):
+            return {
+                "language": language, "stage": "cancelled", "revision": state["revision"],
+                "reply": BROWSER_COPY[language]["goodbye"], "scenario": True,
+            }
+        if answer in (yes, accept):
+            state.update(stage="name", reply=BROWSER_COPY[language]["ask_name"])
+        return state
     if answer == no:
         return new_conversation(language, "cancelled")
     if answer != yes:
         return state
+    return _book(state)
+
+
+def _book(state):
+    language = state["language"]
+    scenario = state.get("scenario", False)
     try:
         booking, _ = confirm_booking(
             room_id=state["room_id"], check_in=date.fromisoformat(state["check_in"]),
@@ -159,9 +242,9 @@ def _confirm(state, message):
             idempotency_key=UUID(state["booking_key"]),
         )
     except BookingError:
-        return new_conversation(language, "offer_changed")
+        return new_conversation(language, "offer_changed", scenario=scenario)
     reference = str(booking.reference)
     return {
         "language": language, "stage": "completed", "revision": state["revision"], "reference": reference,
-        "reply": COPY[language]["confirmed"].format(reference=reference),
+        "reply": (BROWSER_COPY if scenario else COPY)[language]["confirmed"].format(reference=reference),
     }
