@@ -33,14 +33,15 @@ class Price(models.Model):
 
 
 class Client(models.Model):
-    name = models.CharField(max_length=150)
-    email = models.EmailField()
+    name = models.CharField(max_length=150, blank=True)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=16, blank=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["name", "email"], name="client_contact_unique")]
+        constraints = [models.UniqueConstraint(fields=["name", "email", "phone"], name="client_details_unique")]
 
     def __str__(self):
-        return self.name
+        return self.name or self.email or self.phone
 
 
 class Booking(models.Model):
@@ -78,6 +79,34 @@ class CalendarPublication(models.Model):
     next_attempt_at = models.DateTimeField()
     published_at = models.DateTimeField(null=True, blank=True)
     last_error = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return str(self.booking)
+
+
+class BookingConfirmation(models.Model):
+    class Method(models.TextChoices):
+        EMAIL = "email", "Email"
+        SMS = "sms", "SMS"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SENDING = "sending", "Sending or interrupted"
+        ACCEPTED = "accepted", "Accepted by provider"
+        FAILED = "failed", "Submission failed"
+        UNCERTAIN = "uncertain", "Provider outcome uncertain"
+
+    booking = models.OneToOneField(Booking, on_delete=models.PROTECT, related_name="confirmation")
+    method = models.CharField(max_length=5, choices=Method.choices)
+    destination = models.CharField(max_length=254)
+    language = models.CharField(max_length=2, choices=(("pl", "Polish"), ("en", "English")))
+    status = models.CharField(max_length=9, choices=Status.choices, default=Status.PENDING)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    provider_reference = models.CharField(max_length=64, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["status", "method"], name="booking_confirmation_queue")]
 
     def __str__(self):
         return str(self.booking)

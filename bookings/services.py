@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -9,7 +10,7 @@ from django.db import transaction
 from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
-from .models import RATE_DIGITS, RATE_PLACES, Booking, Client, Room
+from .models import RATE_DIGITS, RATE_PLACES, Booking, BookingConfirmation, Client, Room
 
 
 class BookingError(ValueError):
@@ -61,18 +62,48 @@ def available_rooms(*, check_in: date, check_out: date, guests: int) -> list[Roo
     ]
 
 
-def _validate_contact(name: str, email: str) -> tuple[str, str]:
-    name = name.strip() if isinstance(name, str) else ""
-    email = email.strip() if isinstance(email, str) else ""
-    if not 1 <= len(name) <= 150 or not name.isprintable():
-        raise BookingError("invalid_name", "Enter a guest name of up to 150 characters.")
+def normalize_phone(value: str) -> str:
+    if isinstance(value, str) and re.fullmatch(r"[+0-9().\s-]{1,50}", value):
+        number = re.sub(r"[().\s-]", "", value)
+        if number.startswith("00"):
+            number = "+" + number[2:]
+        elif re.fullmatch(r"[1-9][0-9]{8}", number):
+            number = "+48" + number
+        elif re.fullmatch(r"48[0-9]{9}", number):
+            number = "+" + number
+        if re.fullmatch(r"\+[1-9][0-9]{7,14}", number):
+            return number
+    raise BookingError("invalid_phone", "Enter a valid phone number with its country code.")
+
+
+def _validate_email(email):
     if not 1 <= len(email) <= 254 or not email.isprintable():
         raise BookingError("invalid_email", "Enter a valid email address.")
     try:
         validate_email(email)
     except ValidationError as error:
         raise BookingError("invalid_email", "Enter a valid email address.") from error
-    return name, email
+
+
+def _validate_contact(name, email, phone, delivery_method, language):
+    name = name.strip() if isinstance(name, str) else ""
+    email = email.strip() if isinstance(email, str) else ""
+    if len(name) > 150 or not name.isprintable() or (not name and not delivery_method):
+        raise BookingError("invalid_name", "Enter a guest name of up to 150 characters.")
+    if delivery_method not in ("", *BookingConfirmation.Method.values):
+        raise BookingError("invalid_delivery_method", "Choose email or SMS confirmation.")
+    if delivery_method and language not in ("en", "pl"):
+        raise BookingError("invalid_language", "Choose Polish or English confirmation.")
+    if delivery_method == BookingConfirmation.Method.SMS:
+        if email:
+            raise BookingError("invalid_contact", "Provide only the contact for the selected confirmation method.")
+        phone = normalize_phone(phone)
+    else:
+        if phone:
+            raise BookingError("invalid_contact", "Provide only the contact for the selected confirmation method.")
+        _validate_email(email)
+        phone = ""
+    return name, email, phone
 
 
 def _validate_rate(nightly_rate: Decimal) -> None:
@@ -95,6 +126,9 @@ def confirm_booking(
     email: str,
     nightly_rate: Decimal,
     idempotency_key: UUID,
+    phone: str = "",
+    delivery_method: str = "",
+    language: str = "en",
 ) -> tuple[Booking, bool]:
     _validate_stay(check_in, check_out, guests)
     if type(room_id) is not int or not 1 <= room_id <= 2**63 - 1:
@@ -102,16 +136,28 @@ def confirm_booking(
     if not isinstance(idempotency_key, UUID):
         raise BookingError("invalid_idempotency_key", "Idempotency key must be a UUID.")
     _validate_rate(nightly_rate)
-    name, email = _validate_contact(name, email)
+    name, email, phone = _validate_contact(name, email, phone, delivery_method, language)
 
     # SQLite starts this transaction in IMMEDIATE mode to serialize availability checks and writes.
     with transaction.atomic():
-        existing = Booking.objects.select_related("client", "room").filter(idempotency_key=idempotency_key).first()
+        existing = Booking.objects.select_related("client", "room", "confirmation").filter(
+            idempotency_key=idempotency_key,
+        ).first()
         if existing:
-            requested_stay = (room_id, check_in, check_out, guests, name, email, nightly_rate)
+            confirmation = getattr(existing, "confirmation", None)
+            booked_email = existing.client.email
+            booked_phone = existing.client.phone
+            if confirmation:
+                booked_email = confirmation.destination if confirmation.method == BookingConfirmation.Method.EMAIL else ""
+                booked_phone = confirmation.destination if confirmation.method == BookingConfirmation.Method.SMS else ""
+            requested_stay = (
+                room_id, check_in, check_out, guests, name, email, phone, nightly_rate,
+                (delivery_method, language) if delivery_method else None,
+            )
             booked_stay = (
                 existing.room_id, existing.check_in, existing.check_out, existing.guests,
-                existing.client.name, existing.client.email, existing.nightly_rate,
+                existing.client.name, booked_email, booked_phone, existing.nightly_rate,
+                (confirmation.method, confirmation.language) if confirmation else None,
             )
             if requested_stay != booked_stay:
                 raise BookingError("idempotency_conflict", "This idempotency key belongs to a different booking.", 409)
@@ -124,7 +170,7 @@ def confirm_booking(
         if room.price.nightly_rate != nightly_rate:
             raise BookingError("stale_price", "The nightly rate changed. Request a new quote.", 409)
 
-        client, _ = Client.objects.get_or_create(name=name, email=email)
+        client, _ = Client.objects.get_or_create(name=name, email=email, phone=phone)
         booking = Booking.objects.create(
             room=room,
             client=client,
@@ -134,4 +180,8 @@ def confirm_booking(
             nightly_rate=room.price.nightly_rate,
             idempotency_key=idempotency_key,
         )
+        if delivery_method:
+            BookingConfirmation.objects.create(
+                booking=booking, method=delivery_method, destination=email or phone, language=language,
+            )
         return booking, True

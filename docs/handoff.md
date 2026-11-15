@@ -2,11 +2,17 @@
 
 ## Latest milestone
 
-Neptun browser scenario. New browser conversations default to Polish, offer English at the opening, summarize dates and guest count, present up to two available rooms with total prices, and request explicit confirmation before collecting the booking name and email. A declined offer ends the conversation. Confirmed bookings return the reference in chat and voice. Existing drafts retain their original step order.
+Resort Neptun booking scenario, PR [#18](https://github.com/michalfrackowiak/hotel-ai/pull/18). Chat, browser voice, and the phone connector share the bilingual booking flow. Polish is the default. The browser presents the arrival question and English choice together. Phone callers have two seconds after the welcome to choose English or stay in Polish, then ten seconds to give an arrival date or transfer to staff. Browser silence routes to staff during an active turn.
 
-Staff handover, email/SMS delivery, and the Twilio language menu still need channel or provider configuration. Date parsing remains as recorded on the roadmap.
+The flow accepts relative and yearless dates, ordinals, and stay durations. Guests choose a quoted room and confirm before providing one contact detail. Confirmation and the delivery request commit together. The guest receives the reference immediately. Existing drafts past arrival can finish with their original step order.
+
+Staff respond to browser handovers in Django admin under **Staff handovers**. See [booking confirmations](booking-confirmations.md) to configure SMTP and SMS dispatch and [phone booking](phone-booking.md) to configure the transfer destination.
+
+Django system and migration checks, all 86 tests, and JavaScript syntax checks passed. Independent reviews covered the shared flow, browser inbox and voice, signed phone callbacks, and delivery queue. Playwright completed an English chat booking, a Polish browser voice booking with simulated speech, and the chat inactivity handover. A file-backed SQLite check with eight workers submitted one confirmation. The private Compose worker reached Twilio over HTTPS with a simulated sender configuration.
 
 ## Previous milestones
+
+Neptun browser scenario, PR [#17](https://github.com/michalfrackowiak/hotel-ai/pull/17). New browser drafts began in Polish, offered English, quoted room choices, and collected contact details after explicit consent.
 
 Room availability. The public browser tab searches the existing inventory and shows nightly and total PLN prices. Selecting a room opens a prefilled form. Signed offers expire after 30 minutes and belong to the browser session. Confirmation reuses the booking service to check capacity, availability, and price. Repeated submissions of an identical form return the same confirmation number.
 
@@ -53,6 +59,8 @@ Verification passed for Django checks, migration drift, and nine tests. A fresh 
 Development tooling shipped in PR [#1](https://github.com/michalfrackowiak/hotel-ai/pull/1). Both repository MCP servers initialized in Codex on Windows. The project owner authorized opening and merging reviewed milestone PRs. See [tooling research](tooling-research.md) for the Claude-Mem evaluation and external sources.
 
 ## Next action
+
+Set up the live confirmation providers, assign reception staff access to the handover inbox, and set the phone transfer destination. Verify email, SMS, and attended handovers with controlled test recipients.
 
 Open the [public reception](https://92.5.19.10/) in Chrome on the MacBook and make a voice booking in each language with its microphone and speakers. Use the [SSH tunnel](server-deployment.md#connect-from-the-macbook) for Django admin.
 

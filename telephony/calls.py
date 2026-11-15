@@ -1,12 +1,14 @@
 import re
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, timedelta
 from uuid import uuid4
 
 from django.db import transaction
 from django.utils import timezone
 
-from reception.conversation import advance, new_conversation
+from reception.contacts import parse_email
+from reception.conversation import TERMINAL_STAGES as CONVERSATION_TERMINAL_STAGES
+from reception.conversation import advance, new_conversation, selects_english
 from reception.parsing import parse_stay_input
 
 from .models import PhoneCall
@@ -16,28 +18,23 @@ DRAFT_LIFETIME = timedelta(minutes=20)
 TERMINAL_LIFETIME = timedelta(days=1)
 MAX_MISSED_TURNS = 3
 MAX_SPEECH_LENGTH = 500
-TERMINAL_STAGES = ("completed", "ended")
+TERMINAL_STAGES = (*CONVERSATION_TERMINAL_STAGES, "ended")
 STAY_STAGES = ("check_in", "check_out", "guests")
-LANGUAGE_CHOICES = {"1": "en", "2": "pl"}
-MENU = "Welcome to hotel reception. For English, press one."
-MENU_RETRY = "Please choose a language. For English, press one."
+MENU = "Dzień dobry, Resort Neptun Jastrzębia Góra."
 COPY = {
     "en": {
-        "check_in": "What date would you like to check in? Say the day, month and four-digit year, or say tomorrow.",
-        "email": "What is your email address? Say at and dot where they appear.",
-        "email_retry": "I did not catch a valid email address. Please say it again, including at and dot.",
+        "stay_on_line": "You can also stay on the line for reception.",
+        "handover_unavailable": "Reception is unavailable by phone right now. Please try again later. Goodbye.",
         "silence": "I didn't hear an answer. Please try again.",
         "ended": "This call has ended. Please call again to make a booking. Goodbye.",
     },
     "pl": {
-        "check_in": "Kiedy chcesz się zameldować? Podaj dzień, miesiąc i pełny rok lub powiedz jutro.",
-        "email": "Jaki jest Twój adres e-mail? Wypowiedz słowa małpa i kropka w odpowiednich miejscach.",
-        "email_retry": "Nie udało się rozpoznać adresu e-mail. Powtórz go, używając słów małpa i kropka.",
+        "stay_on_line": "Aby połączyć się z recepcją, możesz również pozostać na linii.",
+        "handover_unavailable": "Recepcja jest teraz niedostępna przez telefon. Spróbuj ponownie później. Do widzenia.",
         "silence": "Nie usłyszałem odpowiedzi. Spróbuj ponownie.",
         "ended": "Połączenie zostało zakończone. Zadzwoń ponownie, aby dokonać rezerwacji. Do widzenia.",
     },
 }
-EMAIL_WORDS = {"en": ("at", "dot"), "pl": ("małpa", "kropka")}
 
 
 @dataclass(frozen=True)
@@ -63,6 +60,8 @@ def _reply(state, missed_turns=0):
     stage = state["stage"]
     language = state["language"]
     reply = state["reply"]
+    if stage == "check_in":
+        reply = f"{reply} {COPY[language]['stay_on_line']}"
     if missed_turns and stage != "language":
         reply = f"{COPY[language]['silence']} {reply}"
     return CallReply(state["revision"], stage, language, reply, state.get("reference"))
@@ -93,28 +92,11 @@ def start_call(call_sid: str) -> CallReply:
     call, _ = PhoneCall.objects.get_or_create(
         call_sid=_canonical_call_sid(call_sid),
         defaults={
-            "state": {"revision": uuid4().hex, "stage": "language", "language": "en", "reply": MENU},
+            "state": {"revision": uuid4().hex, "stage": "language", "language": "pl", "reply": MENU},
             "expires_at": now + DRAFT_LIFETIME,
         },
     )
     return _current_reply(call, now)
-
-
-def _spoken_email(text, language):
-    at, dot = EMAIL_WORDS[language]
-    normalized = re.sub(rf"\s+{at}\s+", "@", text, flags=re.IGNORECASE)
-    normalized = re.sub(rf"\s+{dot}\s+", ".", normalized, flags=re.IGNORECASE)
-    return re.sub(r"\s+", "", normalized).removesuffix(".") if "@" in normalized else text
-
-
-def _spoken_reply(previous, next_state):
-    stage = next_state["stage"]
-    copy = COPY[next_state["language"]]
-    if stage == "email":
-        next_state["reply"] = copy["email_retry" if previous["stage"] == "email" else "email"]
-    elif stage == previous["stage"] == "check_in":
-        next_state["reply"] = copy[stage]
-    return next_state
 
 
 def _missed_turn(call, now):
@@ -124,47 +106,72 @@ def _missed_turn(call, now):
         return _save(call, _ended(state["language"]), now)
     # Keep the original prompt so repeated misses do not accumulate the retry prefix.
     updated = {**state, "revision": uuid4().hex}
-    if state["stage"] == "language":
-        updated["reply"] = MENU_RETRY
     return _save(call, updated, now, missed_turns)
 
 
+def _arrive_from_menu(digit, speech):
+    speech = speech.rstrip(".!。！").strip()
+    if digit == "2" or selects_english(speech):
+        return new_conversation("en", "check_in")
+    state = new_conversation("pl", "check_in")
+    parsed = parse_stay_input("check_in", speech, "pl")
+    if parsed is not None and parsed >= timezone.localdate():
+        return advance(state, speech, parsed, voice=True)
+    return state
+
+
+@transaction.atomic
 def advance_call(call_sid: str, revision: str, *, digit: str = "", speech: str = "") -> CallReply:
-    call_sid = _canonical_call_sid(call_sid)
-    preview = PhoneCall.objects.filter(pk=call_sid).values_list("state", flat=True).first()
-    if preview is None:
-        return _reply(_ended("en"))
+    # Hold SQLite's write lock through revision validation and booking.
+    call = PhoneCall.objects.filter(pk=_canonical_call_sid(call_sid)).first()
+    if call is None:
+        return _reply(_ended("pl"))
+    now = timezone.now()
+    current = _current_reply(call, now)
+    if current.stage in TERMINAL_STAGES or current.revision != revision:
+        return current
 
     speech = speech.strip()
-    parsed = None
-    if preview["revision"] == revision and 1 <= len(speech) <= MAX_SPEECH_LENGTH:
-        stage = preview["stage"]
-        if stage in (*STAY_STAGES, "confirm"):
-            speech = speech.rstrip(".!。！").strip()
-        if stage == "email":
-            speech = _spoken_email(speech, preview["language"])
-        if stage in STAY_STAGES:
-            parsed = parse_stay_input(stage, speech, preview["language"])
+    if len(speech) > MAX_SPEECH_LENGTH:
+        speech = ""
+    if current.stage == "language":
+        # A caller may have heard the version of the menu in use before deployment.
+        if current.language == "en" and digit in ("1", "2"):
+            return _save(call, new_conversation("en" if digit == "1" else "pl", "check_in"), now)
+        return _save(call, _arrive_from_menu(digit, speech), now)
 
-    # Checking the revision again under SQLite's write lock keeps booking and the receipt atomic.
-    with transaction.atomic():
-        call = PhoneCall.objects.filter(pk=call_sid).first()
-        if call is None:
-            return _reply(_ended(preview["language"]))
-        now = timezone.now()
-        current = _current_reply(call, now)
-        if current.stage in TERMINAL_STAGES or current.revision != revision:
-            return current
-        if current.stage == "language":
-            language = LANGUAGE_CHOICES.get(digit)
-            if language is None:
-                return _missed_turn(call, now)
-            state = new_conversation(language)
-            state["reply"] = COPY[language]["check_in"]
-            return _save(call, state, now)
-        if not 1 <= len(speech) <= MAX_SPEECH_LENGTH:
-            return _missed_turn(call, now)
-        return _save(call, _spoken_reply(call.state, advance(call.state, speech, parsed)), now)
+    message = digit if current.stage == "room" and digit else speech
+    if current.stage in (*STAY_STAGES, "confirm"):
+        message = message.rstrip(".!。！").strip()
+    if not message and current.stage != "check_in":
+        return _missed_turn(call, now)
+    if current.stage == "email" and call.state.get("flow") != "neptun":
+        message = parse_email(message) or message
+    parsed = None
+    if current.stage in STAY_STAGES:
+        check_in = call.state.get("check_in")
+        parsed = parse_stay_input(
+            current.stage, message, current.language,
+            check_in=date.fromisoformat(check_in) if check_in else None,
+        )
+    return _save(call, advance(call.state, message, parsed, voice=True), now)
+
+
+@transaction.atomic
+def finish_handover(call_sid: str, revision: str, *, connected: bool) -> CallReply:
+    call = PhoneCall.objects.filter(pk=_canonical_call_sid(call_sid)).first()
+    if call is None:
+        return _reply(_ended("pl"))
+    state = call.state
+    if state["revision"] != revision or state["stage"] not in ("handover", "ended"):
+        return _reply(_ended(state["language"]))
+    if state["stage"] == "ended":
+        return _reply(state)
+    language = state["language"]
+    return _save(call, {
+        "revision": revision, "stage": "ended", "language": language,
+        "reply": "" if connected else COPY[language]["handover_unavailable"],
+    }, timezone.now())
 
 
 @transaction.atomic
@@ -174,7 +181,7 @@ def expire_calls() -> tuple[int, int]:
     expired = PhoneCall.objects.filter(expires_at__lte=now)
     deleted, _ = expired.filter(state__stage__in=TERMINAL_STAGES).delete()
     redacted = 0
-    for language in LANGUAGE_CHOICES.values():
+    for language in ("en", "pl"):
         redacted += expired.filter(state__language=language).update(
             state=_ended(language), missed_turns=0, expires_at=now + TERMINAL_LIFETIME,
         )
