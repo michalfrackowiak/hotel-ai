@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -52,3 +53,25 @@ class SpeechTrainingSample(models.Model):
 
     def __str__(self):
         return f"Speech sample {self.pk}"
+
+
+class ScenarioPrompt(models.Model):
+    language = models.CharField(max_length=2, choices=(("pl", "Polish"), ("en", "English")))
+    key = models.CharField(max_length=32)
+    chat_text = models.TextField(max_length=2000, blank=True)
+    voice_parts = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        verbose_name = "booking scenario prompt"
+        verbose_name_plural = "booking scenario prompts"
+        constraints = [models.UniqueConstraint(fields=("language", "key"), name="unique_scenario_prompt")]
+
+    def __str__(self):
+        return f"{self.get_language_display()} · {self.key.replace('_', ' ').capitalize()}"
+
+    def clean(self):
+        from .scenario_editor import validate_prompt
+
+        errors = validate_prompt(self.language, self.key, self.chat_text, self.voice_parts)
+        if errors:
+            raise ValidationError(errors)

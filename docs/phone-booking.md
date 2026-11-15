@@ -34,6 +34,8 @@ In the Twilio Console, set the voice number's incoming call handler or the SIP d
 
 Set `HOTEL_PHONE_RECEPTION_NUMBER` to a separate staff queue number in international format starting with `+`. Use a destination that Twilio may dial and that routes directly to staff. After the English greeting and a two-second pause, English callers hear the date prompt followed by a five-second listening window. Polish callers start at their date prompt and five-second window. Silence leads to a second prompt about staying on the line for reception, then five more seconds to give dates. Continued silence or an unrelated response routes the call to staff. If the destination is unset or Twilio cannot connect, the caller hears a localized unavailable message. [Twilio Gather](https://www.twilio.com/docs/voice/twiml/gather) · [Twilio Pause](https://www.twilio.com/docs/voice/twiml/pause) · [Twilio Dial](https://www.twilio.com/docs/voice/twiml/dial)
 
+The **Scenario editor** in Django admin can edit the spoken prompts and pauses. A silent pause finishes before the phone starts listening. Arrival segments marked **Listen** set the listening window after that segment. The built-in wording and timing above apply until staff save an override.
+
 Start the [booking confirmation worker](booking-confirmations.md) with the same database to send emails and texts after the call.
 
 ## Verify the live phone route

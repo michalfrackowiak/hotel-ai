@@ -6,6 +6,8 @@ from django.utils import timezone
 from bookings.confirmations import configured_methods
 from bookings.models import BookingConfirmation
 
+from .scenario import set_prompt
+
 
 DELIVERY_PENDING = "delivery_pending"
 DELIVERY_WAIT_SECONDS = 25
@@ -40,12 +42,10 @@ COPY = {
 
 
 def start_receipt(state, reference, method):
-    language = state["language"]
-    receipt = {
-        "language": language, "revision": state["revision"], "flow": state["flow"],
+    receipt = set_prompt({
+        "language": state["language"], "revision": state["revision"], "flow": state["flow"],
         "stage": DELIVERY_PENDING, "reference": reference, "method": method,
-        "reply": COPY[language]["waiting"],
-    }
+    }, "receipt_waiting")
     if method in settings.HOTEL_CONFIRMATION_WAIT_METHODS or method in configured_methods():
         receipt["delivery_deadline"] = timezone.now().timestamp() + DELIVERY_WAIT_SECONDS
         return receipt
@@ -68,12 +68,10 @@ def _complete(state, outcome):
     reference = state["reference"]
     copy = COPY[language]
     if outcome == BookingConfirmation.Status.ACCEPTED:
-        message = SENT[language][method]
+        key = f"receipt_sent_{method}"
     else:
-        key = "pending" if outcome == BookingConfirmation.Status.PENDING else "unconfirmed"
-        message = copy[key].format(channel=copy[method])
-    return {
+        key = "receipt_pending" if outcome == BookingConfirmation.Status.PENDING else "receipt_unconfirmed"
+    return set_prompt({
         "language": language, "revision": state["revision"], "flow": state["flow"],
         "stage": "completed", "reference": reference,
-        "reply": f"{message} {copy['reference'].format(reference=reference)}",
-    }
+    }, key, {"channel": copy[method], "reference": reference}, tail="receipt_reference")

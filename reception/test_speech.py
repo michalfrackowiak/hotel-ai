@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .conversation import ARRIVAL_PARTS, WELCOME_PARTS, new_conversation
-from .models import Conversation
+from .models import Conversation, ScenarioPrompt
 from .speech import MAX_AUDIO_BYTES, SpeechUnavailable, synthesize
 
 
@@ -106,6 +106,36 @@ class ReceptionAudioTests(TestCase):
         response = self.request_audio({"revision": conversation.state["revision"], "part": 0}, token=self.token)
         self.assertEqual(response.status_code, 400)
         generate.assert_not_called()
+
+    @patch("reception.views.synthesize", return_value=wav_fixture())
+    def test_edited_checkout_uses_separate_chat_and_voice_with_revision_bound_segments(self, generate):
+        prompt, _ = ScenarioPrompt.objects.update_or_create(
+            language="pl", key="check_out",
+            defaults={
+                "chat_text": "Wpisz datę wyjazdu.",
+                "voice_parts": [
+                    {"text": "Podaj datę wyjazdu.", "seconds": 3, "listen": False},
+                    {"text": "Możesz też podać liczbę nocy.", "seconds": 0, "listen": False},
+                ],
+            },
+        )
+        payload = {"language": "pl", "revision": self.started["revision"], "message": "jutro"}
+        response = self.client.post(
+            reverse("reception-message"), payload, content_type="application/json",
+            headers={"X-CSRFToken": self.token},
+        )
+        self.assertEqual(response.status_code, 200)
+        turn = response.json()
+        self.assertEqual(turn["reply"], "Wpisz datę wyjazdu.")
+        self.assertEqual([part["seconds"] for part in turn["voice_parts"]], [3, 0])
+        payload = {"revision": turn["revision"], "part": 0, "voice_key": turn["voice_key"]}
+        self.assertEqual(self.request_audio(payload, token=self.token).status_code, 200)
+        generate.assert_called_once_with("Podaj datę wyjazdu.", "pl")
+
+        prompt.voice_parts[0]["seconds"] = 4
+        prompt.save(update_fields=["voice_parts"])
+        self.assertEqual(self.request_audio(payload, token=self.token).status_code, 409)
+        generate.assert_called_once()
 
     @patch("reception.views.synthesize")
     def test_audio_uses_current_server_reply_and_requires_csrf(self, generate):

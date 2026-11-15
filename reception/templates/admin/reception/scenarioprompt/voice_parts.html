@@ -1,0 +1,35 @@
+<table>
+    <thead>
+        <tr>
+            <th scope="col">Order</th>
+            <th scope="col">Spoken text</th>
+            <th scope="col">Pause (seconds)</th>
+            {% if widget.allow_listening %}<th scope="col">Listen during pause</th>{% endif %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in widget.rows %}
+        {% with number=forloop.counter %}
+        <tr>
+            <th scope="row">{{ number }}</th>
+            <td>
+                <textarea name="{{ widget.name }}_{{ number }}_text" id="{{ widget.attrs.id }}_{{ number }}_text"
+                    aria-label="Spoken text for segment {{ number }}" rows="2"
+                    maxlength="{{ widget.max_text }}">{{ row.text|default_if_none:"" }}</textarea>
+            </td>
+            <td>
+                <input type="number" name="{{ widget.name }}_{{ number }}_seconds"
+                    aria-label="Pause after segment {{ number }}"
+                    min="0" max="{{ widget.max_pause }}" step="1" value="{{ row.seconds|default_if_none:'' }}">
+            </td>
+            {% if widget.allow_listening %}
+            <td>
+                <input type="checkbox" name="{{ widget.name }}_{{ number }}_listen"
+                    aria-label="Listen after segment {{ number }}"{% if row.listen %} checked{% endif %}>
+            </td>
+            {% endif %}
+        </tr>
+        {% endwith %}
+        {% endfor %}
+    </tbody>
+</table>

@@ -79,10 +79,10 @@
     let stage = null;
     let lastReply = null;
     let voiceWelcome = false;
-    let arrivalPart = 0;
+    let voicePart = 0;
 
-    function arrivalSegment() {
-        return stage === "check_in" ? lastReply?.arrivalParts?.[arrivalPart] : undefined;
+    function currentSegment() {
+        return lastReply?.voiceParts?.[voicePart];
     }
 
     function canStart() {
@@ -133,15 +133,19 @@
         status.textContent = message;
     }
 
+    function playNextSegment() {
+        if (!lastReply?.voiceParts?.[voicePart + 1]) return false;
+        const prepared = nextAudio;
+        nextAudio = null;
+        pauseAudio();
+        voicePart += 1;
+        speak(lastReply, prepared);
+        return true;
+    }
+
     function handleSilence() {
-        if (!active) return;
-        if (arrivalSegment() && arrivalPart + 1 < lastReply.arrivalParts.length && !input.disabled) {
-            const prepared = nextAudio;
-            nextAudio = null;
-            pauseAudio();
-            arrivalPart += 1;
-            speak(lastReply, prepared);
-        } else if (stage in silenceLimits && !input.disabled) {
+        if (!active || playNextSegment()) return;
+        if (stage in silenceLimits && !input.disabled) {
             form.dispatchEvent(new CustomEvent("reception:voice-silence"));
         } else {
             stop(copy.silence);
@@ -344,16 +348,26 @@
         }
     }
 
-    function finishReply() {
-        const segment = arrivalSegment();
-        const silenceLimit = segment ? segment.seconds * 1000 : silenceLimits[stage];
-        if (segment && !segment.listen) {
-            status.textContent = copy.waiting;
-            silenceTimer = setTimeout(handleSilence, silenceLimit);
-        } else if (terminalStages.has(stage)) stop(copy.finished);
+    function awaitGuest(silenceLimit = silenceLimits[stage]) {
+        if (!active) return;
+        if (terminalStages.has(stage)) stop(copy.finished);
         else if (stage === "delivery_pending") status.textContent = copy.waiting;
         else if (canRecord) listenWithMicrophone(silenceLimit);
         else listenWithBrowser(silenceLimit);
+    }
+
+    function finishReply() {
+        const segment = currentSegment();
+        if (segment?.listen) {
+            awaitGuest(segment.seconds * 1000);
+        } else if (segment?.seconds) {
+            status.textContent = copy.waiting;
+            silenceTimer = setTimeout(() => {
+                if (active && !playNextSegment()) awaitGuest();
+            }, segment.seconds * 1000);
+        } else if (!playNextSegment()) {
+            awaitGuest();
+        }
     }
 
     function speakWithBrowser(turn, message) {
@@ -384,7 +398,7 @@
         speakPart(0);
     }
 
-    function requestAudio(revision, part) {
+    function requestAudio(turn, part) {
         const controller = new AbortController();
         const result = fetch(audioUrl, {
             method: "POST",
@@ -394,7 +408,7 @@
                 "Content-Type": "application/json",
                 "X-CSRFToken": form.elements.csrfmiddlewaretoken.value,
             },
-            body: JSON.stringify({ revision, part }),
+            body: JSON.stringify({ revision: turn.revision, part, voice_key: part === undefined ? undefined : turn.voiceKey }),
             signal: controller.signal,
         }).then(async (response) => {
             const contentType = response.headers.get("Content-Type") || "";
@@ -405,15 +419,17 @@
     }
 
     async function speak(turn, prepared = null) {
-        const segment = arrivalSegment();
-        const spokenTurn = segment ? { ...turn, reply: segment.text } : turn;
+        const segment = currentSegment();
+        const spokenTurn = segment
+            ? { ...turn, reply: segment.text, language: segment.language || turn.language, welcomeParts: undefined }
+            : { ...turn, reply: turn.voiceReply || turn.reply };
         const context = audioContext;
         if (!canPlayPiper || !context) {
             speakWithBrowser(spokenTurn, audioUrl ? copy.fallback : copy.speaking);
             return;
         }
 
-        const current = prepared ?? requestAudio(turn.revision, segment ? arrivalPart : undefined);
+        const current = prepared ?? requestAudio(turn, segment ? voicePart : undefined);
         playback = current;
         status.textContent = copy.preparing;
 
@@ -458,8 +474,8 @@
             source.start();
             current.source = source;
             status.textContent = copy.speaking;
-            if (segment && turn.arrivalParts[arrivalPart + 1]) {
-                nextAudio = requestAudio(turn.revision, arrivalPart + 1);
+            if (segment && turn.voiceParts[voicePart + 1]) {
+                nextAudio = requestAudio(turn, voicePart + 1);
             }
         } catch {
             fallback();
@@ -471,7 +487,7 @@
             stop(copy.finished);
         } else if (canStart()) {
             active = true;
-            arrivalPart = 0;
+            voicePart = 0;
             form.dispatchEvent(new CustomEvent("reception:voice-session", { detail: { active } }));
             button.textContent = copy.stop;
             button.setAttribute("aria-pressed", "true");
@@ -501,7 +517,7 @@
     form.addEventListener("reception:reply", (event) => {
         stage = event.detail.stage;
         lastReply = event.detail;
-        arrivalPart = 0;
+        voicePart = 0;
         voiceWelcome = event.detail.voiceWelcome;
         locale = event.detail.language === "pl" ? "pl-PL" : "en-US";
         copy = locale === "pl-PL" ? polishCopy : englishCopy;
