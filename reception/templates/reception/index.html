@@ -7,8 +7,8 @@
     <meta name="color-scheme" content="light">
     <title>{% if language == "pl" %}Rezerwacja pokoju{% else %}Book a room{% endif %} · Hotel-ai</title>
     <link rel="stylesheet" href="{% static 'reception/reception.css' %}">
-    <script src="{% static 'reception/chat.js' %}?v=scenario-editor" defer></script>
-    <script src="{% static 'reception/voice.js' %}?v=scenario-editor" defer></script>
+    <script src="{% static 'reception/chat.js' %}?v=parser-training" defer></script>
+    <script src="{% static 'reception/voice.js' %}?v=parser-training" defer></script>
 </head>
 <body>
     {% include "reception/_header.html" with active_page="reception" %}
@@ -67,6 +67,9 @@
                     <input id="chat-message" name="message" type="text" placeholder="{% if language == 'pl' %}Napisz wiadomość…{% else %}Type a message…{% endif %}" maxlength="500" autocomplete="off" disabled required>
                     <button id="chat-send" class="send-button" type="submit" disabled><span>{% if language == "pl" %}Wyślij{% else %}Send{% endif %}</span><span aria-hidden="true"> →</span></button>
                 </form>
+                {% if parser_training_enabled %}
+                <p>{% if language == "pl" %}Recepcja może sprawdzać odpowiedzi rezerwacyjne, aby poprawiać rozpoznawanie danych. Odpowiedzi na pytania o dane kontaktowe są przechowywane do 30 dni.{% else %}Reception staff may review booking replies to improve parsing. Replies to contact questions are kept for up to 30 days.{% endif %}</p>
+                {% endif %}
                 <noscript><p>{% if language == "pl" %}Włącz JavaScript, aby rozpocząć rozmowę.{% else %}Enable JavaScript to start the conversation.{% endif %}</p></noscript>
             </div>
         </section>

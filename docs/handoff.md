@@ -2,11 +2,15 @@
 
 ## Latest milestone
 
+Parser training, PR [#26](https://github.com/michalfrackowiak/hotel-ai/pull/26). **Reception → Parser training samples** lists original English and Polish chat and voice inputs, parser results, and the success flag. Staff can save validated corrections. Rules apply to matching input, source, language, and step. See [parser training](parser-training.md) for examples, activation, and retention.
+
+All 153 Django tests and migration and JavaScript checks passed. Chromium verified saving a correction in admin and using it for the next matching reply, with the expected room capacity and stay price. The live server still needs deployment and activation.
+
+## Previous milestones
+
 Booking scenario editor, PR [#25](https://github.com/michalfrackowiak/hotel-ai/pull/25). Staff can edit the English and Polish chat and voice wording in the private admin, add ordered voice segments, and set pauses in seconds. The editor validates the placeholders used to display room options, prices, dates, guest counts, and references. See [booking scenario editor](scenario-editor.md).
 
 All 137 Django tests and migration and JavaScript checks passed. The seeded catalog and admin tests cover staff permissions, separate chat and voice settings, validation, and restoring defaults. Browser audio tests cover per-segment speech and a rejected stale audio request after editing. Phone webhook tests cover configured speech and pauses.
-
-## Previous milestones
 
 Voice arrival pauses, PR [#24](https://github.com/michalfrackowiak/hotel-ai/pull/24). English browser voice and phone say the resort address, pause for two seconds, and ask for dates with a five-second listening window. Polish goes straight to the first date prompt. Silence brings up the receptionist option and a second five-second window in both languages. The second timeout follows the existing staff handover path.
 

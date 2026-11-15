@@ -20,6 +20,7 @@ from .contacts import parse_email
 from .conversation import COPY as BOOKING_COPY
 from .conversation import TERMINAL_STAGES, WELCOME_PARTS, advance, new_conversation, recognizes_booking_answer, selects_english
 from .models import Conversation, StaffHandover
+from .parser_review import review_booking_input
 from .parsing import parse_stay_input
 from .receipt import DELIVERY_PENDING, refresh_receipt
 from .scenario import ENGLISH_WEB_GREETING, render_chat, scenario_overrides, set_prompt, voice_segments
@@ -59,6 +60,7 @@ def index(request):
         "piper_enabled": bool(settings.HOTEL_PIPER_URL),
         "asr_enabled": bool(settings.HOTEL_ASR_URL),
         "speech_training_enabled": bool(settings.HOTEL_ASR_URL and settings.HOTEL_SPEECH_TRAINING_ENABLED),
+        "parser_training_enabled": settings.HOTEL_PARSER_TRAINING_ENABLED,
     })
 
 
@@ -146,6 +148,7 @@ def message(request):
     voice_start = payload.get("voice_start") is True and payload.keys() == {"language", "voice_start", "revision"}
     poll = payload.get("poll") is True and payload.keys() == {"language", "poll", "revision", "cursor"}
     voice = payload.get("voice") is True
+    transcript_input = voice and payload.get("transcript") is True
     required_timeout_fields = {"language", "timeout", "revision"}
     timeout = payload.get("timeout") is True and (
         payload.keys() == required_timeout_fields or (voice and payload.keys() == required_timeout_fields | {"voice"})
@@ -154,7 +157,11 @@ def message(request):
     text = payload.get("message")
     revision = payload.get("revision")
     required_turn_fields = {"language", "message", "revision"}
-    turn = payload.keys() == required_turn_fields or (voice and payload.keys() == required_turn_fields | {"voice"})
+    turn = (
+        payload.keys() == required_turn_fields
+        or (voice and payload.keys() == required_turn_fields | {"voice"})
+        or (transcript_input and payload.keys() == required_turn_fields | {"voice", "transcript"})
+    )
     if not (start or reset):
         if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{32}", revision):
             return _invalid()
@@ -236,7 +243,12 @@ def message(request):
             if voice and state["stage"] == "email" and state.get("flow") != "neptun":
                 text = parse_email(text) or text
             was_welcome = state["stage"] == "welcome"
-            state = advance(state, text or "", parsed, voice=voice)
+            input_parsed = False
+            if turn and settings.HOTEL_PARSER_TRAINING_ENABLED:
+                parsed, input_parsed = review_booking_input(
+                    state, text, parsed, source="voice" if transcript_input else "chat",
+                )
+            state = advance(state, text or "", parsed, voice=voice, input_parsed=input_parsed)
             if was_welcome and state["stage"] == "check_in" and state["language"] == "pl" and not voice:
                 state["voice_welcome"] = True
             if state["stage"] == "handover":

@@ -6,6 +6,8 @@ from django.utils import timezone
 
 
 SPEECH_TRAINING_STAGES = ("welcome", "check_in", "check_out", "guests", "room", "confirm", "delivery")
+PARSER_TRAINING_STAGES = ("check_in", "check_out", "guests", "room", "email", "phone")
+PARSER_CONTACT_STAGES = ("email", "phone")
 UNREVIEWED_SAMPLE_AGE = timedelta(days=30)
 CORRECTED_SAMPLE_AGE = timedelta(days=180)
 
@@ -75,3 +77,38 @@ class ScenarioPrompt(models.Model):
         errors = validate_prompt(self.language, self.key, self.chat_text, self.voice_parts)
         if errors:
             raise ValidationError(errors)
+
+
+class ParserSamples(models.QuerySet):
+    def unexpired(self, now=None):
+        now = now or timezone.now()
+        return self.filter(
+            models.Q(created_at__gt=now - UNREVIEWED_SAMPLE_AGE)
+            | (
+                ~models.Q(stage__in=PARSER_CONTACT_STAGES)
+                & ~models.Q(corrected_result="")
+                & models.Q(created_at__gt=now - CORRECTED_SAMPLE_AGE)
+            )
+        )
+
+
+class ParserSample(models.Model):
+    language = models.CharField(max_length=2, choices=(("pl", "Polish"), ("en", "English")))
+    stage = models.CharField(
+        max_length=10, choices=tuple((stage, stage.replace("_", " ").title()) for stage in PARSER_TRAINING_STAGES),
+    )
+    source = models.CharField(max_length=5, choices=(("chat", "Chat"), ("voice", "Voice")))
+    text = models.CharField(max_length=500, blank=True)
+    parsed_result = models.CharField(max_length=500, blank=True)
+    succeeded = models.BooleanField()
+    corrected_result = models.CharField(max_length=500, blank=True, default="")
+    rule_key = models.CharField(max_length=64, db_index=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    objects = ParserSamples.as_manager()
+
+    class Meta:
+        verbose_name = "parser training sample"
+        verbose_name_plural = "parser training samples"
+
+    def __str__(self):
+        return f"Parser sample {self.pk}"

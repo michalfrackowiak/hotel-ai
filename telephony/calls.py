@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from uuid import uuid4
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -10,6 +11,7 @@ from reception.contacts import parse_email
 from reception.conversation import COPY as BOOKING_COPY
 from reception.conversation import TERMINAL_STAGES as CONVERSATION_TERMINAL_STAGES
 from reception.conversation import WELCOME_PARTS, advance, new_conversation, selects_english
+from reception.parser_review import review_booking_input
 from reception.parsing import StayDates, parse_stay_input
 from reception.receipt import DELIVERY_PENDING, refresh_receipt
 from reception.scenario import PHONE_COPY as COPY
@@ -171,7 +173,10 @@ def advance_call(call_sid: str, revision: str, *, digit: str = "", speech: str =
             current.stage, message, current.language,
             check_in=date.fromisoformat(check_in) if check_in else None,
         )
-    return _save(call, advance(call.state, message, parsed, voice=True), now)
+    input_parsed = False
+    if message and settings.HOTEL_PARSER_TRAINING_ENABLED:
+        parsed, input_parsed = review_booking_input(call.state, message, parsed, source="voice")
+    return _save(call, advance(call.state, message, parsed, voice=True, input_parsed=input_parsed), now)
 
 
 @transaction.atomic
