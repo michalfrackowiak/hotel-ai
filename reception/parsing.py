@@ -189,6 +189,8 @@ def _extract_dates(stage, value, language, check_in, today, config):
         if _duration_fragments(value[second.end():], language):
             return arrival
         departure = _parse_date(second[0], language, None, today, calendar_anchor=arrival, config=config)
+        if departure is None:
+            return None
         return _stay_dates(arrival, departure, today)
 
     if stage == "check_in":
