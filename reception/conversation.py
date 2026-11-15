@@ -8,7 +8,7 @@ from bookings.services import BookingError, available_rooms, confirm_booking
 
 from . import legacy_conversation
 from .contacts import parse_email, parse_phone
-from .parsing import NUMBER_WORDS, ORDINALS, StayDates
+from .parsing import NUMBER_WORDS, ORDINALS, StayDates, parse_stay_input
 from .receipt import DELIVERY_PENDING, start_receipt
 
 
@@ -211,6 +211,19 @@ def _offer_rooms(state, guests, voice):
 
 
 def _select_room(state, answer):
+    choice = _room_choice(state, answer)
+    if choice is None:
+        return state
+    state.update(choice, stage="confirm")
+    state.pop("choices")
+    language = state["language"]
+    state["reply"] = COPY[language]["confirm"].format(
+        room=state["room"], guests=state["guests"], **_display_dates(state),
+    )
+    return state
+
+
+def _room_choice(state, answer):
     language = state["language"]
     room_prefix = "room " if language == "en" else "pokój "
     label = answer.removeprefix("option " if language == "en" else "opcja ")
@@ -222,18 +235,35 @@ def _select_room(state, answer):
     )
     choices = state["choices"]
     if number is not None:
-        choice = choices[number - 1] if 1 <= number <= len(choices) else None
-    else:
-        room_code = answer.removeprefix(room_prefix)
-        choice = next((offer for offer in choices if offer["room"].casefold() == room_code), None)
-    if choice is None:
-        return state
-    state.update(choice, stage="confirm")
-    state.pop("choices")
-    state["reply"] = COPY[language]["confirm"].format(
-        room=state["room"], guests=state["guests"], **_display_dates(state),
-    )
-    return state
+        return choices[number - 1] if 1 <= number <= len(choices) else None
+    room_code = answer.removeprefix(room_prefix)
+    return next((offer for offer in choices if offer["room"].casefold() == room_code), None)
+
+
+def recognizes_booking_answer(state, message):
+    """Check whether a transcript fits the current prompt without advancing a booking."""
+    stage, language = state["stage"], state["language"]
+    answer = _answer(message)
+    check_in = date.fromisoformat(state["check_in"]) if stage == "check_out" else None
+    parser_stage = "check_in" if stage == "welcome" else stage
+    parsed = parse_stay_input(parser_stage, message, language, check_in=check_in)
+    if stage in ("welcome", "check_in"):
+        if language == "pl" and selects_english(message):
+            return True
+        if isinstance(parsed, StayDates):
+            return timezone.localdate() <= parsed.check_in < parsed.check_out
+        return type(parsed) is date and parsed >= timezone.localdate()
+    if stage == "check_out":
+        return type(parsed) is date and parsed > check_in
+    if stage == "guests":
+        return type(parsed) is int and 1 <= parsed <= 32767
+    if stage == "room":
+        return _room_choice(state, answer) is not None
+    if stage == "confirm":
+        return answer in CONFIRM[language] or answer in CANCEL[language]
+    if stage == "delivery":
+        return answer in EMAIL_ANSWERS or answer in SMS_ANSWERS
+    return False
 
 
 def _book(state, *, email, phone, method):

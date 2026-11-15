@@ -62,6 +62,9 @@
     }
     const privacy = document.getElementById("voice-privacy");
     if (privacy) privacy.hidden = !canRecord;
+    const training = document.getElementById("voice-training");
+    const trainingOptIn = document.getElementById("voice-training-opt-in");
+    if (training) training.hidden = !canRecord;
 
     let active = false;
     let recognition = null;
@@ -248,6 +251,7 @@
                     "Content-Type": "application/octet-stream",
                     "X-CSRFToken": form.elements.csrfmiddlewaretoken.value,
                     "X-Reception-Revision": current.revision,
+                    ...(trainingOptIn?.checked ? { "X-Reception-Speech-Training": "1" } : {}),
                 },
                 body: bytes,
                 signal: current.controller.signal,
