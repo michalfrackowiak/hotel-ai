@@ -6,6 +6,9 @@ Each milestone has a development branch, a pull request to `main`, and independe
 
 See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for processing steps, speech-provider switching, full scenario configuration, separate voice/chat views, Google accounts, the blue visual redesign, hardware budgets and acceptance gates. These are planned releases, not implemented features. Start with the hardware and performance baseline in 0.4.
 
+- [x] 0.4 first baseline: inventory accessible server/MacBook hardware, add bounded bilingual synthetic speech tooling, measure warm latency and semantic extraction, and verify isolated SQLite backup/restore. See [results and remaining checks](hardware-speech-baseline.md).
+- [ ] 0.4 completion: staging cold-start/concurrent-load/peak-resource checks, physical microphone evaluation, full off-host recovery and any separately used PC/macOS inventory.
+
 ## Alpha
 
 - [x] Development environment. Create the private repository and branches. Track the roadmap, handoff, pinned project skills, and MCP configuration. Verify GitHub, Docker, and local development tools.
