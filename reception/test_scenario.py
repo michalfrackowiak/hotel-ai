@@ -1,13 +1,16 @@
+import io
+import wave
 from datetime import date
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from django.test import SimpleTestCase, TestCase
 
 from bookings.models import Booking, Price, Room
 
 from .contacts import parse_email, parse_phone
-from .conversation import advance, new_conversation
+from .conversation import WELCOME_PARTS, advance, new_conversation
 from .parsing import parse_stay_input
+from .speech import SpeechUnavailable, synthesize_welcome, transcribe_welcome
 
 
 class ScenarioInputTests(SimpleTestCase):
@@ -20,6 +23,7 @@ class ScenarioInputTests(SimpleTestCase):
             ("pl", "trzydziestego pierwszego grudnia", date(2026, 12, 31)),
             ("en", "June 10th", date(2027, 6, 10)),
             ("en", "November twenty-first", date(2026, 11, 21)),
+            ("en", "the twenty-first of November", date(2026, 11, 21)),
             ("en", "22nd", date(2026, 11, 22)),
             ("pl", "dziesiątego czerwca 2026 roku", date(2026, 6, 10)),
             ("en", "February 30th", None),
@@ -33,7 +37,12 @@ class ScenarioInputTests(SimpleTestCase):
         arrival = date(2026, 12, 29)
         for language, text, expected in (
             ("en", "for 3 nights", date(2027, 1, 1)),
+            ("en", "3", date(2027, 1, 1)),
+            ("en", "three", date(2027, 1, 1)),
             ("pl", "na trzy noce", date(2027, 1, 1)),
+            ("pl", "trzy", date(2027, 1, 1)),
+            ("pl", "trzeciego", date(2026, 11, 3)),
+            ("en", "3rd", date(2026, 11, 3)),
             ("en", "for a week", date(2027, 1, 5)),
             ("pl", "na tydzień", date(2027, 1, 5)),
             ("pl", "przez 5 dni", date(2027, 1, 3)),
@@ -57,6 +66,32 @@ class ScenarioInputTests(SimpleTestCase):
         self.assertEqual(parse_phone("plus cztery osiem 501 dwa trzy cztery 567"), "+48501234567")
         self.assertIsNone(parse_phone("today 501 234 567"))
 
+    @patch("reception.speech.transcribe")
+    def test_welcome_uses_english_recognizer_for_the_language_command(self, transcribe):
+        samples = b"\x01\x00"
+        transcribe.side_effect = ["głos", "english", "jutro", "you throw", "pojutrze", SpeechUnavailable()]
+        self.assertEqual(transcribe_welcome(samples, "pl"), "English")
+        self.assertEqual(transcribe_welcome(samples, "pl"), "jutro")
+        self.assertEqual(transcribe_welcome(samples, "pl"), "pojutrze")
+        self.assertEqual(transcribe.call_args_list, [call(samples, "pl"), call(samples, "en")] * 3)
+
+    @patch("reception.speech.synthesize")
+    def test_welcome_audio_keeps_the_language_and_order_of_each_sentence(self, synthesize):
+        self.addCleanup(synthesize_welcome.cache_clear)
+
+        def segment(sample):
+            output = io.BytesIO()
+            with wave.open(output, "wb") as wav:
+                wav.setparams((1, 2, 22050, 0, "NONE", "not compressed"))
+                wav.writeframes(bytes((sample, 0)))
+            return output.getvalue()
+
+        synthesize.side_effect = [segment(1), segment(2), segment(3)]
+        with wave.open(io.BytesIO(synthesize_welcome(WELCOME_PARTS)), "rb") as wav:
+            self.assertEqual(wav.getframerate(), 22050)
+            self.assertEqual(wav.readframes(3), b"\x01\x00\x02\x00\x03\x00")
+        self.assertEqual(synthesize.call_args_list, [call(text, language) for language, text in WELCOME_PARTS])
+
 
 class ScenarioConversationTests(TestCase):
     @classmethod
@@ -67,7 +102,8 @@ class ScenarioConversationTests(TestCase):
 
     def turn(self, state, text, *, voice=False):
         check_in = date.fromisoformat(state["check_in"]) if "check_in" in state else None
-        parsed = parse_stay_input(state["stage"], text, state["language"], check_in=check_in)
+        stage = "check_in" if state["stage"] == "welcome" else state["stage"]
+        parsed = parse_stay_input(stage, text, state["language"], check_in=check_in)
         return advance(state, text, parsed, voice=voice)
 
     def choose_room(self, *, voice=False):
@@ -83,9 +119,10 @@ class ScenarioConversationTests(TestCase):
         self.assertEqual(len(voice["choices"]), 2)
         self.assertEqual(self.turn(voice, "3", voice=True)["stage"], "room")
         chat = self.choose_room()
+        self.assertIn("room R3 for 900.00 PLN total", chat["reply"])
         state = self.turn(chat, "option three")
         self.assertEqual(state["stage"], "confirm")
-        self.assertIn("900.00 PLN", state["reply"])
+        self.assertTrue(state["reply"].startswith("You have selected room R3 from "))
         self.assertEqual(self.turn(state, "cancel")["stage"], "cancelled")
         self.assertFalse(Booking.objects.exists())
 
@@ -100,6 +137,8 @@ class ScenarioConversationTests(TestCase):
         self.assertEqual(self.turn(state, "yes, maybe")["stage"], "confirm")
         state = self.turn(state, "confirm")
         self.assertEqual(state["stage"], "delivery")
+        self.assertTrue(state["reply"].startswith("Your reservation has been tentatively created!"))
+        self.assertIn("booking_key", state)
         state = self.turn(state, "phone")
         self.assertEqual(state["stage"], "phone")
         self.assertEqual(self.turn(state, "123")["stage"], "phone")
@@ -116,7 +155,20 @@ class ScenarioConversationTests(TestCase):
 
     def test_handover_on_unrelated_or_silent_arrival_turn(self):
         for message in ("I need to speak to reception", ""):
-            state = self.turn(new_conversation("en"), message)
+            state = self.turn(new_conversation("en", "check_in"), message)
             self.assertEqual(state["stage"], "handover")
             self.assertEqual(self.turn(state, "tomorrow"), state)
         self.assertFalse(Booking.objects.exists())
+
+    def test_welcome_waits_separately_from_check_in(self):
+        welcome = new_conversation("pl")
+        self.assertEqual(welcome["stage"], "welcome")
+        self.assertNotIn("termin przyjazdu", welcome["reply"])
+        after_silence = self.turn(welcome, "")
+        self.assertEqual((after_silence["stage"], after_silence["language"]), ("check_in", "pl"))
+        self.assertIn("planowany termin przyjazdu", after_silence["reply"])
+        after_english = self.turn(welcome, "2")
+        self.assertEqual((after_english["stage"], after_english["language"]), ("check_in", "en"))
+        self.assertIn("planned arrival date", after_english["reply"])
+        after_early_date = self.turn(welcome, "jutro")
+        self.assertEqual(after_early_date["stage"], "check_out")

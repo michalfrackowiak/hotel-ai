@@ -15,7 +15,7 @@
     const status = document.getElementById("chat-status");
     const footer = form.closest(".chat-footer");
     let language = app.dataset.language;
-    const terminalStages = new Set(["completed", "cancelled"]);
+    const terminalStages = new Set(["completed", "cancelled", "delivery_pending"]);
     const labels = {
         en: {
             guest: "You",
@@ -70,6 +70,7 @@
     let lastReply = null;
     let idleTimer = null;
     let voiceActive = false;
+    let voiceWelcome = false;
     let pollTimer = null;
     let handoverClosed = false;
     let staffReplied = false;
@@ -90,7 +91,7 @@
         sendButton.firstElementChild.textContent = copy.send;
         resetButton.textContent = copy.reset;
         retryButton.textContent = copy.retry;
-        languageChoice.hidden = language !== "pl" || stage !== "check_in";
+        languageChoice.hidden = language !== "pl" || !["welcome", "check_in"].includes(stage);
         confirmation.hidden = stage !== "confirm";
         const [yes, no] = confirmation.querySelectorAll("button");
         yes.textContent = copy.yes;
@@ -153,17 +154,24 @@
             cursor = entry.id;
         }
         handoverClosed = result.handover_closed;
+        if (voiceWelcome !== Boolean(result.voice_welcome)) {
+            voiceWelcome = Boolean(result.voice_welcome);
+            form.dispatchEvent(new CustomEvent("reception:voice-welcome", { detail: { allowed: voiceWelcome } }));
+        }
         const copy = labels[language];
         status.textContent = handoverClosed ? copy.handoverClosed : (staffReplied ? copy.handoverConnected : copy.handoverWaiting);
     }
 
     function schedulePoll() {
         clearTimeout(pollTimer);
-        if (connected && stage === "handover") pollTimer = setTimeout(pollHandover, 4000);
+        if (!connected) return;
+        if (stage === "handover") pollTimer = setTimeout(pollConversation, 4000);
+        if (stage === "delivery_pending") pollTimer = setTimeout(pollConversation, 2000);
     }
 
-    async function pollHandover() {
-        if (stage !== "handover") return;
+    async function pollConversation() {
+        const polledStage = stage;
+        if (!["handover", "delivery_pending"].includes(polledStage)) return;
         if (pending || document.hidden) {
             schedulePoll();
             return;
@@ -172,18 +180,35 @@
         try {
             const result = await fetchChat({ poll: true, revision, cursor });
             if (pending || revision !== previous) return;
-            if (!result || result.stage !== "handover" || result.language !== language) {
+            if (polledStage === "delivery_pending" && result?.stage === "completed" && result.language === language) {
+                revision = result.revision;
+                stage = result.stage;
+                lastReply = result.reply;
+                appendMessage(result.reply, "reception", result.reference);
+                status.textContent = "";
+                updateControls();
+                announceReply(result);
+                return;
+            }
+            if (!result || result.stage !== polledStage || result.language !== language) {
                 await requestChat({ start: true, language: result?.language || language });
                 return;
             }
             revision = result.revision;
-            appendHandover(result);
+            if (stage === "handover") appendHandover(result);
             updateControls();
         } catch {
             if (stage === "handover") status.textContent = labels[language].handoverOffline;
         } finally {
             schedulePoll();
         }
+    }
+
+    function announceReply(result) {
+        form.dispatchEvent(new CustomEvent("reception:reply", { detail: {
+            reply: result.reply, stage, language, revision,
+            voiceWelcome, welcomeParts: result.welcome_parts,
+        } }));
     }
 
     async function requestChat(payload) {
@@ -227,12 +252,15 @@
             }
             if (!wasHandover || result.stage !== "handover" || lastReply !== result.reply) {
                 appendMessage(result.reply, "reception", result.reference);
-                reply = result.reply;
+                reply = result;
+            } else if (payload.voice_start) {
+                reply = result;
             }
             lastReply = result.reply;
-            if (!result.stale) messageInput.value = "";
+            if (!result.stale && !payload.timeout && !payload.voice_start) messageInput.value = "";
             stage = result.stage;
             revision = result.revision;
+            voiceWelcome = Boolean(result.voice_welcome);
             connected = true;
             status.textContent = result.stale ? labels[language].updated : "";
             if (stage === "handover") appendHandover(result);
@@ -251,9 +279,7 @@
                 (messageInput.disabled ? resetButton : messageInput).focus();
             }
             if (reply !== null) {
-                form.dispatchEvent(new CustomEvent("reception:reply", {
-                    detail: { reply, stage, language, revision },
-                }));
+                announceReply(reply);
             }
             if (failure !== null) {
                 form.dispatchEvent(new CustomEvent("reception:error", {
@@ -261,6 +287,7 @@
                 }));
             }
             schedulePoll();
+            trackSilence();
         }
     }
 
@@ -270,27 +297,29 @@
         return requestChat({ message, revision, ...(voiceActive ? { voice: true } : {}) });
     }
 
-    function checkInTimeout() {
-        if (connected && !pending && stage === "check_in") {
+    function replyTimeout() {
+        if (connected && !pending && ["welcome", "check_in"].includes(stage) && (voiceActive || !document.hidden)) {
             requestChat({ timeout: true, revision, ...(voiceActive ? { voice: true } : {}) });
         }
     }
 
-    function trackComposerSilence() {
+    function trackSilence() {
         clearTimeout(idleTimer);
-        if (!voiceActive && stage === "check_in" && !messageInput.value.trim()) {
-            idleTimer = setTimeout(checkInTimeout, 10000);
-        }
+        if (voiceActive || document.hidden || !connected || pending) return;
+        if (stage === "welcome") idleTimer = setTimeout(replyTimeout, 2000);
+        if (stage === "check_in" && !messageInput.value.trim()) idleTimer = setTimeout(replyTimeout, 10000);
     }
 
-    messageInput.addEventListener("focus", trackComposerSilence);
-    messageInput.addEventListener("input", trackComposerSilence);
-    messageInput.addEventListener("blur", () => clearTimeout(idleTimer));
+    messageInput.addEventListener("input", () => {
+        if (stage === "check_in") trackSilence();
+    });
+    document.addEventListener("visibilitychange", trackSilence);
     form.addEventListener("reception:voice-session", (event) => {
         voiceActive = event.detail.active;
-        clearTimeout(idleTimer);
+        if (voiceActive && voiceWelcome && !pending) requestChat({ voice_start: true, revision });
+        trackSilence();
     });
-    form.addEventListener("reception:voice-silence", checkInTimeout);
+    form.addEventListener("reception:voice-silence", replyTimeout);
 
     form.addEventListener("submit", (event) => {
         event.preventDefault();

@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 from datetime import timedelta
+from unittest.mock import patch
 from urllib.parse import urlencode, urlsplit
 from xml.etree import ElementTree
 
@@ -10,7 +11,8 @@ from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from bookings.models import Booking
+from bookings.confirmations import dispatch_confirmations
+from bookings.models import Booking, BookingConfirmation
 from config.phone_wsgi import application as phone_application
 
 
@@ -56,7 +58,8 @@ class PhoneWebhookTests(TestCase):
         return ElementTree.fromstring(response.content)
 
     def turn(self, previous, call_sid=CALL_SID, **fields):
-        action = urlsplit(previous.find("Gather").attrib["action"])
+        gather = previous.find("Gather")
+        action = urlsplit(previous.findtext("Redirect") if gather is None else gather.attrib["action"])
         self.assertEqual((action.scheme, action.netloc, action.query), ("https", "reception.example.test", ""))
         response = self.signed_post(action.path, {"CallSid": call_sid, **fields})
         self.assertEqual(response.status_code, 200)
@@ -126,13 +129,16 @@ class PhoneWebhookTests(TestCase):
                 gather = menu.find("Gather")
                 self.assertEqual(gather.attrib["input"], "dtmf speech")
                 self.assertEqual(gather.attrib["timeout"], "2")
-                self.assertEqual(gather.attrib["language"], "pl-PL")
+                self.assertEqual(gather.attrib["language"], "en-US")
                 self.assertEqual(gather.attrib["numDigits"], "1")
                 self.assertEqual(gather.attrib["actionOnEmptyResult"], "true")
                 self.assertEqual(
                     [say.attrib["language"] for say in gather.findall("Say")], ["pl-PL", "en-US", "pl-PL"],
                 )
-                self.assertIn("Resort Neptun Jastrzębia Góra", gather.findtext("Say"))
+                self.assertEqual(" ".join(say.text for say in gather.findall("Say")), (
+                    "Dzień dobry, Resort Neptun Jastrzębia Góra. For English press 2 or say 'English'. "
+                    "Język polski – pozostań na linii lub napisz wiadomość."
+                ))
 
                 welcome = self.turn(menu, call_sid, Digits=digit)
                 gather = welcome.find("Gather")
@@ -142,7 +148,7 @@ class PhoneWebhookTests(TestCase):
                 self.assertEqual(gather.attrib["speechModel"], "experimental_utterances")
                 self.assertEqual(gather.attrib["speechTimeout"], "2")
                 self.assertEqual(gather.find("Say").attrib["voice"], voice)
-                self.assertIn("stay on the line" if digit else "pozostać na linii", gather.findtext("Say"))
+                self.assertIn("stay on the line" if digit else "pozostań na linii", gather.findtext("Say"))
 
                 start_date = today + timedelta(days=int(digit or "3") * 5)
                 flow = welcome
@@ -174,6 +180,38 @@ class PhoneWebhookTests(TestCase):
                 self.assertIsNone(completed.find("Gather"))
                 self.turn(collect_contact, call_sid, SpeechResult=contact)
                 self.assertEqual(Booking.objects.filter(check_in=start_date).count(), 1)
+
+    @override_settings(HOTEL_CONFIRMATION_WAIT_METHODS=("sms",))
+    @patch("bookings.confirmations._submit", return_value=("fixture-message", True))
+    def test_signed_receipt_waits_for_dispatch_and_uses_the_sms_closing(self, submit):
+        flow = self.turn(self.start())
+        for speech in ("jutro", "na dwie noce", "dwie osoby", "1", "tak", "sms"):
+            flow = self.turn(flow, SpeechResult=speech)
+        pending = self.turn(flow, SpeechResult="500 000 123")
+        self.assertNotIn("Wysłaliśmy SMS", pending.findtext("Say"))
+        self.assertEqual(pending.find("Pause").attrib["length"], "2")
+        self.assertEqual(pending.find("Redirect").attrib["method"], "POST")
+        path = urlsplit(pending.findtext("Redirect")).path
+        self.assertEqual(self.signed_post(path, {"CallSid": CALL_SID}, signature="").status_code, 403)
+        waiting = self.turn(pending)
+        self.assertIsNone(waiting.find("Say"))
+        self.assertEqual(waiting.findtext("Redirect"), pending.findtext("Redirect"))
+        submit.assert_not_called()
+
+        self.assertEqual(dispatch_confirmations(["sms"]), (1, 0))
+        self.assertEqual(dispatch_confirmations(["sms"]), (0, 0))
+        completed = self.turn(waiting)
+        booking = Booking.objects.get()
+        self.assertEqual(booking.confirmation.status, BookingConfirmation.Status.ACCEPTED)
+        self.assertIn("Wysłaliśmy SMS z potwierdzeniem.", completed.findtext("Say"))
+        self.assertIn(str(booking.reference), completed.findtext("Say"))
+        self.assertIsNotNone(completed.find("Hangup"))
+        self.assertEqual(
+            ElementTree.tostring(completed),
+            ElementTree.tostring(self.turn(flow, SpeechResult="500 000 123")),
+        )
+        self.assertEqual(Booking.objects.count(), 1)
+        submit.assert_called_once()
 
     @override_settings(HOTEL_PHONE_RECEPTION_NUMBER=RECEPTION_NUMBER)
     def test_handover_dials_configured_reception_and_does_not_redial_after_callback(self):

@@ -7,8 +7,8 @@
     <meta name="color-scheme" content="light">
     <title>{% if language == "pl" %}Rezerwacja pokoju{% else %}Book a room{% endif %} · Hotel-ai</title>
     <link rel="stylesheet" href="{% static 'reception/reception.css' %}">
-    <script src="{% static 'reception/chat.js' %}" defer></script>
-    <script src="{% static 'reception/voice.js' %}" defer></script>
+    <script src="{% static 'reception/chat.js' %}?v=neptun-opening" defer></script>
+    <script src="{% static 'reception/voice.js' %}?v=neptun-opening" defer></script>
 </head>
 <body>
     {% include "reception/_header.html" with active_page="reception" %}
@@ -20,7 +20,7 @@
                 <button id="start-voice" class="confirm-button" type="button"
                     {% if piper_enabled %}data-audio-url="{% url 'reception-audio' %}"{% endif %}
                     {% if asr_enabled %}data-transcribe-url="{% url 'reception-transcript' %}"
-                    data-microphone-module="{% static 'reception/microphone.js' %}"{% endif %}
+                    data-microphone-module="{% static 'reception/microphone.js' %}?v=neptun-opening"{% endif %}
                     aria-pressed="false" aria-describedby="voice-status{% if asr_enabled %} voice-privacy{% endif %}" disabled>{% if language == "pl" %}Włącz rozmowę głosową{% else %}Start voice booking{% endif %}</button>
                 <p id="voice-status" role="status"></p>
                 {% if asr_enabled %}
@@ -45,7 +45,7 @@
                     <button id="chat-retry" class="quiet-button" type="button" hidden>{% if language == "pl" %}Połącz ponownie{% else %}Reconnect{% endif %}</button>
                 </div>
                 <div id="chat-language" class="confirmation-actions" hidden>
-                    <button class="quiet-button" type="button" data-answer="English" lang="en">English</button>
+                    <button class="quiet-button" type="button" data-answer="2" lang="en">English</button>
                 </div>
                 <div id="chat-confirmation" class="confirmation-actions" hidden>
                     <button class="confirm-button" type="button" data-answer="{% if language == 'pl' %}Tak{% else %}Yes{% endif %}">{% if language == "pl" %}Tak, potwierdzam{% else %}Yes, confirm{% endif %}</button>

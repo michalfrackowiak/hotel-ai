@@ -16,7 +16,12 @@ class ReceptionTranscriptTests(TestCase):
             reverse("reception-message"), {"language": "pl", "start": True},
             content_type="application/json", headers={"X-CSRFToken": self.token},
         )
-        self.revision = started.json()["revision"]
+        arrival = self.client.post(
+            reverse("reception-message"),
+            {"language": "pl", "revision": started.json()["revision"], "timeout": True},
+            content_type="application/json", headers={"X-CSRFToken": self.token},
+        )
+        self.revision = arrival.json()["revision"]
         self.pcm = b"\x10\x00" * 1600
 
     def upload(self, pcm=None, *, revision=None, csrf=True, content_type="application/octet-stream"):
@@ -27,6 +32,16 @@ class ReceptionTranscriptTests(TestCase):
             reverse("reception-transcript"), self.pcm if pcm is None else pcm,
             content_type=content_type, headers=headers,
         )
+
+    @patch("reception.views.transcribe_welcome", return_value="English")
+    def test_welcome_uses_bilingual_recognition(self, recognize):
+        started = self.client.post(
+            reverse("reception-message"), {"language": "pl", "reset": True},
+            content_type="application/json", headers={"X-CSRFToken": self.token},
+        )
+        revision = started.json()["revision"]
+        self.assertEqual(self.upload(revision=revision).json(), {"text": "English"})
+        recognize.assert_called_once_with(self.pcm, "pl")
 
     @patch("reception.views.transcribe", return_value="Dwie osoby")
     def test_upload_requires_csrf_and_uses_current_session_language(self, recognize):

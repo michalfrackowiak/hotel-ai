@@ -1,4 +1,9 @@
 services:
+  web:
+    environment:
+      HOTEL_CONFIRMATION_WAIT_EMAIL: "${HOTEL_CONFIRMATION_FROM:+1}"
+      HOTEL_CONFIRMATION_WAIT_SMS: "${HOTEL_TWILIO_SMS_FROM:+1}"
+
   booking-confirmations:
     build: .
     command: ["python", "manage.py", "send_booking_confirmations", "--watch"]

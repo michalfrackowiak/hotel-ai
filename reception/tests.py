@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import patch
+from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.test import Client, SimpleTestCase, TestCase
@@ -56,14 +57,14 @@ class ReceptionTests(TestCase):
     def test_english_quote_and_explicit_confirmation(self):
         quote = self.quote()
         self.assertIn("ROOM-2", quote["reply"])
-        self.assertIn("240.00 PLN", quote["reply"])
         self.assertFalse(Booking.objects.exists())
 
-        quote = self.turn(quote, "Yes, maybe", "confirm")
-        self.assertIn("240.00 PLN", quote["reply"])
+        ambiguous = self.turn(quote, "Yes, maybe", "confirm")
+        self.assertEqual(ambiguous["reply"], quote["reply"])
         self.assertFalse(Booking.objects.exists())
 
-        delivery = self.turn(quote, "Yes.", "delivery")
+        delivery = self.turn(ambiguous, "Yes.", "delivery")
+        self.assertTrue(delivery["reply"].startswith("Your reservation has been tentatively created!"))
         email = self.turn(delivery, "Email", "email")
         email = self.turn(email, "invalid@example", "email")
         self.assertFalse(Booking.objects.exists())
@@ -73,6 +74,7 @@ class ReceptionTests(TestCase):
         self.assertNotIn("email", Conversation.objects.get().state)
         self.assertEqual(BookingConfirmation.objects.get().method, "email")
         self.assertEqual(Booking.objects.get().client.email, "ada@example.com")
+        self.assertEqual(Booking.objects.get().total_price, Decimal("240"))
 
         retry = self.post(language="en", revision=email["revision"], message="ada@example.com")
         self.assertEqual(retry.status_code, 409)
@@ -83,15 +85,15 @@ class ReceptionTests(TestCase):
     def test_polish_quote_and_explicit_confirmation(self):
         quote = self.quote("pl", guests="sześć osób")
         self.assertIn("ROOM-6", quote["reply"])
-        self.assertIn("400,00 PLN", quote["reply"])
         quote = self.turn(quote, "Yes", "confirm")
         self.assertFalse(Booking.objects.exists())
         delivery = self.turn(quote, "Potwierdzam", "delivery")
+        self.assertTrue(delivery["reply"].startswith("Rezerwacja została wstępnie utworzona!"))
         phone = self.turn(delivery, "SMS", "phone")
         phone = self.turn(phone, "123", "phone")
         self.assertFalse(Booking.objects.exists())
         confirmed = self.turn(phone, "500 000 123", "completed")
-        self.assertIn("Twoja rezerwacja jest potwierdzona", confirmed["reply"])
+        self.assertIn("Twoja rezerwacja została w pełni potwierdzona", confirmed["reply"])
         self.assertEqual(Booking.objects.get().guests, 6)
         self.assertEqual(BookingConfirmation.objects.get().method, "sms")
         self.assertEqual(Booking.objects.get().client.phone, "+48500000123")
@@ -108,12 +110,12 @@ class ReceptionTests(TestCase):
 
     @patch("django.utils.timezone.localdate", return_value=date(2027, 12, 30))
     def test_checkout_relative_to_today_after_a_separate_arrival(self, today):
-        for language, arrival, departure, arrival_text, departure_text, question in (
+        for language, arrival, departure, question in (
             (
-                "en", "tomorrow", "for two nights", "2027-12-31", "2028-01-02", "number of nights",
+                "en", "tomorrow", "for two nights", "number of nights",
             ),
             (
-                "pl", "jutro", "na dwie noce", "31.12.2027", "02.01.2028", "na ile nocy",
+                "pl", "jutro", "na dwie noce", "na ile nocy",
             ),
         ):
             with self.subTest(language=language):
@@ -121,9 +123,10 @@ class ReceptionTests(TestCase):
                 current = self.turn(current, arrival, "check_out")
                 self.assertIn(question, current["reply"])
                 current = self.turn(current, arrival, "check_out")
-                current = self.turn(current, departure, "guests")
-                self.assertIn(arrival_text, current["reply"])
-                self.assertIn(departure_text, current["reply"])
+                self.turn(current, departure, "guests")
+                state = Conversation.objects.get().state
+                self.assertEqual(state["check_in"], "2027-12-31")
+                self.assertEqual(state["check_out"], "2028-01-02")
 
     def test_unavailable_stay_recovers_in_both_languages(self):
         for language, check_in, check_out, reply in (
@@ -162,7 +165,7 @@ class ReceptionTests(TestCase):
             content_type="application/json",
         )
         self.assertEqual(other.status_code, 409)
-        self.assertEqual(other.json()["stage"], "check_in")
+        self.assertEqual(other.json()["stage"], "welcome")
         self.assertNotIn("reference", other.json())
         self.assertFalse(Booking.objects.exists())
 
@@ -185,7 +188,7 @@ class ReceptionTests(TestCase):
         quote = self.quote()
         conversation = Conversation.objects.get()
         conversation.state.pop("flow")
-        conversation.state.update(name="Ada Example", email="ada@example.com")
+        conversation.state.update(name="Ada Example", email="ada@example.com", booking_key=str(uuid4()))
         conversation.save(update_fields=["state"])
         self.turn(quote, "Yes", "completed")
         self.assertEqual(Booking.objects.count(), 1)
@@ -193,6 +196,7 @@ class ReceptionTests(TestCase):
     @patch("reception.views.extract_stay_value")
     def test_english_switch_preserves_the_browser_session(self, extract):
         opening = self.post(language="pl", start=True).json()
+        self.assertEqual(opening["stage"], "welcome")
         session = self.client.session.session_key
         english = self.turn(opening, "2", "check_in", voice=True)
         self.assertEqual(english["language"], "en")
@@ -201,6 +205,41 @@ class ReceptionTests(TestCase):
         self.assertIn("planned arrival date", english["reply"])
         self.turn(english, "tomorrow", "check_out", voice=True)
         extract.assert_not_called()
+
+    def test_timed_welcome_defaults_to_polish_and_voice_can_replay_it(self):
+        opening = self.post(language="pl", start=True).json()
+        self.assertEqual(opening["stage"], "welcome")
+        self.assertEqual([part[0] for part in opening["welcome_parts"]], ["pl", "en", "pl"])
+        self.assertNotIn("termin przyjazdu", opening["reply"])
+        timed_out = self.post(language="pl", revision=opening["revision"], timeout=True)
+        self.assertEqual(timed_out.status_code, 200)
+        arrival = timed_out.json()
+        self.assertEqual(arrival["stage"], "check_in")
+        self.assertIn("termin przyjazdu", arrival["reply"])
+        self.assertTrue(arrival["voice_welcome"])
+        self.assertFalse(StaffHandover.objects.exists())
+        self.assertEqual(
+            self.post(language="pl", revision=opening["revision"], timeout=True).status_code, 409,
+        )
+        voice = self.post(language="pl", revision=arrival["revision"], voice_start=True).json()
+        self.assertEqual(voice["stage"], "welcome")
+        checkout = self.turn(voice, "jutro", "check_out", voice=True)
+        self.assertEqual(self.post(language="pl", revision=checkout["revision"], voice_start=True).json(), checkout)
+
+    def test_start_replaces_pre_upgrade_initial_greeting(self):
+        for language, old_reply in (
+            ("en", "Welcome to Resort Neptun Jastrzębia Góra. Please give your arrival date."),
+            ("en", "To check availability, prices, or make a reservation, please give your planned arrival date. For anything else, ask for reception."),
+            ("pl", "Aby sprawdzić dostępność, ceny lub dokonać rezerwacji, podaj planowaną datę przyjazdu. W innej sprawie poproś o kontakt z recepcją."),
+        ):
+            with self.subTest(language=language, old_reply=old_reply):
+                self.post(language=language, start=True)
+                prior = Conversation.objects.get()
+                prior.state.update(stage="check_in", reply=old_reply)
+                prior.save(update_fields=["state"])
+                started = self.post(language=language, start=True).json()
+                self.assertEqual(started["stage"], "welcome")
+                self.assertEqual(started["language"], language)
 
     def test_voice_room_options_are_limited_to_two(self):
         third = Room.objects.create(code="ROOM-8", capacity=8)
@@ -225,8 +264,10 @@ class ReceptionHandoverTests(TestCase):
 
     def test_non_booking_inquiry_routes_to_staff_and_back_to_its_guest(self):
         opening = self.post(start=True).json()
-        forwarded = self.post(revision=opening["revision"], message="I'd like to ask about breakfast.").json()
+        arrival = self.post(revision=opening["revision"], timeout=True).json()
+        forwarded = self.post(revision=arrival["revision"], message="I'd like to ask about breakfast.").json()
         self.assertEqual(forwarded["stage"], "handover")
+        self.assertFalse(forwarded["voice_welcome"])
         first = forwarded["handover_messages"][0]
         self.assertFalse(first["staff"])
         self.assertIn("breakfast", first["text"])
@@ -267,10 +308,22 @@ class ReceptionHandoverTests(TestCase):
         self.assertFalse(StaffHandover.objects.exists())
 
         opening = self.post(reset=True).json()
-        forwarded = self.post(revision=opening["revision"], timeout=True, voice=True).json()
+        arrival = self.post(revision=opening["revision"], timeout=True, voice=True).json()
+        forwarded = self.post(revision=arrival["revision"], timeout=True, voice=True).json()
         self.assertEqual(forwarded["stage"], "handover")
         self.assertEqual(forwarded["handover_messages"], [])
         message = {"revision": forwarded["revision"], "message": "Could someone help?"}
         self.assertEqual(self.post(**message).status_code, 200)
         self.assertEqual(self.post(**message).status_code, 409)
         self.assertEqual(StaffHandover.objects.get().messages.count(), 1)
+        current = self.post(start=True).json()
+        self.assertEqual(self.post(revision=current["revision"], voice_start=True).json()["stage"], "handover")
+
+    def test_voice_can_start_after_empty_silence_handover(self):
+        opening = self.post(start=True).json()
+        arrival = self.post(revision=opening["revision"], timeout=True).json()
+        forwarded = self.post(revision=arrival["revision"], timeout=True).json()
+        self.assertTrue(forwarded["voice_welcome"])
+        voice = self.post(revision=forwarded["revision"], voice_start=True).json()
+        self.assertEqual(voice["stage"], "welcome")
+        self.assertTrue(StaffHandover.objects.get().closed)
