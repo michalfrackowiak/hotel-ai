@@ -8,7 +8,7 @@ The flow accepts relative and yearless dates, ordinals, and stay durations. Gues
 
 Staff respond to browser handovers in Django admin under **Staff handovers**. See [booking confirmations](booking-confirmations.md) to configure SMTP and SMS dispatch and [phone booking](phone-booking.md) to configure the transfer destination.
 
-Django system and migration checks, all 86 tests, and JavaScript syntax checks passed. Independent reviews covered the shared flow, browser inbox and voice, signed phone callbacks, and delivery queue. A file-backed SQLite check with eight workers submitted one confirmation. The private Compose worker reached Twilio over HTTPS with a simulated sender configuration.
+Django system and migration checks, all 86 tests, and JavaScript syntax checks passed. Independent reviews covered the shared flow, browser inbox and voice, signed phone callbacks, and delivery queue. Playwright completed an English chat booking, a Polish browser voice booking with simulated speech, and the chat inactivity handover. A file-backed SQLite check with eight workers submitted one confirmation. The private Compose worker reached Twilio over HTTPS with a simulated sender configuration.
 
 ## Previous milestones
 

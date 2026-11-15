@@ -190,14 +190,17 @@ class ReceptionTests(TestCase):
         self.turn(quote, "Yes", "completed")
         self.assertEqual(Booking.objects.count(), 1)
 
-    def test_english_switch_preserves_the_browser_session(self):
+    @patch("reception.views.extract_stay_value")
+    def test_english_switch_preserves_the_browser_session(self, extract):
         opening = self.post(language="pl", start=True).json()
         session = self.client.session.session_key
         english = self.turn(opening, "2", "check_in", voice=True)
         self.assertEqual(english["language"], "en")
         self.assertEqual(self.client.session.session_key, session)
         self.assertEqual(self.client.get(reverse("reception")).context["language"], "en")
+        self.assertIn("planned arrival date", english["reply"])
         self.turn(english, "tomorrow", "check_out", voice=True)
+        extract.assert_not_called()
 
     def test_voice_room_options_are_limited_to_two(self):
         third = Room.objects.create(code="ROOM-8", capacity=8)
@@ -250,6 +253,8 @@ class ReceptionHandoverTests(TestCase):
         self.assertTrue(reply["staff"])
         self.assertEqual(reply["text"], "Breakfast begins at seven.")
         self.assertEqual(self.post(**{**poll, "cursor": reply["id"]}).json()["handover_messages"], [])
+        self.assertEqual(self.post(revision=forwarded["revision"], message="A new question").status_code, 409)
+        self.assertEqual(StaffHandover.objects.get().messages.count(), 2)
         self.assertEqual(Client().post(
             reverse("reception-message"), {"language": "en", **poll}, content_type="application/json",
         ).status_code, 404)

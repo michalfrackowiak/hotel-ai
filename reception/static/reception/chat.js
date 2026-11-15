@@ -13,6 +13,7 @@
     const log = document.getElementById("chat-log");
     const messages = document.getElementById("chat-messages");
     const status = document.getElementById("chat-status");
+    const footer = form.closest(".chat-footer");
     let language = app.dataset.language;
     const terminalStages = new Set(["completed", "cancelled"]);
     const labels = {
@@ -78,6 +79,8 @@
         const copy = labels[language];
         const ready = connected && !pending;
         const canSend = ready && !terminalStages.has(stage) && !handoverClosed;
+        footer.lang = language;
+        resetButton.lang = language;
         resetButton.disabled = pending;
         retryButton.disabled = pending;
         messageInput.disabled = !canSend;
