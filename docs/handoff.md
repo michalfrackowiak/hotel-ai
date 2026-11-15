@@ -2,13 +2,17 @@
 
 ## Latest milestone
 
+English web entry, PR [#20](https://github.com/michalfrackowiak/hotel-ai/pull/20). The English page starts new chat and voice conversations at Step 2.b and uses the same entry point after **Start over**. The Polish page starts at the bilingual greeting. Returning guests resume an in-progress booking, and older English welcome drafts advance directly to the arrival prompt on refresh.
+
+All 102 Django tests passed, including language selection, reset, recovery from an older draft, and English voice playback.
+
+## Previous milestones
+
 Resort Neptun scenario wording and timing, PR [#19](https://github.com/michalfrackowiak/hotel-ai/pull/19). The attachment's bilingual greeting is a separate step with a two-second language selection window. The localized arrival prompt starts a ten-second handover window in visible chat or while voice is listening. Piper uses each language's voice in the greeting. Vosk recognizes the English selection in the Polish opening and continues with the selected language.
 
 The shared flow uses the supplied prompts through room selection, a tentative booking after consent, and the selected contact detail. A bare checkout number means nights, while an ordinal means a calendar day in the current month. The confirmed booking has a reference before delivery completes. The scenario's closing reports an email or SMS sent after provider acceptance. The fallback gives the booking reference and the available status when dispatch is pending or unverifiable. The server still needs live delivery settings and a staff phone destination.
 
 All 98 Django tests, migration checks, and JavaScript syntax checks passed. Independent Chromium verification measured 2.35 seconds from greeting to arrival and 10.02 seconds from arrival to staff handover. An AudioWorklet test used Piper and Vosk to recognize “English” in the Polish greeting, then “tomorrow” in the English arrival prompt.
-
-## Previous milestones
 
 Omnichannel booking, PR [#18](https://github.com/michalfrackowiak/hotel-ai/pull/18). Chat, browser voice, and the phone connector share the bilingual booking flow. Staff respond to browser handovers in Django admin under **Staff handovers**. See [booking confirmations](booking-confirmations.md) to configure SMTP and SMS dispatch and [phone booking](phone-booking.md) to configure the transfer destination.
 

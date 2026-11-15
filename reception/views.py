@@ -60,7 +60,7 @@ def _result(state, *, stale=False, cursor=0):
         payload["reference"] = state["reference"]
     if state["stage"] == "welcome":
         payload["welcome_parts"] = WELCOME_PARTS
-    if state["stage"] == "check_in" and state.get("voice_welcome"):
+    if state["stage"] == "check_in" and state["language"] == "pl" and state.get("voice_welcome"):
         payload["voice_welcome"] = True
     if state["stage"] == "handover":
         handover = StaffHandover.objects.get(pk=state["handover_id"])
@@ -76,6 +76,10 @@ def _result(state, *, stale=False, cursor=0):
 
 def _invalid(status=400):
     return JsonResponse({"error": "invalid_message"}, status=status)
+
+
+def _new_web_conversation(language):
+    return new_conversation(language, "check_in" if language == "en" else "welcome")
 
 
 def _save_state(conversation, state):
@@ -170,28 +174,30 @@ def message(request):
         if request.session.session_key is None:
             request.session.create()
         conversation, _ = Conversation.objects.get_or_create(
-            session_id=request.session.session_key, defaults={"state": new_conversation(language)}
+            session_id=request.session.session_key, defaults={"state": _new_web_conversation(language)}
         )
         state = conversation.state
         if reset or (start and state["language"] != language):
             if state["stage"] == "handover":
                 StaffHandover.objects.filter(pk=state["handover_id"]).update(closed=True)
-            state = new_conversation(language)
+            state = _new_web_conversation(language)
         elif start:
-            if state["stage"] != "check_in" or not state["reply"].startswith(OLD_ARRIVAL_PROMPTS):
+            old_arrival = state["stage"] == "check_in" and state["reply"].startswith(OLD_ARRIVAL_PROMPTS)
+            english_welcome = language == "en" and state["stage"] == "welcome"
+            if not (old_arrival or english_welcome):
                 return _result(state)
-            state = new_conversation(language)
+            state = _new_web_conversation(language)
         elif state["revision"] != revision or state["language"] != language:
             return _result(state, stale=True)
         elif voice_start:
-            if state["stage"] == "check_in" and state.get("voice_welcome"):
-                state = new_conversation(language)
+            if language == "pl" and state["stage"] == "check_in" and state.get("voice_welcome"):
+                state = _new_web_conversation(language)
             elif state["stage"] == "handover":
                 handover = StaffHandover.objects.get(pk=state["handover_id"])
                 if not handover.closed and not handover.messages.exists():
                     handover.closed = True
                     handover.save(update_fields=["closed"])
-                    state = new_conversation(language)
+                    state = _new_web_conversation(language)
         elif state["stage"] == "handover":
             handover = StaffHandover.objects.get(pk=state["handover_id"])
             if turn:
@@ -206,7 +212,7 @@ def message(request):
                 text = parse_email(text) or text
             was_welcome = state["stage"] == "welcome"
             state = advance(state, text or "", parsed, voice=voice)
-            if was_welcome and state["stage"] == "check_in" and not voice:
+            if was_welcome and state["stage"] == "check_in" and state["language"] == "pl" and not voice:
                 state["voice_welcome"] = True
             if state["stage"] == "handover":
                 handover = StaffHandover.objects.create(conversation=conversation, language=state["language"])
