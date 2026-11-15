@@ -24,10 +24,14 @@ def check_speech(base_url, language, *, check_asr=False):
         headers=headers,
     )
     with client.open(start, timeout=15) as response:
-        revision = json.load(response)["revision"]
+        turn = json.load(response)
+    revision = turn["revision"]
+    audio_request = {"revision": revision}
+    if turn.get("arrival_parts"):
+        audio_request["part"] = 0
     request = Request(
         f"{base_url}/reception/audio/",
-        data=json.dumps({"revision": revision}).encode(),
+        data=json.dumps(audio_request).encode(),
         headers=headers,
     )
     started = monotonic()

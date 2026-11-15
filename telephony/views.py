@@ -14,7 +14,8 @@ from django.views.decorators.http import require_POST
 from twilio.request_validator import RequestValidator
 from twilio.twiml.voice_response import Gather, VoiceResponse
 
-from reception.conversation import WELCOME_PARTS
+from reception.conversation import ARRIVAL_PARTS, WELCOME_PARTS
+from reception.conversation import COPY as BOOKING_COPY
 from reception.receipt import DELIVERY_PENDING
 
 from .calls import COPY, TERMINAL_STAGES, advance_call, finish_handover, is_call_sid, start_call
@@ -81,6 +82,19 @@ def _twilio_post(view):
     return signed
 
 
+def _arrival_reply(response, segments, action, locale, voice):
+    for index, segment in enumerate(segments):
+        response.say(segment["text"], language=locale, voice=voice)
+        if segment["listen"]:
+            response.gather(
+                input="speech", language=locale, speech_model="experimental_utterances", speech_timeout=2,
+                profanity_filter=False, method="POST", action=action, timeout=segment["seconds"],
+                action_on_empty_result=index == len(segments) - 1,
+            )
+        else:
+            response.pause(length=segment["seconds"])
+
+
 def _voice_reply(result, *, announce_pending=False):
     response = VoiceResponse()
     locale, voice = LOCALES[result.language]
@@ -103,6 +117,9 @@ def _voice_reply(result, *, announce_pending=False):
         response.pause(length=2)
         path = reverse("telephony:turn", kwargs={"revision": result.revision})
         response.redirect(_public_url(path), method="POST")
+    elif result.stage == "check_in" and result.reply == BOOKING_COPY[result.language]["check_in"]:
+        action = _public_url(reverse("telephony:turn", kwargs={"revision": result.revision}))
+        _arrival_reply(response, ARRIVAL_PARTS[result.language], action, locale, voice)
     else:
         action = _public_url(reverse("telephony:turn", kwargs={"revision": result.revision}))
         timeout = {"language": 2, "check_in": 10}.get(result.stage, 7)

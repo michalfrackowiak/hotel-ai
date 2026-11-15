@@ -16,6 +16,7 @@ from django.views.decorators.http import require_POST, require_safe
 from model_providers.extraction import extract_stay_value
 
 from .contacts import parse_email
+from .conversation import ARRIVAL_PARTS
 from .conversation import COPY as BOOKING_COPY
 from .conversation import TERMINAL_STAGES, WELCOME_PARTS, advance, new_conversation, recognizes_booking_answer, selects_english
 from .models import Conversation, StaffHandover
@@ -67,6 +68,8 @@ def _result(state, *, stale=False, cursor=0):
         payload["reference"] = state["reference"]
     if state["stage"] == "welcome":
         payload["welcome_parts"] = WELCOME_PARTS
+    if parts := _arrival_parts(state):
+        payload["arrival_parts"] = parts
     if state["stage"] == "check_in" and state["language"] == "pl" and state.get("voice_welcome"):
         payload["voice_welcome"] = True
     if state["stage"] == "handover":
@@ -83,6 +86,18 @@ def _result(state, *, stale=False, cursor=0):
 
 def _invalid(status=400):
     return JsonResponse({"error": "invalid_message"}, status=status)
+
+
+def _arrival_parts(state):
+    if state["stage"] != "check_in":
+        return ()
+    language = state["language"]
+    arrival = BOOKING_COPY[language]["check_in"]
+    if state["reply"] == arrival or (
+        language == "en" and state["reply"] == f"{ENGLISH_WEB_GREETING} {arrival}"
+    ):
+        return ARRIVAL_PARTS[language]
+    return ()
 
 
 def _new_web_conversation(language):
@@ -248,9 +263,12 @@ def audio(request):
         payload = json.loads(body)
     except (UnreadablePostError, ValueError, RecursionError):
         return _invalid()
-    if not isinstance(payload, dict) or payload.keys() != {"revision"}:
+    if not isinstance(payload, dict) or payload.keys() not in ({"revision"}, {"revision", "part"}):
         return _invalid()
     revision = payload["revision"]
+    part = payload.get("part")
+    if "part" in payload and (type(part) is not int or part < 0):
+        return _invalid()
     if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{32}", revision):
         return _invalid()
 
@@ -262,8 +280,13 @@ def audio(request):
         return HttpResponse(status=404)
     if state["revision"] != revision:
         return HttpResponse(status=409)
+    parts = _arrival_parts(state) if part is not None else ()
+    if part is not None and part >= len(parts):
+        return _invalid()
     try:
-        if state["stage"] == "welcome":
+        if part is not None:
+            speech = synthesize(parts[part]["text"], state["language"])
+        elif state["stage"] == "welcome":
             speech = synthesize_welcome(WELCOME_PARTS)
         else:
             speech = synthesize(state["reply"], state["language"])

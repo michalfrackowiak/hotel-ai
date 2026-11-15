@@ -20,6 +20,27 @@ WELCOME_PARTS = (
     ("pl", "Język polski – pozostań na linii lub napisz wiadomość."),
 )
 WELCOME = " ".join(text for _, text in WELCOME_PARTS)
+ARRIVAL_PARTS = {
+    "en": (
+        {"text": "Hi, this is Neptun Resort, Pucka 2 street", "seconds": 2, "listen": False},
+        {"text": "For availability, prices, booking. Specify the dates of your stay", "seconds": 5, "listen": True},
+        {
+            "text": "If you are calling regarding another matter, please stay on the line and I will connect you with a receptionist. "
+                    "For availability, prices, booking - Specify the dates of your stay",
+            "seconds": 5,
+            "listen": True,
+        },
+    ),
+    "pl": (
+        {"text": "Dostępność, ceny, rezerwacje. Proszę podaj planowany termin przyjazdu.", "seconds": 5, "listen": True},
+        {
+            "text": "Jeżeli dzwonisz w innej sprawie, pozostań na linii. "
+                    "Dostępność, ceny, rezerwacje. Proszę podaj planowany termin przyjazdu.",
+            "seconds": 5,
+            "listen": True,
+        },
+    ),
+}
 COPY = {
     "en": {
         "welcome": WELCOME,
