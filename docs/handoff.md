@@ -4,6 +4,8 @@
 
 Voice arrival pauses, PR [#24](https://github.com/michalfrackowiak/hotel-ai/pull/24). English browser voice and phone say the resort address, pause for two seconds, and ask for dates with a five-second listening window. Polish goes straight to the first date prompt. Silence brings up the receptionist option and a second five-second window in both languages. The second timeout follows the existing staff handover path.
 
+All 127 Django tests, system checks, migration checks, and JavaScript syntax checks passed. Independent Chromium playback with Piper measured English gaps of 2.02 and 5.03 seconds between clips, confirmed both listening windows, and reached handover after silence. Signed phone tests verify prompt order and timing in the webhook responses. Live phone calls remain a manual check.
+
 ## Previous milestones
 
 Speech training, PR [#23](https://github.com/michalfrackowiak/hotel-ai/pull/23). The private admin queue accepts failed browser clips from guests who opt in. Staff can listen, enter the correct transcript, delete samples, and export labeled audio. Reviewed English corrections improve repeat failures on arrival, departure, and guest-count turns. See [speech training](speech-training.md) for activation, retention, and offline use.
