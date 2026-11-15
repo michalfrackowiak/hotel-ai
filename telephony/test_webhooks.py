@@ -14,6 +14,7 @@ from django.utils import timezone
 from bookings.confirmations import dispatch_confirmations
 from bookings.models import Booking, BookingConfirmation
 from config.phone_wsgi import application as phone_application
+from reception.models import ScenarioPrompt
 
 
 ORIGIN = "https://reception.example.test"
@@ -166,6 +167,58 @@ class PhoneWebhookTests(TestCase):
         self.assertEqual([element.tag for element in retry], ["Gather"])
         self.assertIn("No room is available", retry.findtext("Gather/Say"))
         self.assertFalse(Booking.objects.exists())
+
+    def test_saved_scenario_preserves_mixed_menu_locales_and_listening_windows(self):
+        ScenarioPrompt.objects.update_or_create(language="en", key="welcome_english_option", defaults={"voice_parts": [
+            {"text": "For English, say English or use key 2.", "seconds": 4, "listen": False},
+        ]})
+        ScenarioPrompt.objects.update_or_create(language="en", key="check_in", defaults={"voice_parts": [
+            {"text": "Your holiday starts here.", "seconds": 3, "listen": False},
+            {"text": "When will you arrive?", "seconds": 8, "listen": True},
+            {"text": "Please stay on the line for reception.", "seconds": 6, "listen": True},
+        ]})
+        menu = self.start()
+        self.assertEqual([tag.tag for tag in menu], ["Say", "Say", "Pause", "Say", "Gather"])
+        self.assertEqual([say.attrib["language"] for say in menu.findall("Say")], ["pl-PL", "en-US", "pl-PL"])
+        self.assertEqual(menu.findall("Say")[1].text, "For English, say English or use key 2.")
+        self.assertEqual(menu.find("Pause").attrib["length"], "4")
+        self.assertEqual(menu.find("Gather").attrib["input"], "dtmf speech")
+        self.assertEqual(menu.find("Gather").attrib["timeout"], "2")
+
+        arrival = self.turn(menu, Digits="2")
+        self.assertEqual([tag.tag for tag in arrival], ["Say", "Pause", "Say", "Gather", "Say", "Gather"])
+        self.assertEqual(arrival.findtext("Say"), "Your holiday starts here.")
+        self.assertEqual(arrival.find("Pause").attrib["length"], "3")
+        first, last = arrival.findall("Gather")
+        self.assertEqual(first.attrib["timeout"], "8")
+        self.assertEqual(first.attrib["actionOnEmptyResult"], "false")
+        self.assertEqual(last.attrib["timeout"], "6")
+        self.assertEqual(last.attrib["actionOnEmptyResult"], "true")
+        self.assertEqual(first.attrib["action"], last.attrib["action"])
+        self.assertIn("departure", self.turn(arrival, SpeechResult="tomorrow").findtext("Gather/Say"))
+
+    def test_nonlistening_parts_keep_normal_timeout_and_timed_handover_uses_honest_fallback(self):
+        ScenarioPrompt.objects.update_or_create(language="en", key="check_out", defaults={"voice_parts": [
+            {"text": "Please tell us when you plan to leave.", "seconds": 4, "listen": False},
+            {"text": "A night count works too.", "seconds": 1, "listen": False},
+        ]})
+        ScenarioPrompt.objects.update_or_create(language="pl", key="phone_handover_unavailable", defaults={"voice_parts": [
+            {"text": "Dziś recepcja telefoniczna jest nieczynna.", "seconds": 3, "listen": False},
+            {"text": "Do widzenia.", "seconds": 0, "listen": False},
+        ]})
+        arrival = self.turn(self.start(), Digits="2")
+        departure = self.turn(arrival, SpeechResult="tomorrow")
+        self.assertEqual([tag.tag for tag in departure], ["Say", "Pause", "Say", "Pause", "Gather"])
+        self.assertEqual([pause.attrib["length"] for pause in departure.findall("Pause")], ["4", "1"])
+        self.assertEqual(departure.find("Gather").attrib["timeout"], "7")
+        self.assertIsNotNone(self.turn(departure, SpeechResult="for one night").find("Gather"))
+
+        other_sid = "CA" + "b" * 32
+        polish_arrival = self.turn(self.start(other_sid), other_sid)
+        fallback = self.turn(polish_arrival, other_sid)
+        self.assertEqual([tag.tag for tag in fallback], ["Say", "Pause", "Say", "Hangup"])
+        self.assertEqual(fallback.findtext("Say"), "Dziś recepcja telefoniczna jest nieczynna.")
+        self.assertEqual(fallback.find("Pause").attrib["length"], "3")
 
     def test_signed_english_and_polish_calls_complete_only_after_explicit_confirmation(self):
         today = timezone.localdate()

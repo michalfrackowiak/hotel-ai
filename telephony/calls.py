@@ -7,10 +7,13 @@ from django.db import transaction
 from django.utils import timezone
 
 from reception.contacts import parse_email
+from reception.conversation import COPY as BOOKING_COPY
 from reception.conversation import TERMINAL_STAGES as CONVERSATION_TERMINAL_STAGES
 from reception.conversation import WELCOME_PARTS, advance, new_conversation, selects_english
 from reception.parsing import StayDates, parse_stay_input
 from reception.receipt import DELIVERY_PENDING, refresh_receipt
+from reception.scenario import PHONE_COPY as COPY
+from reception.scenario import voice_segments
 
 from .models import PhoneCall
 
@@ -22,18 +25,6 @@ MAX_SPEECH_LENGTH = 500
 TERMINAL_STAGES = (*CONVERSATION_TERMINAL_STAGES, "ended")
 STAY_STAGES = ("check_in", "check_out", "guests")
 MENU = WELCOME_PARTS[0][1]
-COPY = {
-    "en": {
-        "handover_unavailable": "Reception is unavailable by phone right now. Please try again later. Goodbye.",
-        "silence": "I didn't hear an answer. Please try again.",
-        "ended": "This call has ended. Please call again to make a booking. Goodbye.",
-    },
-    "pl": {
-        "handover_unavailable": "Recepcja jest teraz niedostępna przez telefon. Spróbuj ponownie później. Do widzenia.",
-        "silence": "Nie usłyszałem odpowiedzi. Spróbuj ponownie.",
-        "ended": "Połączenie zostało zakończone. Zadzwoń ponownie, aby dokonać rezerwacji. Do widzenia.",
-    },
-}
 
 
 @dataclass(frozen=True)
@@ -43,6 +34,7 @@ class CallReply:
     language: str
     reply: str
     reference: str | None = None
+    parts: tuple[dict, ...] = ()
 
 
 def is_call_sid(value: str) -> bool:
@@ -55,17 +47,38 @@ def _canonical_call_sid(call_sid):
     return "CA" + call_sid[2:].lower()
 
 
+def _literal_part(text, language):
+    return {"text": text, "language": language, "seconds": 0, "listen": False}
+
+
+def phone_prompt_parts(key, language):
+    state = {"prompt_key": f"phone_{key}", "language": language, "reply": COPY[language][key]}
+    return voice_segments(state)
+
+
 def _reply(state, missed_turns=0):
     stage = state["stage"]
     language = state["language"]
     reply = state["reply"]
+    prompt_state = state
+    if stage == "check_in" and not state.get("prompt_key") and reply == BOOKING_COPY[language]["check_in"]:
+        prompt_state = {**state, "prompt_key": "check_in"}
+    parts = voice_segments(prompt_state)
     if missed_turns and stage != "language":
+        prefix = phone_prompt_parts("silence", language)
+        if parts or prefix:
+            parts = (prefix or [_literal_part(COPY[language]["silence"], language)]) + (
+                parts or [_literal_part(reply, language)]
+            )
         reply = f"{COPY[language]['silence']} {reply}"
-    return CallReply(state["revision"], stage, language, reply, state.get("reference"))
+    return CallReply(state["revision"], stage, language, reply, state.get("reference"), tuple(parts))
 
 
 def _ended(language):
-    return {"revision": "", "stage": "ended", "language": language, "reply": COPY[language]["ended"]}
+    return {
+        "revision": "", "stage": "ended", "language": language,
+        "reply": COPY[language]["ended"], "prompt_key": "phone_ended",
+    }
 
 
 def _save(call, state, now, missed_turns=0):
@@ -89,7 +102,10 @@ def start_call(call_sid: str) -> CallReply:
     call, _ = PhoneCall.objects.get_or_create(
         call_sid=_canonical_call_sid(call_sid),
         defaults={
-            "state": {"revision": uuid4().hex, "stage": "language", "language": "pl", "reply": MENU},
+            "state": {
+                "revision": uuid4().hex, "stage": "language", "language": "pl", "reply": MENU,
+                "prompt_key": "welcome",
+            },
             "expires_at": now + DRAFT_LIFETIME,
         },
     )
@@ -172,6 +188,7 @@ def finish_handover(call_sid: str, revision: str, *, connected: bool) -> CallRep
     return _save(call, {
         "revision": revision, "stage": "ended", "language": language,
         "reply": "" if connected else COPY[language]["handover_unavailable"],
+        **({} if connected else {"prompt_key": "phone_handover_unavailable"}),
     }, timezone.now())
 
 

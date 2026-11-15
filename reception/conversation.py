@@ -10,6 +10,7 @@ from . import legacy_conversation
 from .contacts import parse_email, parse_phone
 from .parsing import NUMBER_WORDS, ORDINALS, StayDates, parse_stay_input
 from .receipt import DELIVERY_PENDING, start_receipt
+from .scenario import room_options, set_prompt
 
 
 TERMINAL_STAGES = ("completed", "cancelled", "handover")
@@ -99,17 +100,17 @@ SMS_ANSWERS = {
 
 
 def new_conversation(language, prompt="welcome"):
-    return {
+    return set_prompt({
         "language": language, "stage": "welcome" if prompt == "welcome" else "check_in",
-        "revision": uuid4().hex, "reply": COPY[language][prompt], "flow": "neptun",
-    }
+        "revision": uuid4().hex, "flow": "neptun",
+    }, prompt)
 
 
-def _terminal(state, stage, reply, **fields):
-    return {
+def _terminal(state, stage):
+    return set_prompt({
         "language": state["language"], "stage": stage, "revision": state["revision"],
-        "reply": reply, "flow": "neptun", **fields,
-    }
+        "flow": "neptun",
+    }, stage)
 
 
 def _stay_dates(state):
@@ -150,53 +151,57 @@ def advance(state, message, parsed, *, voice=False):
         state = new_conversation(language, "check_in")
 
     state = {**state, "revision": uuid4().hex}
-    copy = COPY[language]
     if stage == "check_in":
         if isinstance(parsed, StayDates):
             if timezone.localdate() <= parsed.check_in < parsed.check_out:
                 state.update(stage="guests", check_in=parsed.check_in.isoformat(), check_out=parsed.check_out.isoformat())
-                state["reply"] = f"{copy['stay_dates'].format(**_display_dates(state))} {copy['guests']}"
+                set_prompt(state, "stay_dates", _display_dates(state), tail="guests")
             else:
-                state["reply"] = copy["check_in"]
+                set_prompt(state, "check_in")
         elif type(parsed) is date:
             if parsed >= timezone.localdate():
-                state.update(stage="check_out", check_in=parsed.isoformat(), reply=copy["check_out"])
+                state.update(stage="check_out", check_in=parsed.isoformat())
+                set_prompt(state, "check_out")
             else:
-                state["reply"] = copy["check_in"]
+                set_prompt(state, "check_in")
         else:
-            return _terminal(state, "handover", copy["handover"])
+            return _terminal(state, "handover")
     elif stage == "check_out":
         if type(parsed) is date and parsed > date.fromisoformat(state["check_in"]):
-            state.update(stage="guests", check_out=parsed.isoformat(), reply=copy["guests"])
+            state.update(stage="guests", check_out=parsed.isoformat())
+            set_prompt(state, "guests")
         else:
-            state["reply"] = copy["check_out_retry"]
+            set_prompt(state, "check_out_retry")
     elif stage == "guests":
         if type(parsed) is int and 1 <= parsed <= 32767:
             return _offer_rooms(state, parsed, voice)
-        state["reply"] = copy["guests_retry"]
+        set_prompt(state, "guests_retry")
     elif stage == "room":
         return _select_room(state, answer)
     elif stage == "confirm":
         if answer in CANCEL[language]:
-            return _terminal(state, "cancelled", copy["cancelled"])
+            return _terminal(state, "cancelled")
         if answer in CONFIRM[language]:
-            state.update(stage="delivery", reply=copy["delivery"])
+            state["stage"] = "delivery"
+            set_prompt(state, "delivery")
             state.setdefault("booking_key", str(uuid4()))
     elif stage == "delivery":
         if answer in EMAIL_ANSWERS:
-            state.update(stage="email", reply=copy["email"])
+            state["stage"] = "email"
+            set_prompt(state, "email")
         elif answer in SMS_ANSWERS:
-            state.update(stage="phone", reply=copy["phone"])
+            state["stage"] = "phone"
+            set_prompt(state, "phone")
     elif stage == "email":
         email = parse_email(message)
         if email is not None:
             return _book(state, email=email, phone="", method="email")
-        state["reply"] = copy["invalid_email"]
+        set_prompt(state, "invalid_email")
     elif stage == "phone":
         phone = parse_phone(message)
         if phone is not None:
             return _book(state, email="", phone=phone, method="sms")
-        state["reply"] = copy["invalid_phone"]
+        set_prompt(state, "invalid_phone")
     return state
 
 
@@ -211,24 +216,15 @@ def _offer_rooms(state, guests, voice):
         return new_conversation(language, "unavailable")
     if voice:
         offers = offers[:2]
-    copy = COPY[language]
-    option = copy["voice_option" if voice else "option"]
-    options = [
-        option.format(
-            number=number, room=offer.room_code, total=legacy_conversation._price(offer.total_price, language),
-        )
-        for number, offer in enumerate(offers, 1)
-    ]
-    room_list = options[0] if len(options) == 1 else f"{', '.join(options[:-1])}, {copy['and']} {options[-1]}"
     state.update(
-        stage="room", guests=guests, reply=copy["rooms"].format(options=room_list),
+        stage="room", guests=guests,
         choices=[
             {"room_id": offer.room_id, "room": offer.room_code,
              "nightly_rate": str(offer.nightly_rate), "total_price": str(offer.total_price)}
             for offer in offers
         ],
     )
-    return state
+    return set_prompt(state, "rooms", {"options": room_options(state, voice=voice)})
 
 
 def _select_room(state, answer):
@@ -237,11 +233,7 @@ def _select_room(state, answer):
         return state
     state.update(choice, stage="confirm")
     state.pop("choices")
-    language = state["language"]
-    state["reply"] = COPY[language]["confirm"].format(
-        room=state["room"], guests=state["guests"], **_display_dates(state),
-    )
-    return state
+    return set_prompt(state, "confirm", {"room": state["room"], "guests": state["guests"], **_display_dates(state)})
 
 
 def _room_choice(state, answer):
@@ -298,7 +290,6 @@ def _book(state, *, email, phone, method):
         )
     except BookingError as error:
         if error.code in {"invalid_email", "invalid_phone"}:
-            state["reply"] = COPY[language][error.code]
-            return state
+            return set_prompt(state, error.code)
         return new_conversation(language, "offer_changed")
     return start_receipt(state, str(booking.reference), method)

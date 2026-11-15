@@ -1,6 +1,7 @@
 import json
 import re
 from datetime import date
+from hashlib import sha256
 from uuid import uuid4
 
 from django.conf import settings
@@ -16,12 +17,12 @@ from django.views.decorators.http import require_POST, require_safe
 from model_providers.extraction import extract_stay_value
 
 from .contacts import parse_email
-from .conversation import ARRIVAL_PARTS
 from .conversation import COPY as BOOKING_COPY
 from .conversation import TERMINAL_STAGES, WELCOME_PARTS, advance, new_conversation, recognizes_booking_answer, selects_english
 from .models import Conversation, StaffHandover
 from .parsing import parse_stay_input
 from .receipt import DELIVERY_PENDING, refresh_receipt
+from .scenario import ENGLISH_WEB_GREETING, render_chat, scenario_overrides, set_prompt, voice_segments
 from .speech import MAX_PCM_BYTES, SpeechUnavailable, synthesize, synthesize_welcome, transcribe, transcribe_welcome
 from .speech_feedback import corrected_booking_transcript
 from .speech_training import TRAINABLE_STAGES, record_failed_transcript
@@ -39,7 +40,6 @@ OLD_ARRIVAL_PROMPTS = (
     "To check availability, prices, or make a reservation, please give your planned arrival date.",
     BOOKING_COPY["en"]["check_in"],
 )
-ENGLISH_WEB_GREETING = "Hi, this is Neptun Resort Jastrzębia Góra."
 
 
 @never_cache
@@ -64,12 +64,19 @@ def index(request):
 
 def _result(state, *, stale=False, cursor=0):
     payload = {field: state[field] for field in ("language", "stage", "revision", "reply")}
+    overrides = scenario_overrides(state)
+    payload["reply"] = render_chat(state, overrides=overrides)
     if state["stage"] in ("completed", DELIVERY_PENDING):
         payload["reference"] = state["reference"]
     if state["stage"] == "welcome":
         payload["welcome_parts"] = WELCOME_PARTS
-    if parts := _arrival_parts(state):
-        payload["arrival_parts"] = parts
+    if parts := voice_segments(state, overrides=overrides):
+        payload["voice_parts"] = parts
+        payload["voice_key"] = _voice_key(parts)
+        if state["stage"] == "check_in" and any(part["listen"] for part in parts):
+            payload["arrival_parts"] = parts
+    elif payload["reply"] != state["reply"]:
+        payload["voice_reply"] = state["reply"]
     if state["stage"] == "check_in" and state["language"] == "pl" and state.get("voice_welcome"):
         payload["voice_welcome"] = True
     if state["stage"] == "handover":
@@ -88,23 +95,15 @@ def _invalid(status=400):
     return JsonResponse({"error": "invalid_message"}, status=status)
 
 
-def _arrival_parts(state):
-    if state["stage"] != "check_in":
-        return ()
-    language = state["language"]
-    arrival = BOOKING_COPY[language]["check_in"]
-    if state["reply"] == arrival or (
-        language == "en" and state["reply"] == f"{ENGLISH_WEB_GREETING} {arrival}"
-    ):
-        return ARRIVAL_PARTS[language]
-    return ()
+def _voice_key(parts):
+    return sha256(json.dumps(parts, sort_keys=True).encode("utf-8")).hexdigest()[:32]
 
 
 def _new_web_conversation(language):
     if language == "pl":
         return new_conversation(language)
     state = new_conversation("en", "check_in")
-    state["reply"] = f"{ENGLISH_WEB_GREETING} {state['reply']}"
+    set_prompt(state, "web_check_in", reply=f"{ENGLISH_WEB_GREETING} {state['reply']}")
     return state
 
 
@@ -263,11 +262,16 @@ def audio(request):
         payload = json.loads(body)
     except (UnreadablePostError, ValueError, RecursionError):
         return _invalid()
-    if not isinstance(payload, dict) or payload.keys() not in ({"revision"}, {"revision", "part"}):
+    if not isinstance(payload, dict) or payload.keys() not in (
+        {"revision"}, {"revision", "part"}, {"revision", "part", "voice_key"},
+    ):
         return _invalid()
     revision = payload["revision"]
     part = payload.get("part")
+    voice_key = payload.get("voice_key")
     if "part" in payload and (type(part) is not int or part < 0):
+        return _invalid()
+    if "voice_key" in payload and (not isinstance(voice_key, str) or not re.fullmatch(r"[0-9a-f]{32}", voice_key)):
         return _invalid()
     if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{32}", revision):
         return _invalid()
@@ -280,12 +284,15 @@ def audio(request):
         return HttpResponse(status=404)
     if state["revision"] != revision:
         return HttpResponse(status=409)
-    parts = _arrival_parts(state) if part is not None else ()
+    parts = voice_segments(state) if part is not None else ()
+    if voice_key is not None and _voice_key(parts) != voice_key:
+        return HttpResponse(status=409)
     if part is not None and part >= len(parts):
         return _invalid()
     try:
         if part is not None:
-            speech = synthesize(parts[part]["text"], state["language"])
+            segment = parts[part]
+            speech = synthesize(segment["text"], segment.get("language", state["language"]))
         elif state["stage"] == "welcome":
             speech = synthesize_welcome(WELCOME_PARTS)
         else:

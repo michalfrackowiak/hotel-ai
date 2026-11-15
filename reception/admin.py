@@ -5,7 +5,8 @@ from django.http import FileResponse, Http404, HttpResponse, HttpResponseNotAllo
 from django.urls import path, reverse
 from django.utils.html import format_html
 
-from .models import HandoverMessage, SpeechTrainingSample, StaffHandover
+from .models import HandoverMessage, ScenarioPrompt, SpeechTrainingSample, StaffHandover
+from .scenario_editor import ScenarioPromptForm
 from .speech_training import MAX_EXPORT_SAMPLES, corrected_samples_zip, pcm_to_wav, training_text_allowed
 
 
@@ -141,3 +142,36 @@ class SpeechTrainingSampleAdmin(admin.ModelAdmin):
         rows = rows.order_by("pk").values_list("pcm", "corrected_transcript", "language", "stage")
         archive = corrected_samples_zip(rows[:MAX_EXPORT_SAMPLES].iterator(chunk_size=1))
         return FileResponse(archive, as_attachment=True, filename="speech-training-samples.zip", content_type="application/zip")
+
+
+@admin.register(ScenarioPrompt)
+class ScenarioPromptAdmin(admin.ModelAdmin):
+    form = ScenarioPromptForm
+    fields = ("language", "key", "chat_text", "voice_parts", "reset_voice")
+    readonly_fields = ("language", "key")
+    list_display = ("key", "language", "custom_chat", "custom_voice")
+    list_display_links = ("key",)
+    list_filter = ("language",)
+    search_fields = ("key",)
+    ordering = ("language", "id")
+    actions = None
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_fields(self, request, obj=None):
+        fields = super().get_fields(request, obj)
+        if obj and obj.key.startswith("phone_"):
+            return [field for field in fields if field != "chat_text"]
+        return fields
+
+    @admin.display(boolean=True, description="Custom chat")
+    def custom_chat(self, obj):
+        return bool(obj.chat_text)
+
+    @admin.display(boolean=True, description="Custom voice")
+    def custom_voice(self, obj):
+        return bool(obj.voice_parts)
