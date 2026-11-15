@@ -1,0 +1,65 @@
+{% load i18n static %}
+<!doctype html>
+<html lang="{{ language }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>{% if language == "pl" %}Moja rezerwacja{% else %}My booking{% endif %} · Hotel-ai</title>
+    <link rel="stylesheet" href="{% static 'reception/reception.css' %}">
+</head>
+<body>
+    {% include "reception/_header.html" with active_page="booking" %}
+    <main class="booking-layout">
+        <section class="intro" aria-labelledby="booking-title">
+            <h1 id="booking-title">{% if language == "pl" %}Moja rezerwacja{% else %}My booking{% endif %}</h1>
+            <p>{% if language == "pl" %}Wpisz numer potwierdzenia otrzymany przy rezerwacji.{% else %}Enter the confirmation number you received when you booked.{% endif %}</p>
+        </section>
+        <section class="booking-lookup" aria-label="{% if language == 'pl' %}Sprawdź rezerwację{% else %}Check your booking{% endif %}">
+            <form method="post" action="{% url 'reception-booking' %}" class="lookup-form">
+                {% csrf_token %}
+                <input type="hidden" name="lang" value="{{ language }}">
+                <label for="booking-reference">{% if language == "pl" %}Numer potwierdzenia{% else %}Confirmation number{% endif %}</label>
+                <input id="booking-reference" name="reference" type="text" value="{{ reference|default:'' }}" maxlength="64" autocomplete="off" autocapitalize="none" spellcheck="false" required{% if error %} aria-invalid="true" aria-describedby="booking-error"{% endif %}>
+                {% if error %}
+                    <p id="booking-error" class="lookup-error">
+                        {% if error == "invalid" %}
+                            {% if language == "pl" %}Wpisz pełny numer potwierdzenia.{% else %}Enter the full confirmation number.{% endif %}
+                        {% else %}
+                            {% if language == "pl" %}Nie znaleziono rezerwacji. Sprawdź numer potwierdzenia i spróbuj ponownie.{% else %}Booking not found. Check your confirmation number and try again.{% endif %}
+                        {% endif %}
+                    </p>
+                {% endif %}
+                <button class="send-button" type="submit">{% if language == "pl" %}Sprawdź rezerwację{% else %}Check booking{% endif %}</button>
+            </form>
+            {% if booking %}
+                <section class="lookup-result" aria-labelledby="booking-details">
+                    <h2 id="booking-details">{% if language == "pl" %}Potwierdzona rezerwacja{% else %}Confirmed booking{% endif %}</h2>
+                    <dl>
+                        <div>
+                            <dt>{% if language == "pl" %}Pokój{% else %}Room{% endif %}</dt>
+                            <dd>{{ booking.room.code }}</dd>
+                        </div>
+                        <div>
+                            <dt>{% if language == "pl" %}Zameldowanie{% else %}Check-in{% endif %}</dt>
+                            <dd><time datetime="{{ booking.check_in|date:'Y-m-d' }}">{% if language == "pl" %}{{ booking.check_in|date:"d.m.Y" }}{% else %}{{ booking.check_in|date:"Y-m-d" }}{% endif %}</time></dd>
+                        </div>
+                        <div>
+                            <dt>{% if language == "pl" %}Wymeldowanie{% else %}Check-out{% endif %}</dt>
+                            <dd><time datetime="{{ booking.check_out|date:'Y-m-d' }}">{% if language == "pl" %}{{ booking.check_out|date:"d.m.Y" }}{% else %}{{ booking.check_out|date:"Y-m-d" }}{% endif %}</time></dd>
+                        </div>
+                        <div>
+                            <dt>{% if language == "pl" %}Liczba gości{% else %}Guests{% endif %}</dt>
+                            <dd>{{ booking.guests }}</dd>
+                        </div>
+                        <div>
+                            <dt>{% if language == "pl" %}Cena za pobyt{% else %}Total price{% endif %}</dt>
+                            <dd>{% language language %}{{ booking.total_price|floatformat:2 }}{% endlanguage %} PLN</dd>
+                        </div>
+                    </dl>
+                </section>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>

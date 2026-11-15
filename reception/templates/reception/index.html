@@ -11,15 +11,7 @@
     <script src="{% static 'reception/voice.js' %}" defer></script>
 </head>
 <body>
-    <header class="site-header">
-        <div class="site-bar">
-            <span class="wordmark"><span class="brand-mark" aria-hidden="true"></span>Hotel-ai</span>
-            <nav class="languages" aria-label="{% if language == 'pl' %}Język{% else %}Language{% endif %}">
-                <a href="/" lang="en"{% if language == "en" %} aria-current="true"{% endif %}>English</a>
-                <a href="/?lang=pl" lang="pl"{% if language == "pl" %} aria-current="true"{% endif %}>Polski</a>
-            </nav>
-        </div>
-    </header>
+    {% include "reception/_header.html" with active_page="reception" %}
     <main id="reception-app" data-language="{{ language }}" class="booking-layout">
         <section class="intro" aria-labelledby="booking-title">
             <h1 id="booking-title">{% if language == "pl" %}Zarezerwuj pokój{% else %}Book a room{% endif %}</h1>

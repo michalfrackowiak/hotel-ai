@@ -1,0 +1,16 @@
+{% url 'reception' as reception_url %}
+{% url 'reception-booking' as booking_url %}
+<header class="site-header">
+    <div class="site-bar">
+        <span class="wordmark"><span class="brand-mark" aria-hidden="true"></span>Hotel-ai</span>
+        <nav class="site-tabs" aria-label="{% if language == 'pl' %}Nawigacja główna{% else %}Main navigation{% endif %}">
+            <a href="{{ reception_url }}{% if language == 'pl' %}?lang=pl{% endif %}"{% if active_page == 'reception' %} aria-current="page"{% endif %}>{% if language == "pl" %}Recepcja{% else %}Reception{% endif %}</a>
+            <a href="{{ booking_url }}{% if language == 'pl' %}?lang=pl{% endif %}"{% if active_page == 'booking' %} aria-current="page"{% endif %}>{% if language == "pl" %}Moja rezerwacja{% else %}My booking{% endif %}</a>
+        </nav>
+        {% if active_page == "booking" %}
+            {% with page_url=booking_url %}{% include "reception/_languages.html" %}{% endwith %}
+        {% else %}
+            {% with page_url=reception_url %}{% include "reception/_languages.html" %}{% endwith %}
+        {% endif %}
+    </div>
+</header>
