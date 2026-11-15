@@ -207,7 +207,7 @@
     function announceReply(result) {
         form.dispatchEvent(new CustomEvent("reception:reply", { detail: {
             reply: result.reply, stage, language, revision,
-            voiceWelcome, welcomeParts: result.welcome_parts,
+            voiceWelcome, welcomeParts: result.welcome_parts, arrivalParts: result.arrival_parts,
         } }));
     }
 

@@ -26,6 +26,7 @@ Each milestone has a development branch, a pull request to `main`, and independe
 - [ ] Configure live SMTP, Twilio SMS, and the staff phone transfer destination. Verify each live destination with a controlled test.
 - [x] Flexible stay dates. Extract arrival and departure from one English or Polish message, including a spoken arrival date and stay duration amid extra words.
 - [x] Browser speech training. Let staff transcribe opted-in failed recognition clips, reuse reviewed English corrections, and export labeled audio for offline model evaluation and training.
+- [x] Voice arrival prompts. Give English callers the address and a two-second pause, then offer two five-second listening windows in English and Polish.
 
 ## Later releases
 

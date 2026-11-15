@@ -58,7 +58,8 @@ class PhoneWebhookTests(TestCase):
         return ElementTree.fromstring(response.content)
 
     def turn(self, previous, call_sid=CALL_SID, **fields):
-        gather = previous.find("Gather")
+        gathers = previous.findall("Gather")
+        gather = (gathers[0] if any(fields.values()) else gathers[-1]) if gathers else None
         action = urlsplit(previous.findtext("Redirect") if gather is None else gather.attrib["action"])
         self.assertEqual((action.scheme, action.netloc, action.query), ("https", "reception.example.test", ""))
         response = self.signed_post(action.path, {"CallSid": call_sid, **fields})
@@ -117,6 +118,55 @@ class PhoneWebhookTests(TestCase):
         self.assertEqual(signed_for_other_path.status_code, 403)
         self.assertEqual(Booking.objects.count(), 0)
 
+    def test_arrival_prompts_separate_greeting_and_two_listening_windows(self):
+        for digit, locale, voice, prompts in (
+            ("2", "en-US", "Polly.Joanna", (
+                "For availability, prices, booking. Specify the dates of your stay",
+                "If you are calling regarding another matter, please stay on the line and I will connect "
+                "you with a receptionist. For availability, prices, booking - Specify the dates of your stay",
+            )),
+            ("", "pl-PL", "Polly.Ewa", (
+                "Dostępność, ceny, rezerwacje. Proszę podaj planowany termin przyjazdu.",
+                "Jeżeli dzwonisz w innej sprawie, pozostań na linii. Dostępność, ceny, rezerwacje. "
+                "Proszę podaj planowany termin przyjazdu.",
+            )),
+        ):
+            with self.subTest(locale=locale):
+                call_sid = "CA" + (digit or "3") * 32
+                arrival = self.turn(self.start(call_sid), call_sid, Digits=digit)
+                self.assertEqual(
+                    [element.tag for element in arrival],
+                    ["Say", "Pause", "Say", "Gather", "Say", "Gather"] if digit else ["Say", "Gather", "Say", "Gather"],
+                )
+                if digit:
+                    self.assertEqual(arrival.findtext("Say"), "Hi, this is Neptun Resort, Pucka 2 street")
+                    self.assertEqual(arrival.find("Pause").attrib["length"], "2")
+
+                first, last = arrival.findall("Gather")
+                self.assertEqual(first.attrib["action"], last.attrib["action"])
+                self.assertEqual([say.text for say in arrival.findall("Say")[-2:]], list(prompts))
+                for say in arrival.findall("Say"):
+                    self.assertEqual(say.attrib, {"language": locale, "voice": voice})
+                for gather, on_empty in zip((first, last), ("false", "true"), strict=True):
+                    self.assertEqual(gather.attrib["timeout"], "5")
+                    self.assertEqual(gather.attrib["actionOnEmptyResult"], on_empty)
+                    self.assertEqual(gather.attrib["input"], "speech")
+                    self.assertEqual(gather.attrib["language"], locale)
+
+                departure = self.turn(arrival, call_sid, SpeechResult="tomorrow" if digit else "jutro")
+                self.assertEqual(len(departure.findall("Gather")), 1)
+                self.assertIn("departure date" if digit else "datę wyjazdu", departure.findtext("Gather/Say"))
+                self.assertEqual(ElementTree.tostring(self.turn(arrival, call_sid)), ElementTree.tostring(departure))
+
+    def test_arrival_retry_preserves_the_unavailable_stay_message(self):
+        arrival = self.turn(self.start(), Digits="2")
+        departure = self.turn(arrival, SpeechResult="Tomorrow")
+        guests = self.turn(departure, SpeechResult="For two nights")
+        retry = self.turn(guests, SpeechResult="9")
+        self.assertEqual([element.tag for element in retry], ["Gather"])
+        self.assertIn("No room is available", retry.findtext("Gather/Say"))
+        self.assertFalse(Booking.objects.exists())
+
     def test_signed_english_and_polish_calls_complete_only_after_explicit_confirmation(self):
         today = timezone.localdate()
         for digit, locale, voice, method, contact, confirmation in (
@@ -143,12 +193,11 @@ class PhoneWebhookTests(TestCase):
                 welcome = self.turn(menu, call_sid, Digits=digit)
                 gather = welcome.find("Gather")
                 self.assertEqual(gather.attrib["input"], "speech")
-                self.assertEqual(gather.attrib["timeout"], "10")
+                self.assertEqual(gather.attrib["timeout"], "5")
                 self.assertEqual(gather.attrib["language"], locale)
                 self.assertEqual(gather.attrib["speechModel"], "experimental_utterances")
                 self.assertEqual(gather.attrib["speechTimeout"], "2")
-                self.assertEqual(gather.find("Say").attrib["voice"], voice)
-                self.assertIn("stay on the line" if digit else "pozostań na linii", gather.findtext("Say"))
+                self.assertEqual(welcome.find("Say").attrib["voice"], voice)
 
                 start_date = today + timedelta(days=int(digit or "3") * 5)
                 flow = welcome

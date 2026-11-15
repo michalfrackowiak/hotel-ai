@@ -70,6 +70,7 @@
     let recognition = null;
     let speech = null;
     let playback = null;
+    let nextAudio = null;
     let audioContext = null;
     let microphone = null;
     let microphoneModule = null;
@@ -78,6 +79,11 @@
     let stage = null;
     let lastReply = null;
     let voiceWelcome = false;
+    let arrivalPart = 0;
+
+    function arrivalSegment() {
+        return stage === "check_in" ? lastReply?.arrivalParts?.[arrivalPart] : undefined;
+    }
 
     function canStart() {
         return !input.disabled && Boolean(lastReply) && stage !== "delivery_pending" &&
@@ -104,6 +110,8 @@
         if (current) current.abort();
         clearRecording();
         clearPlayback();
+        nextAudio?.controller.abort();
+        nextAudio = null;
         if (speech) {
             speech = null;
             synthesis.cancel();
@@ -126,7 +134,14 @@
     }
 
     function handleSilence() {
-        if (stage in silenceLimits && !input.disabled) {
+        if (!active) return;
+        if (arrivalSegment() && arrivalPart + 1 < lastReply.arrivalParts.length && !input.disabled) {
+            const prepared = nextAudio;
+            nextAudio = null;
+            pauseAudio();
+            arrivalPart += 1;
+            speak(lastReply, prepared);
+        } else if (stage in silenceLimits && !input.disabled) {
             form.dispatchEvent(new CustomEvent("reception:voice-silence"));
         } else {
             stop(copy.silence);
@@ -148,7 +163,7 @@
         form.requestSubmit();
     }
 
-    function listenWithBrowser() {
+    function listenWithBrowser(silenceLimit) {
         if (!active) return;
         const current = new recognitionType();
         recognition = current;
@@ -186,7 +201,7 @@
         };
         try {
             current.start();
-            if (stage in silenceLimits) silenceTimer = setTimeout(handleSilence, silenceLimits[stage]);
+            if (silenceLimit) silenceTimer = setTimeout(handleSilence, silenceLimit);
             status.textContent = copy.listening;
         } catch {
             recognition = null;
@@ -270,7 +285,7 @@
         }
     }
 
-    function listenWithMicrophone() {
+    function listenWithMicrophone(silenceLimit) {
         const stream = microphone?.stream;
         const track = stream?.getAudioTracks()[0];
         if (!track || track.readyState !== "live") {
@@ -280,7 +295,7 @@
         try {
             const node = new AudioWorkletNode(audioContext, "reception-microphone", {
                 channelCount: 1,
-                processorOptions: { silenceSeconds: (silenceLimits[stage] || 10000) / 1000 },
+                processorOptions: { silenceSeconds: (silenceLimit || 10000) / 1000 },
             });
             const source = audioContext.createMediaStreamSource(stream);
             const current = { source, node, track, revision: lastReply.revision, controller: new AbortController() };
@@ -330,10 +345,15 @@
     }
 
     function finishReply() {
-        if (terminalStages.has(stage)) stop(copy.finished);
+        const segment = arrivalSegment();
+        const silenceLimit = segment ? segment.seconds * 1000 : silenceLimits[stage];
+        if (segment && !segment.listen) {
+            status.textContent = copy.waiting;
+            silenceTimer = setTimeout(handleSilence, silenceLimit);
+        } else if (terminalStages.has(stage)) stop(copy.finished);
         else if (stage === "delivery_pending") status.textContent = copy.waiting;
-        else if (canRecord) listenWithMicrophone();
-        else listenWithBrowser();
+        else if (canRecord) listenWithMicrophone(silenceLimit);
+        else listenWithBrowser(silenceLimit);
     }
 
     function speakWithBrowser(turn, message) {
@@ -364,38 +384,50 @@
         speakPart(0);
     }
 
-    async function speak(turn) {
+    function requestAudio(revision, part) {
+        const controller = new AbortController();
+        const result = fetch(audioUrl, {
+            method: "POST",
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": form.elements.csrfmiddlewaretoken.value,
+            },
+            body: JSON.stringify({ revision, part }),
+            signal: controller.signal,
+        }).then(async (response) => {
+            const contentType = response.headers.get("Content-Type") || "";
+            const bytes = response.ok && /^audio\/(x-)?wav(?:;|$)/i.test(contentType) ? await response.arrayBuffer() : null;
+            return { status: response.status, bytes };
+        }).catch(() => ({}));
+        return { controller, result };
+    }
+
+    async function speak(turn, prepared = null) {
+        const segment = arrivalSegment();
+        const spokenTurn = segment ? { ...turn, reply: segment.text } : turn;
         const context = audioContext;
         if (!canPlayPiper || !context) {
-            speakWithBrowser(turn, audioUrl ? copy.fallback : copy.speaking);
+            speakWithBrowser(spokenTurn, audioUrl ? copy.fallback : copy.speaking);
             return;
         }
 
-        const current = { controller: new AbortController() };
+        const current = prepared ?? requestAudio(turn.revision, segment ? arrivalPart : undefined);
         playback = current;
         status.textContent = copy.preparing;
 
         function fallback() {
             if (playback !== current) return;
             clearPlayback();
-            speakWithBrowser(turn, copy.fallback);
+            speakWithBrowser(spokenTurn, copy.fallback);
         }
 
         try {
-            const response = await fetch(audioUrl, {
-                method: "POST",
-                credentials: "same-origin",
-                cache: "no-store",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-CSRFToken": form.elements.csrfmiddlewaretoken.value,
-                },
-                body: JSON.stringify({ revision: turn.revision }),
-                signal: current.controller.signal,
-            });
+            const { status: responseStatus, bytes } = await current.result;
             if (playback !== current) return;
-            if ([404, 409].includes(response.status)) {
-                if (response.status === 409 && turn.stage === "delivery_pending") {
+            if ([404, 409].includes(responseStatus)) {
+                if (responseStatus === 409 && turn.stage === "delivery_pending") {
                     clearPlayback();
                     status.textContent = copy.waiting;
                     return;
@@ -404,14 +436,11 @@
                 button.disabled = true;
                 return;
             }
-            const contentType = response.headers.get("Content-Type") || "";
-            if (!response.ok || !/^audio\/(x-)?wav(?:;|$)/i.test(contentType)) {
+            if (!bytes) {
                 fallback();
                 return;
             }
 
-            const bytes = await response.arrayBuffer();
-            if (playback !== current) return;
             const buffer = await context.decodeAudioData(bytes);
             if (playback !== current) return;
             if (context.state !== "running") {
@@ -429,6 +458,9 @@
             source.start();
             current.source = source;
             status.textContent = copy.speaking;
+            if (segment && turn.arrivalParts[arrivalPart + 1]) {
+                nextAudio = requestAudio(turn.revision, arrivalPart + 1);
+            }
         } catch {
             fallback();
         }
@@ -439,6 +471,7 @@
             stop(copy.finished);
         } else if (canStart()) {
             active = true;
+            arrivalPart = 0;
             form.dispatchEvent(new CustomEvent("reception:voice-session", { detail: { active } }));
             button.textContent = copy.stop;
             button.setAttribute("aria-pressed", "true");
@@ -468,6 +501,7 @@
     form.addEventListener("reception:reply", (event) => {
         stage = event.detail.stage;
         lastReply = event.detail;
+        arrivalPart = 0;
         voiceWelcome = event.detail.voiceWelcome;
         locale = event.detail.language === "pl" ? "pl-PL" : "en-US";
         copy = locale === "pl-PL" ? polishCopy : englishCopy;

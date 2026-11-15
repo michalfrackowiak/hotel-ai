@@ -8,7 +8,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .conversation import WELCOME_PARTS
+from .conversation import ARRIVAL_PARTS, WELCOME_PARTS, new_conversation
 from .models import Conversation
 from .speech import MAX_AUDIO_BYTES, SpeechUnavailable, synthesize
 
@@ -72,6 +72,40 @@ class ReceptionAudioTests(TestCase):
         self.assertTrue(started["reply"].startswith("Hi, this is Neptun Resort Jastrzębia Góra. "))
         self.assertIn("please state your planned arrival date", started["reply"])
         generate.assert_called_once_with(started["reply"], "en")
+
+    @patch("reception.views.synthesize", return_value=wav_fixture())
+    def test_arrival_audio_serves_only_the_requested_segment(self, generate):
+        endpoint = reverse("reception-message")
+        headers = {"X-CSRFToken": self.token}
+        for language, pauses in (("en", [(2, False), (5, True), (5, True)]), ("pl", [(5, True), (5, True)])):
+            with self.subTest(language=language):
+                started = self.client.post(
+                    endpoint, {"language": language, "reset": True}, content_type="application/json", headers=headers,
+                ).json()
+                if language == "pl":
+                    started = self.client.post(
+                        endpoint, {"language": language, "revision": started["revision"], "timeout": True},
+                        content_type="application/json", headers=headers,
+                    ).json()
+                parts = started["arrival_parts"]
+                self.assertEqual([(part["seconds"], part["listen"]) for part in parts], pauses)
+                for index, part in enumerate(ARRIVAL_PARTS[language]):
+                    response = self.request_audio({"revision": started["revision"], "part": index}, token=self.token)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.content, wav_fixture())
+                    self.assertEqual(generate.call_args.args, (part["text"], language))
+                for invalid in (None, True, -1, len(parts), "0"):
+                    response = self.request_audio({"revision": started["revision"], "part": invalid}, token=self.token)
+                    self.assertEqual(response.status_code, 400)
+
+    @patch("reception.views.synthesize")
+    def test_arrival_segments_do_not_replace_unavailable_room_reply(self, generate):
+        conversation = Conversation.objects.get()
+        conversation.state = new_conversation("pl", "unavailable")
+        conversation.save(update_fields=["state"])
+        response = self.request_audio({"revision": conversation.state["revision"], "part": 0}, token=self.token)
+        self.assertEqual(response.status_code, 400)
+        generate.assert_not_called()
 
     @patch("reception.views.synthesize")
     def test_audio_uses_current_server_reply_and_requires_csrf(self, generate):

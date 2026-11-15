@@ -2,11 +2,15 @@
 
 ## Latest milestone
 
+Voice arrival pauses, PR [#24](https://github.com/michalfrackowiak/hotel-ai/pull/24). English browser voice and phone say the resort address, pause for two seconds, and ask for dates with a five-second listening window. Polish goes straight to the first date prompt. Silence brings up the receptionist option and a second five-second window in both languages. The second timeout follows the existing staff handover path.
+
+All 127 Django tests, system checks, migration checks, and JavaScript syntax checks passed. Independent Chromium playback with Piper measured English gaps of 2.02 and 5.03 seconds between clips, confirmed both listening windows, and reached handover after silence. Signed phone tests verify prompt order and timing in the webhook responses. Live phone calls remain a manual check.
+
+## Previous milestones
+
 Speech training, PR [#23](https://github.com/michalfrackowiak/hotel-ai/pull/23). The private admin queue accepts failed browser clips from guests who opt in. Staff can listen, enter the correct transcript, delete samples, and export labeled audio. Reviewed English corrections improve repeat failures on arrival, departure, and guest-count turns. See [speech training](speech-training.md) for activation, retention, and offline use.
 
 The 60-utterance synthetic benchmark favored the existing English model for latency. The larger Vosk 0.22-lgraph decoded one additional booking answer correctly, with 3.94 s median latency versus 1.06 s for small 0.15. The benchmark used x86-64 Docker. All 123 Django tests passed, including staff authorization, bounded export, intake opt-in, stale revisions, correction reuse, and expiry. The live site still needs deployment and activation of training.
-
-## Previous milestones
 
 Noisy stay dates, PR [#22](https://github.com/michalfrackowiak/hotel-ai/pull/22). Chat, browser voice, and phone can extract a stay from one English or Polish message. “From tomorrow for three days” and “od jutra na trzy dni” set arrival to tomorrow and departure three days after arrival, even with extra words. The reception reads both dates back before asking for the guest count. When a recognized arrival has conflicting durations, reception asks for departure.
 
