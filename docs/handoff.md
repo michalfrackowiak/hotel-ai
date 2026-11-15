@@ -2,11 +2,13 @@
 
 ## Latest milestone
 
+English web greeting. The [English reception](https://92.5.19.10/?lang=en) opens chat and browser voice with “Hi, this is Neptun Resort Jastrzębia Góra.” followed immediately by the arrival question. Existing drafts at the old opening pick up the greeting when reopened. All 103 Django tests, the system check, and the migration check passed.
+
+## Previous milestones
+
 English web entry, PR [#20](https://github.com/michalfrackowiak/hotel-ai/pull/20). The English page starts new chat and voice conversations at Step 2.b and uses the same entry point after **Start over**. The Polish page starts at the bilingual greeting. Returning guests resume an in-progress booking, and older English welcome drafts advance directly to the arrival prompt on refresh.
 
 All 102 Django tests passed, including language selection, reset, recovery from an older draft, and English voice playback.
-
-## Previous milestones
 
 Resort Neptun scenario wording and timing, PR [#19](https://github.com/michalfrackowiak/hotel-ai/pull/19). The attachment's bilingual greeting is a separate step with a two-second language selection window. The localized arrival prompt starts a ten-second handover window in visible chat or while voice is listening. Piper uses each language's voice in the greeting. Vosk recognizes the English selection in the Polish opening and continues with the selected language.
 
