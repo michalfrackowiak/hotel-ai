@@ -2,6 +2,10 @@
 
 Each milestone has a development branch, a pull request to `main`, and independent review. Update this checklist and the [handoff](handoff.md) with the implementation PR and verification evidence.
 
+## Next versions
+
+See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for processing steps, speech-provider switching, full scenario configuration, separate voice/chat views, Google accounts, the blue visual redesign, hardware budgets and acceptance gates. These are planned releases, not implemented features. Start with the hardware and performance baseline in 0.4.
+
 ## Alpha
 
 - [x] Development environment. Create the private repository and branches. Track the roadmap, handoff, pinned project skills, and MCP configuration. Verify GitHub, Docker, and local development tools.

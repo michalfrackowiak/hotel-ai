@@ -2,6 +2,8 @@
 
 ## Latest milestone
 
+Planning update: [next versions 0.4–1.0](next-versions-roadmap.md) defines the upcoming processing stages, dependencies, hardware evaluation and acceptance gates. No runtime changes are included. The next implementation action is release 0.4 hardware inventory and speech benchmark, followed by the per-language provider catalog and switch controller.
+
 Parser configuration and stay extraction, PR [#28](https://github.com/michalfrackowiak/hotel-ai/pull/28), merged as `ca543c9` and deployed to the [public reception](https://92.5.19.10/). **Reception → Parser configuration** controls the English and Polish numeric date order and accepted ISO, slash, dot, dash, yearless, and two-digit-year forms. The arrival parser accepts check-in and check-out dates together, including “check in 12/28/2026 and check out 01/02/2027” and “przyjazd 28 grudnia a wyjazd 2 stycznia.” Parser sample review remains available under **Reception → Parser training samples** for staff corrections reused on matching inputs. See [parser training and configuration](parser-training.md).
 
 Browser speech training has been retired. Voice transcription still works, but incoming audio is no longer stored and the sample queue, admin audio review, and export are removed. Migration 0006 dropped the old speech sample table. The speech-expiry systemd timer and its retired source files were removed. A private SQLite backup is stored at `/app/data/pre-parser-admin-expansion-2d14274.sqlite3` with mode 600; its `quick_check` passed.
