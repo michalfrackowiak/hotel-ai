@@ -14,7 +14,7 @@ Voice and chat synchronization, PR [#27](https://github.com/michalfrackowiak/hot
 
 Parser training, PR [#26](https://github.com/michalfrackowiak/hotel-ai/pull/26). **Reception → Parser training samples** lists original English and Polish chat and voice inputs, parser results, and the success flag. Staff can save validated corrections. Rules apply to matching input, source, language, and step. See [parser training](parser-training.md) for examples, activation, and retention. Live deployment and parser-training activation were completed in later milestones.
 
-All 153 Django tests and migration and JavaScript checks passed. Chromium verified saving a correction in admin and using it for the next matching reply, with the expected room capacity and stay price. The live server still needs deployment and activation.
+All 153 Django tests and migration and JavaScript checks passed. Chromium verified saving a correction in admin and using it for the next matching reply, with the expected room capacity and stay price. At that milestone, deployment and parser-training activation were still pending; PR #27 later deployed and enabled them.
 
 Booking scenario editor, PR [#25](https://github.com/michalfrackowiak/hotel-ai/pull/25). Staff can edit the English and Polish chat and voice wording in the private admin, add ordered voice segments, and set pauses in seconds. The editor validates the placeholders used to display room options, prices, dates, guest counts, and references. See [booking scenario editor](scenario-editor.md).
 
