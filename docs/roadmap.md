@@ -14,6 +14,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 ## Alpha
 
+- [x] Bounded speech queue: one active inference and one waiting request per engine, three-second waiting deadline, explicit busy feedback and shared web admission cap. Candidate staging and automated recovery tests passed; see [speech queue](speech-queue.md).
+
 - [x] Development environment. Create the private repository and branches. Track the roadmap, handoff, pinned project skills, and MCP configuration. Verify GitHub, Docker, and local development tools.
 - [x] Booking engine. Run Django in Docker with persistent SQLite and Django admin. Seed one room for two guests at PLN 120 per night, one room for up to six guests at PLN 200 per night, and the requested local test administrator. Expose authenticated availability and booking endpoints. Confirm that retries cannot create duplicate bookings and overlapping dates cannot double-book a room.
 - [x] Bilingual booking conversation. Offer a browser chat in English and Polish that gathers stay details and contact information, quotes an available room, and requires explicit confirmation before writing a booking. Verify successful and unavailable stays in both languages.

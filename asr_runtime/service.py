@@ -1,6 +1,9 @@
 import json
 import logging
+import select
+import socket
 import threading
+from time import monotonic
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -25,11 +28,65 @@ def transcribe(audio, model):
     return " ".join(segment for segment in segments if segment)
 
 
+QUEUE_WAIT_SECONDS = 3.0
+DISCONNECT_POLL_SECONDS = 0.05
+
+
+def client_connected(connection):
+    try:
+        readable, _, _ = select.select([connection], [], [], 0)
+        return not readable or bool(connection.recv(1, socket.MSG_PEEK))
+    except OSError:
+        return False
+
+
+class InferenceQueue:
+    """Reserve one active inference and one waiting request across languages."""
+
+    def __init__(self):
+        self.condition = threading.Condition()
+        self.active = False
+        self.waiting = False
+
+    def acquire(self, connection):
+        deadline = monotonic() + QUEUE_WAIT_SECONDS
+        with self.condition:
+            if self.waiting:
+                return "full"
+            if not self.active:
+                if not client_connected(connection):
+                    return "disconnected"
+                self.active = True
+                return "acquired"
+            self.waiting = True
+            try:
+                while self.active:
+                    if not client_connected(connection):
+                        return "disconnected"
+                    remaining = deadline - monotonic()
+                    if remaining <= 0:
+                        return "expired"
+                    self.condition.wait(min(DISCONNECT_POLL_SECONDS, remaining))
+                if not client_connected(connection):
+                    return "disconnected"
+                if monotonic() >= deadline:
+                    return "expired"
+                self.active = True
+                return "acquired"
+            finally:
+                self.waiting = False
+
+    def release(self):
+        with self.condition:
+            self.active = False
+            self.condition.notify_all()
+
+
 class RecognitionServer(ThreadingHTTPServer):
     def __init__(self):
         SetLogLevel(-1)
         self.models = {language: Model(str(Path("/models") / name)) for language, name in MODEL_NAMES.items()}
-        self.inference = threading.BoundedSemaphore(1)
+        self.inference = InferenceQueue()
         self.connections = threading.BoundedSemaphore(MAX_CONNECTIONS)
         super().__init__(("0.0.0.0", 5001), RecognitionHandler)
 
@@ -97,7 +154,10 @@ class RecognitionHandler(BaseHTTPRequestHandler):
         if len(audio) != length:
             self.respond(400, {"error": "incomplete audio"})
             return
-        if not self.server.inference.acquire(blocking=False):
+        admission = self.server.inference.acquire(self.connection)
+        if admission == "disconnected":
+            return
+        if admission != "acquired":
             self.respond(429, {"error": "recognizer busy"})
             return
 
@@ -118,6 +178,8 @@ class RecognitionHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Cache-Control", "no-store")
+        if status == 429:
+            self.send_header("Retry-After", "1")
         self.end_headers()
         self.wfile.write(payload)
 
