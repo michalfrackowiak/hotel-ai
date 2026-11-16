@@ -14,6 +14,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 ## Alpha
 
+- [x] 0.5 lifecycle core: serialized, revision-checked switch sequencing with shared-worker retention, readiness, idempotency and failure recovery through an injected test backend. See [executor scope](speech-lifecycle-executor.md). Docker execution, durable recovery and guest routing are not wired.
+
 - [x] 0.5 resource preview: explicit local reserves/artifact estimates, pinned daemon and operator-confirmed topology checked against the same transition snapshot. See [resource policy](speech-resource-admission.md). Default blocked; no execution authorization or automatic topology attestation.
 
 - [x] 0.5 daemon identity: observed daemon identity and optional explicit Unix-socket/daemon-ID pinning, with legacy connections labeled unverified. See [identity limits](speech-daemon-identity.md). Pinning alone does not establish resource co-location or admission.
