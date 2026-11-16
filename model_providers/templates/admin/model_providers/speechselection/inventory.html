@@ -1,0 +1,19 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p><a href="{% url 'admin:model_providers_speechselection_changelist' %}">Back to planned assignments</a></p>
+{% if inventory_error %}<p class="errornote">{{ inventory_error }}</p>{% else %}
+<p>Host: {{ observed_host }}. Observed at: {{ observed_at }}. This snapshot may already be stale.</p>
+<table>
+<thead><tr><th>Container / planned deployment</th><th>State / health</th><th>Configured image / image ID</th><th>CPU / RAM (MiB)</th><th>Plan comparison</th></tr></thead>
+<tbody>{% for row in rows %}<tr>
+<td>{% if row.observed %}{{ row.observed.container_name }}{% else %}{{ row.planned.container_name }}{% endif %}<br>{{ row.planned.name|default:"No planned deployment" }}</td>
+{% if row.observed %}
+<td>{{ row.observed.state }} / {{ row.observed.health }}</td>
+<td>{{ row.observed.configured_image }}<br>{{ row.observed.image_id }}</td>
+<td>{{ row.observed.cpu_limit|default_if_none:"Not reported" }} / {{ row.observed.memory_mib|default_if_none:"Not reported" }}</td>
+<td>{% if row.planned %}Configured image matches: {{ row.image_matches|yesno:"Yes,No" }}<br>Configured limits match: {{ row.limits_match|yesno:"Yes,No" }}{% else %}No planned deployment{% endif %}</td>
+{% else %}<td colspan="4">Unknown: not present in this controller snapshot.</td>{% endif %}
+</tr>{% empty %}<tr><td colspan="5">No observations.</td></tr>{% endfor %}</tbody>
+</table>{% endif %}
+<p>Read-only observation; no plan or stored state is changed. Configured image comparison is a string match, not verification of the repository digest, model files or readiness. CPU reports NanoCpus only; missing limits do not prove unlimited capacity. This is not measured headroom or permission to activate. Other hosts are outside this snapshot.</p>
+{% endblock %}

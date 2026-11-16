@@ -8,6 +8,7 @@ from django.views.decorators.http import require_GET
 
 from .models import AgentConfiguration, SPEECH_LANGUAGES, SpeechModel, SpeechProvider, SpeechDeployment, SpeechSelection
 from .preflight import check_speech_plan
+from .controller_client import inventory_report
 
 
 @admin.register(AgentConfiguration)
@@ -111,7 +112,17 @@ class SpeechSelectionAdmin(admin.ModelAdmin):
 
     def get_urls(self):
         return [path("preflight/", self.admin_site.admin_view(require_GET(self.preflight_view)),
-                     name="model_providers_speechselection_preflight")] + super().get_urls()
+                     name="model_providers_speechselection_preflight"),
+                path("inventory/", self.admin_site.admin_view(require_GET(self.inventory_view)),
+                     name="model_providers_speechselection_inventory")] + super().get_urls()
+
+    def inventory_view(self, request):
+        if not self.can_preflight(request):
+            raise PermissionDenied
+        return TemplateResponse(request, "admin/model_providers/speechselection/inventory.html", {
+            **self.admin_site.each_context(request), "opts": self.model._meta,
+            "title": "Observed speech container inventory", **inventory_report(),
+        })
 
     def preflight_view(self, request):
         if not self.can_preflight(request):
