@@ -14,6 +14,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 ## Alpha
 
+- [x] 0.5 durable lifecycle tracking: separate SQLite pending/completed journal, restart-safe idempotency and blocking of uncertain work. See [journal limits](speech-durable-journal.md). Automatic reconciliation, Docker mutation and guest routing remain unwired.
+
 - [x] 0.5 lifecycle core: serialized, revision-checked switch sequencing with shared-worker retention, readiness, idempotency and failure recovery through an injected test backend. See [executor scope](speech-lifecycle-executor.md). Docker execution, durable recovery and guest routing are not wired.
 
 - [x] 0.5 resource preview: explicit local reserves/artifact estimates, pinned daemon and operator-confirmed topology checked against the same transition snapshot. See [resource policy](speech-resource-admission.md). Default blocked; no execution authorization or automatic topology attestation.
