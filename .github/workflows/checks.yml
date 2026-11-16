@@ -63,6 +63,8 @@ jobs:
           finally:
               subprocess.run(["docker", "rm", name], check=True)
           PY
+      - name: Check approved Docker start and stop
+        run: python scripts/smoke_controller_controls.py
       - name: Smoke-test the optional phone service
         env:
           DJANGO_SECRET_KEY: django-insecure-ci-phone-fixture
