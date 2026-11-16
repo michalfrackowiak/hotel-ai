@@ -269,7 +269,11 @@ class PhoneWebhookTests(TestCase):
                 delivery = self.turn(uncertain, call_sid, SpeechResult=confirmation)
                 collect_contact = self.turn(delivery, call_sid, SpeechResult=method)
                 self.assertFalse(Booking.objects.filter(check_in=start_date).exists())
-                completed = self.turn(collect_contact, call_sid, SpeechResult=contact)
+                pending = self.turn(collect_contact, call_sid, SpeechResult=contact)
+                self.assertFalse(Booking.objects.filter(check_in=start_date).exists())
+                expected_readback = "at sign, e" if digit else "plus, cztery, osiem, pięć"
+                self.assertIn(expected_readback, pending.findtext("Gather/Say"))
+                completed = self.turn(pending, call_sid, SpeechResult=confirmation)
                 booking = Booking.objects.get(check_in=start_date)
                 self.assertEqual(booking.room.code, "ROOM-6")
                 if method == "Email":
@@ -280,7 +284,7 @@ class PhoneWebhookTests(TestCase):
                 self.assertEqual(completed.find("Say").attrib["language"], locale)
                 self.assertIsNotNone(completed.find("Hangup"))
                 self.assertIsNone(completed.find("Gather"))
-                self.turn(collect_contact, call_sid, SpeechResult=contact)
+                self.turn(pending, call_sid, SpeechResult=confirmation)
                 self.assertEqual(Booking.objects.filter(check_in=start_date).count(), 1)
 
     @override_settings(HOTEL_CONFIRMATION_WAIT_METHODS=("sms",))
@@ -289,7 +293,8 @@ class PhoneWebhookTests(TestCase):
         flow = self.turn(self.start())
         for speech in ("jutro", "na dwie noce", "dwie osoby", "1", "tak", "sms"):
             flow = self.turn(flow, SpeechResult=speech)
-        pending = self.turn(flow, SpeechResult="500 000 123")
+        candidate = self.turn(flow, SpeechResult="500 000 123")
+        pending = self.turn(candidate, SpeechResult="tak")
         self.assertNotIn("Wysłaliśmy SMS", pending.findtext("Say"))
         self.assertEqual(pending.find("Pause").attrib["length"], "2")
         self.assertEqual(pending.find("Redirect").attrib["method"], "POST")
@@ -310,7 +315,7 @@ class PhoneWebhookTests(TestCase):
         self.assertIsNotNone(completed.find("Hangup"))
         self.assertEqual(
             ElementTree.tostring(completed),
-            ElementTree.tostring(self.turn(flow, SpeechResult="500 000 123")),
+            ElementTree.tostring(self.turn(candidate, SpeechResult="tak")),
         )
         self.assertEqual(Booking.objects.count(), 1)
         submit.assert_called_once()

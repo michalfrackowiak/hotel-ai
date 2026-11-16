@@ -511,6 +511,10 @@ button:disabled, input:disabled {
     background: var(--guest);
 }
 
+#chat-contact-value {
+    overflow-wrap: anywhere;
+}
+
 .message .booking-reference {
     margin-top: 8px;
     font-weight: 650;

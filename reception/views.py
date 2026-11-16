@@ -66,10 +66,13 @@ def _result(state, *, stale=False, cursor=0):
     payload["reply"] = render_chat(state, overrides=overrides)
     if state["stage"] in ("completed", DELIVERY_PENDING):
         payload["reference"] = state["reference"]
+    if state["stage"] == "contact_confirm":
+        payload["contact_candidate"] = state["contact_candidate"]
+        payload["can_change_delivery"] = state.get("flow") == "neptun"
     if state["stage"] == "welcome":
         payload["welcome_parts"] = WELCOME_PARTS
     if parts := _browser_voice_parts(state, overrides=overrides):
-        if not any(row.chat_text for row in overrides.values()):
+        if state["stage"] != "contact_confirm" and not any(row.chat_text for row in overrides.values()):
             payload["reply"] = " ".join(part["text"] for part in parts)
         payload["voice_parts"] = parts
         payload["voice_key"] = _voice_key(parts)

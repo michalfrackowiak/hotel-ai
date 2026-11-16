@@ -9,9 +9,10 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import escape
 
-from bookings.models import Booking, BookingConfirmation, Price, Room
+from bookings.models import Booking, BookingConfirmation, Client as Guest, Price, Room
+from bookings.services import confirm_booking
 
-from .models import Conversation, StaffHandover
+from .models import Conversation, ScenarioPrompt, StaffHandover
 from .parsing import parse_stay_input
 
 
@@ -68,7 +69,11 @@ class ReceptionTests(TestCase):
         email = self.turn(delivery, "Email", "email")
         email = self.turn(email, "invalid@example", "email")
         self.assertFalse(Booking.objects.exists())
-        confirmed = self.turn(email, "a d a at example dot com", "completed", voice=True)
+        pending = self.turn(email, "a d a at example dot com", "contact_confirm", voice=True)
+        self.assertEqual(pending["contact_candidate"], "ada@example.com")
+        self.assertIn("a, d, a, at sign", pending["voice_parts"][0]["text"])
+        self.assertFalse(BookingConfirmation.objects.exists())
+        confirmed = self.turn(pending, "yes", "completed")
         self.assertIn(confirmed["reference"], confirmed["reply"])
         self.assertEqual(str(Booking.objects.get().reference), confirmed["reference"])
         self.assertNotIn("email", Conversation.objects.get().state)
@@ -76,7 +81,7 @@ class ReceptionTests(TestCase):
         self.assertEqual(Booking.objects.get().client.email, "ada@example.com")
         self.assertEqual(Booking.objects.get().total_price, Decimal("240"))
 
-        retry = self.post(language="en", revision=email["revision"], message="ada@example.com")
+        retry = self.post(language="en", revision=pending["revision"], message="yes")
         self.assertEqual(retry.status_code, 409)
         self.assertTrue(retry.json()["stale"])
         self.assertEqual(retry.json()["reference"], confirmed["reference"])
@@ -92,7 +97,10 @@ class ReceptionTests(TestCase):
         phone = self.turn(delivery, "SMS", "phone")
         phone = self.turn(phone, "123", "phone")
         self.assertFalse(Booking.objects.exists())
-        confirmed = self.turn(phone, "500 000 123", "completed")
+        pending = self.turn(phone, "500 000 123", "contact_confirm")
+        self.assertEqual(pending["contact_candidate"], "+48500000123")
+        self.assertFalse(Booking.objects.exists())
+        confirmed = self.turn(pending, "tak", "completed")
         self.assertIn("Twoja rezerwacja została w pełni potwierdzona", confirmed["reply"])
         self.assertEqual(Booking.objects.get().guests, 6)
         self.assertEqual(BookingConfirmation.objects.get().method, "sms")
@@ -171,12 +179,68 @@ class ReceptionTests(TestCase):
 
     def test_changed_price_requires_fresh_quote(self):
         quote = self.quote()
-        Price.objects.filter(room=self.double_room).update(nightly_rate=Decimal("130"))
         delivery = self.turn(quote, "Confirm", "delivery")
         email = self.turn(delivery, "Email", "email")
-        current = self.turn(email, "ada@example.com", "check_in")
+        pending = self.turn(email, "ada@example.com", "contact_confirm")
+        Price.objects.filter(room=self.double_room).update(nightly_rate=Decimal("130"))
+        current = self.turn(pending, "yes", "check_in")
         self.assertIn("fresh quote", current["reply"])
         self.assertFalse(Booking.objects.exists())
+
+    def test_contact_readback_rejects_uncertain_and_stale_approval(self):
+        delivery = self.turn(self.quote(), "yes", "delivery")
+        email = self.turn(delivery, "email", "email")
+        first = self.turn(email, "guess at example dot com", "contact_confirm", voice=True)
+        self.assertIn("guess@example.com", first["reply"])
+        self.assertFalse(Guest.objects.exists())
+        self.assertFalse(Booking.objects.exists())
+        self.assertFalse(BookingConfirmation.objects.exists())
+
+        maybe = self.turn(first, "yes, maybe", "contact_confirm")
+        self.assertEqual(maybe["contact_candidate"], "guess@example.com")
+        replacement = self.turn(maybe, "guest@example.com", "contact_confirm")
+        self.assertNotEqual(replacement["revision"], maybe["revision"])
+        stale = self.post(language="en", revision=maybe["revision"], message="yes")
+        self.assertEqual(stale.status_code, 409)
+        self.assertFalse(Booking.objects.exists())
+
+        cleared = self.turn(replacement, "no", "email")
+        self.assertNotIn("contact_candidate", cleared)
+        self.assertNotIn("contact_candidate", Conversation.objects.get().state)
+        cleared = self.turn(cleared, "yes", "email")
+        pending = self.turn(cleared, "guest@example.com", "contact_confirm")
+        completed = self.turn(pending, "yes", "completed")
+        self.assertNotIn("guest@example.com", completed["reply"])
+        self.assertEqual(BookingConfirmation.objects.get().destination, "guest@example.com")
+
+    def test_delivery_change_requires_fresh_contact_and_approval(self):
+        delivery = self.turn(self.quote("pl", guests="dwie osoby"), "tak", "delivery")
+        phone = self.turn(delivery, "sms", "phone")
+        pending = self.turn(phone, "plus cztery osiem pięć zero jeden dwa trzy cztery pięć sześć osiem", "contact_confirm")
+        self.assertEqual(pending["contact_candidate"], "+48501234568")
+        self.assertIn("plus, cztery, osiem, pięć", pending["voice_parts"][0]["text"])
+        delivery = self.turn(pending, "zmień sposób dostawy", "delivery")
+        self.assertNotIn("contact_candidate", Conversation.objects.get().state)
+        email = self.turn(delivery, "email", "email")
+        pending = self.turn(email, "gosc@example.test", "contact_confirm")
+        self.assertFalse(Booking.objects.exists())
+        self.turn(pending, "tak", "completed")
+        self.assertEqual(BookingConfirmation.objects.get().destination, "gosc@example.test")
+
+    def test_availability_is_rechecked_when_contact_is_approved(self):
+        delivery = self.turn(self.quote(), "yes", "delivery")
+        email = self.turn(delivery, "email", "email")
+        pending = self.turn(email, "guest@example.test", "contact_confirm")
+        state = Conversation.objects.get().state
+        confirm_booking(
+            room_id=state["room_id"], check_in=date.fromisoformat(state["check_in"]),
+            check_out=date.fromisoformat(state["check_out"]), guests=state["guests"],
+            name="Fixture", email="fixture@example.test", nightly_rate=Decimal(state["nightly_rate"]),
+            idempotency_key=uuid4(),
+        )
+        self.turn(pending, "yes", "check_in")
+        self.assertEqual(Booking.objects.count(), 1)
+        self.assertFalse(BookingConfirmation.objects.exists())
 
     def test_start_resumes_and_other_sessions_cannot_confirm(self):
         quote = self.quote()
@@ -211,8 +275,25 @@ class ReceptionTests(TestCase):
         conversation.state.pop("flow")
         conversation.state.update(name="Ada Example", email="ada@example.com", booking_key=str(uuid4()))
         conversation.save(update_fields=["state"])
-        self.turn(quote, "Yes", "completed")
+        pending = self.turn(quote, "Yes", "contact_confirm")
+        self.assertFalse(pending["can_change_delivery"])
+        self.assertFalse(Booking.objects.exists())
+        self.turn(pending, "Yes", "completed")
         self.assertEqual(Booking.objects.count(), 1)
+
+    def test_legacy_contact_readback_returns_to_original_quote_without_entry_overrides(self):
+        quote = self.quote()
+        conversation = Conversation.objects.get()
+        conversation.state.pop("flow")
+        conversation.state.update(stage="email", name="Ada Example", booking_key=str(uuid4()))
+        conversation.save(update_fields=["state"])
+        ScenarioPrompt.objects.filter(language="en", key="email").update(chat_text="Custom entry text")
+        candidate = self.turn(quote, "ada@example.com", "contact_confirm")
+        revised_quote = self.turn(candidate, "yes", "confirm")
+        self.assertIn("Reply Yes to book", revised_quote["reply"])
+        self.assertNotIn("contact_candidate", Conversation.objects.get().state)
+        self.assertFalse(Booking.objects.exists())
+        self.turn(revised_quote, "yes", "completed")
 
     def test_english_page_starts_and_restarts_at_arrival(self):
         page = self.client.get(reverse("reception"), {"lang": "en"})

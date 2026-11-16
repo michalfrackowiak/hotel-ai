@@ -41,7 +41,7 @@ class DeliveryReceiptTests(TestCase):
     @patch("bookings.confirmations._submit", return_value=("", True))
     def test_english_chat_uses_sent_closing_only_after_a_single_submission(self, submit):
         pending = self.collect_contact(
-            "en", ("tomorrow", "for 3 nights", "2", "1", "yes", "email", "guest@example.test"),
+            "en", ("tomorrow", "for 3 nights", "2", "1", "yes", "email", "guest@example.test", "yes"),
         )
         self.assertEqual(self.poll(pending).json(), pending)
         self.assertEqual(self.poll(pending, client=Client()).status_code, 404)
@@ -62,7 +62,7 @@ class DeliveryReceiptTests(TestCase):
     @patch("bookings.confirmations._submit", return_value=("fixture-message", False))
     def test_polish_browser_voice_reports_unconfirmed_sms_on_provider_rejection(self, _submit):
         pending = self.collect_contact(
-            "pl", ("jutro", "na trzy noce", "dwie osoby", "1", "potwierdzam", "SMS", "500 000 123"),
+            "pl", ("jutro", "na trzy noce", "dwie osoby", "1", "potwierdzam", "SMS", "500 000 123", "tak"),
             voice=True,
         )
         self.assertEqual(dispatch_confirmations(["sms"]), (0, 1))
@@ -75,7 +75,7 @@ class DeliveryReceiptTests(TestCase):
 
     def test_timeout_keeps_the_confirmation_in_the_worker_queue(self):
         pending = self.collect_contact(
-            "en", ("tomorrow", "for 3 nights", "2", "1", "confirm", "email", "guest@example.test"),
+            "en", ("tomorrow", "for 3 nights", "2", "1", "confirm", "email", "guest@example.test", "yes"),
         )
         later = timezone.now() + timedelta(seconds=DELIVERY_WAIT_SECONDS + 1)
         with patch("reception.receipt.timezone.now", return_value=later):

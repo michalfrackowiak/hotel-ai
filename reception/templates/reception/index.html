@@ -7,8 +7,8 @@
     <meta name="color-scheme" content="light">
     <title>{% if language == "pl" %}Rezerwacja pokoju{% else %}Book a room{% endif %} · Hotel-ai</title>
     <link rel="stylesheet" href="{% static 'reception/reception.css' %}">
-    <script src="{% static 'reception/chat.js' %}?v=voice-chat-sync" defer></script>
-    <script src="{% static 'reception/voice.js' %}?v=voice-chat-sync" defer></script>
+    <script src="{% static 'reception/chat.js' %}?v=contact-confirmation" defer></script>
+    <script src="{% static 'reception/voice.js' %}?v=contact-confirmation" defer></script>
 </head>
 <body>
     {% include "reception/_header.html" with active_page="reception" %}
@@ -47,10 +47,13 @@
                 <div id="chat-language" class="confirmation-actions" hidden>
                     <button class="quiet-button" type="button" data-answer="2" lang="en">English</button>
                 </div>
+                <p id="chat-contact-value" dir="ltr" hidden></p>
                 <div id="chat-confirmation" class="confirmation-actions" hidden>
                     <button class="confirm-button" type="button" data-answer="{% if language == 'pl' %}Tak{% else %}Yes{% endif %}">{% if language == "pl" %}Tak, potwierdzam{% else %}Yes, confirm{% endif %}</button>
                     <button class="quiet-button" type="button" data-answer="{% if language == 'pl' %}Nie{% else %}No{% endif %}">{% if language == "pl" %}Nie{% else %}No{% endif %}</button>
                 </div>
+                <button id="chat-change-delivery" class="quiet-button" type="button" hidden>{% if language == "pl" %}Zmień sposób dostawy{% else %}Change delivery method{% endif %}</button>
+                <button id="chat-type-instead" class="quiet-button" type="button" hidden>{% if language == "pl" %}Wpisz zamiast dyktować{% else %}Type instead{% endif %}</button>
                 <div id="chat-delivery" class="confirmation-actions" hidden>
                     <button class="quiet-button" type="button" data-answer="Email">E-mail</button>
                     <button class="quiet-button" type="button" data-answer="SMS">SMS</button>

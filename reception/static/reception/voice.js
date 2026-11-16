@@ -544,6 +544,9 @@
         if (active) stop(copy.error);
         button.disabled = true;
     });
+    form.addEventListener("reception:type-instead", () => {
+        if (active) stop(copy.finished);
+    });
     document.addEventListener("visibilitychange", () => {
         if (document.hidden && active) stop(copy.finished);
     });
