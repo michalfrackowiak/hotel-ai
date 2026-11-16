@@ -1,0 +1,2276 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-11-16T09:52:36.998189+00:00",
+  "run_id": "ad22fdc584ef49bda750a3ef30637f77",
+  "duration_seconds": 60,
+  "production_before": {
+    "hotel-ai-web-1": {
+      "id": "4ff563692b1c0612f157ca98d1c1be4f7c77f86a2c5317180c3fbefc7340d732",
+      "started_at": "2026-11-16T09:32:45.188464508Z",
+      "running": true,
+      "health": "healthy"
+    },
+    "hotel-ai-piper-1": {
+      "id": "ad3a6727ac3229fae664a58385b4afb8a0b51967243b40443c8fbb2ad9db4615",
+      "started_at": "2026-11-14T16:43:24.171168695Z",
+      "running": true,
+      "health": "healthy"
+    },
+    "hotel-ai-asr-1": {
+      "id": "d9bf3b727d570089d98270f6a6f4b0abbdea66c899ceb4f344182341d35c0faf",
+      "started_at": "2026-11-14T17:08:00.546535131Z",
+      "running": true,
+      "health": "healthy"
+    }
+  },
+  "startup": {
+    "piper": {
+      "image": "sha256:ec96b0ad0db437f31edc954faffbc9231c77b47a9e31bdd59033fb4e7f8c4d12",
+      "ready_seconds": 3.043904182035476,
+      "resources": {
+        "memory.current": 212799488,
+        "memory.peak": 212799488,
+        "cpu.stat": {
+          "usage_usec": 1457572,
+          "user_usec": 1314624,
+          "system_usec": 142948,
+          "nice_usec": 0,
+          "core_sched.force_idle_usec": 0,
+          "nr_periods": 30,
+          "nr_throttled": 28,
+          "throttled_usec": 1261589,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    "asr": {
+      "image": "sha256:9f26fbdc6596e6b851323edbe8275f6e95ddb1a6154c92ae5939519b4ebf1091",
+      "ready_seconds": 3.277462931815535,
+      "resources": {
+        "memory.current": 311709696,
+        "memory.peak": 311709696,
+        "cpu.stat": {
+          "usage_usec": 1583705,
+          "user_usec": 1354020,
+          "system_usec": 229684,
+          "nice_usec": 0,
+          "core_sched.force_idle_usec": 0,
+          "nr_periods": 32,
+          "nr_throttled": 31,
+          "throttled_usec": 1570534,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    "web": {
+      "image": "sha256:41fdcb676932fe6a829ee741b6c4576417db6b6fe193eddbc0a34cae17f538ca",
+      "ready_seconds": 7.7265979300718755,
+      "resources": {
+        "memory.current": 71016448,
+        "memory.peak": 71016448,
+        "cpu.stat": {
+          "usage_usec": 3838671,
+          "user_usec": 3555337,
+          "system_usec": 283333,
+          "nice_usec": 0,
+          "core_sched.force_idle_usec": 0,
+          "nr_periods": 77,
+          "nr_throttled": 76,
+          "throttled_usec": 3777505,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    }
+  },
+  "speech": {
+    "piper": [
+      {
+        "fixture_length": "short",
+        "language": "en",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.034198320005089045
+          },
+          {
+            "status": 200,
+            "seconds": 0.4750430870335549
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.48332127393223345
+          },
+          {
+            "status": 429,
+            "seconds": 0.011564054992049932
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 1.4887794598471373
+          },
+          {
+            "status": 429,
+            "seconds": 0.015733208041638136
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.009812559932470322
+          },
+          {
+            "status": 200,
+            "seconds": 2.6952953299041837
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.49199670483358204
+          },
+          {
+            "status": 429,
+            "seconds": 0.012663183035328984
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.00955763808451593
+          },
+          {
+            "status": 200,
+            "seconds": 0.4919890651945025
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 1.482068883953616
+          },
+          {
+            "status": 429,
+            "seconds": 0.01160057494416833
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 2.7180240359157324
+          },
+          {
+            "status": 429,
+            "seconds": 0.011934937909245491
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.41618804493919015
+          },
+          {
+            "status": 429,
+            "seconds": 0.016115932026878
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.010573286097496748
+          },
+          {
+            "status": 200,
+            "seconds": 0.4447227579075843
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 1.5017642849124968
+          },
+          {
+            "status": 429,
+            "seconds": 0.010391565039753914
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 2.6941397599875927
+          },
+          {
+            "status": 429,
+            "seconds": 0.018513711169362068
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.4696038409601897
+          },
+          {
+            "status": 429,
+            "seconds": 0.010361005086451769
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.43780138180591166
+          },
+          {
+            "status": 429,
+            "seconds": 0.01057608611881733
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "en",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.010848688194528222
+          },
+          {
+            "status": 200,
+            "seconds": 1.457108279922977
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.009762360015884042
+          },
+          {
+            "status": 200,
+            "seconds": 2.709185163024813
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.4615630959160626
+          },
+          {
+            "status": 429,
+            "seconds": 0.009717599954456091
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.4329998230095953
+          },
+          {
+            "status": 429,
+            "seconds": 0.009849200025200844
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 1.453544331016019
+          },
+          {
+            "status": 429,
+            "seconds": 0.015807528980076313
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.009868321008980274
+          },
+          {
+            "status": 200,
+            "seconds": 2.6959346949588507
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.47784702898934484
+          },
+          {
+            "status": 429,
+            "seconds": 0.022826866945251822
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.008815591922029853
+          },
+          {
+            "status": 200,
+            "seconds": 0.48676138184964657
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 1.498511578887701
+          },
+          {
+            "status": 429,
+            "seconds": 0.011025449959561229
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 2.714319085003808
+          },
+          {
+            "status": 429,
+            "seconds": 0.011858616955578327
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.46372955408878624
+          },
+          {
+            "status": 429,
+            "seconds": 0.011255132034420967
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.4824103070423007
+          },
+          {
+            "status": 429,
+            "seconds": 0.11411793297156692
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "en",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.012848585145547986
+          },
+          {
+            "status": 200,
+            "seconds": 1.426694231107831
+          }
+        ]
+      }
+    ],
+    "asr": [
+      {
+        "fixture_length": "short",
+        "language": "en",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.03212350304238498
+          },
+          {
+            "status": 200,
+            "seconds": 1.2467768399510533,
+            "transcript": "for three nights"
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.01661557611078024
+          },
+          {
+            "status": 200,
+            "seconds": 0.8250783099792898,
+            "transcript": "na trzy noce"
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 2.270921738119796,
+            "transcript": "i would like to arrive tomorrow and stay for three nights with to guess please"
+          },
+          {
+            "status": 429,
+            "seconds": 0.010398524813354015
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.010662367101758718
+          },
+          {
+            "status": 200,
+            "seconds": 1.9943499150685966,
+            "transcript": "chcemy przyjecha\u0107 jutro i zosta\u0107 na trzy noce b\u0119d\u0105 dwie osoby prosz\u0119 sprawdzi\u0107 dost\u0119pno\u015b\u0107"
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 1.1856689788401127,
+            "transcript": "for three nights"
+          },
+          {
+            "status": 429,
+            "seconds": 0.011487134033814073
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.8017009990289807,
+            "transcript": "na trzy noce"
+          },
+          {
+            "status": 429,
+            "seconds": 0.010252442909404635
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 2.274501847103238,
+            "transcript": "i would like to arrive tomorrow and stay for three nights with to guess please"
+          },
+          {
+            "status": 429,
+            "seconds": 0.009195595048367977
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.008928952971473336
+          },
+          {
+            "status": 200,
+            "seconds": 2.0130612291395664,
+            "transcript": "chcemy przyjecha\u0107 jutro i zosta\u0107 na trzy noce b\u0119d\u0105 dwie osoby prosz\u0119 sprawdzi\u0107 dost\u0119pno\u015b\u0107"
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "en",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.010689288144931197
+          },
+          {
+            "status": 200,
+            "seconds": 1.2109413871075958,
+            "transcript": "for three nights"
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.008177785901352763
+          },
+          {
+            "status": 200,
+            "seconds": 0.7530370408203453,
+            "transcript": "na trzy noce"
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 2.316912394016981,
+            "transcript": "i would like to arrive tomorrow and stay for three nights with to guess please"
+          },
+          {
+            "status": 429,
+            "seconds": 0.009370596148073673
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.021575095830485225
+          },
+          {
+            "status": 200,
+            "seconds": 1.9546347500290722,
+            "transcript": "chcemy przyjecha\u0107 jutro i zosta\u0107 na trzy noce b\u0119d\u0105 dwie osoby prosz\u0119 sprawdzi\u0107 dost\u0119pno\u015b\u0107"
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 1.2051541791297495,
+            "transcript": "for three nights"
+          },
+          {
+            "status": 429,
+            "seconds": 0.01024004421196878
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.7890674551017582,
+            "transcript": "na trzy noce"
+          },
+          {
+            "status": 429,
+            "seconds": 0.01347822998650372
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "en",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.02219502185471356
+          },
+          {
+            "status": 200,
+            "seconds": 2.2750812110025436,
+            "transcript": "i would like to arrive tomorrow and stay for three nights with to guess please"
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 2.005752688040957,
+            "transcript": "chcemy przyjecha\u0107 jutro i zosta\u0107 na trzy noce b\u0119d\u0105 dwie osoby prosz\u0119 sprawdzi\u0107 dost\u0119pno\u015b\u0107"
+          },
+          {
+            "status": 429,
+            "seconds": 0.01093992916867137
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 1.186417266028002,
+            "transcript": "for three nights"
+          },
+          {
+            "status": 429,
+            "seconds": 0.009856000076979399
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.7642995328642428,
+            "transcript": "na trzy noce"
+          },
+          {
+            "status": 429,
+            "seconds": 0.02103833295404911
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 2.3054421001579612,
+            "transcript": "i would like to arrive tomorrow and stay for three nights with to guess please"
+          },
+          {
+            "status": 429,
+            "seconds": 0.011465453077107668
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 1.9726002579554915,
+            "transcript": "chcemy przyjecha\u0107 jutro i zosta\u0107 na trzy noce b\u0119d\u0105 dwie osoby prosz\u0119 sprawdzi\u0107 dost\u0119pno\u015b\u0107"
+          },
+          {
+            "status": 429,
+            "seconds": 0.010432404931634665
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "en",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.008805911988019943
+          },
+          {
+            "status": 200,
+            "seconds": 1.2280260070692748,
+            "transcript": "for three nights"
+          }
+        ]
+      },
+      {
+        "fixture_length": "short",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.010685608023777604
+          },
+          {
+            "status": 200,
+            "seconds": 0.7693142939824611,
+            "transcript": "na trzy noce"
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 2.2935414030216634,
+            "transcript": "i would like to arrive tomorrow and stay for three nights with to guess please"
+          },
+          {
+            "status": 429,
+            "seconds": 0.009543318068608642
+          }
+        ]
+      },
+      {
+        "fixture_length": "long",
+        "language": "pl",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.018999635009095073
+          },
+          {
+            "status": 200,
+            "seconds": 1.972772458102554,
+            "transcript": "chcemy przyjecha\u0107 jutro i zosta\u0107 na trzy noce b\u0119d\u0105 dwie osoby prosz\u0119 sprawdzi\u0107 dost\u0119pno\u015b\u0107"
+          }
+        ]
+      }
+    ]
+  },
+  "bookings": [
+    {
+      "number": 0,
+      "language": "en",
+      "turn_seconds": [
+        0.007780903950333595,
+        0.012972666881978512,
+        0.011872817063704133,
+        0.0241560370195657,
+        0.008278866996988654,
+        0.011630095075815916,
+        0.007984505034983158,
+        0.08813584106974304,
+        0.010813408065587282
+      ],
+      "turn_stages": [
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.22766482294537127
+    },
+    {
+      "number": 1,
+      "language": "pl",
+      "turn_seconds": [
+        0.008105386048555374,
+        0.004670358961448073,
+        0.0061594098806381226,
+        0.005994488950818777,
+        0.009352636989206076,
+        0.010647247079759836,
+        0.010990009875968099,
+        0.009316675830632448,
+        0.007330740103498101,
+        0.010031122015789151
+      ],
+      "turn_stages": [
+        "welcome",
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.09062310098670423
+    },
+    {
+      "number": 2,
+      "language": "en",
+      "turn_seconds": [
+        0.005638805916532874,
+        0.00600244989618659,
+        0.0058303268160671,
+        0.012293340871110559,
+        0.005386164179071784,
+        0.009340276941657066,
+        0.004725157981738448,
+        0.005333043867722154,
+        0.0292661190032959
+      ],
+      "turn_stages": [
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.08923724992200732
+    },
+    {
+      "number": 3,
+      "language": "pl",
+      "turn_seconds": [
+        0.0051936430390924215,
+        0.005741887027397752,
+        0.005492485128343105,
+        0.0051173618994653225,
+        0.006229810882359743,
+        0.004522757139056921,
+        0.004823880037292838,
+        0.006901855813339353,
+        0.004968041088432074,
+        0.0346203229855746
+      ],
+      "turn_stages": [
+        "welcome",
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.09298220020718873
+    },
+    {
+      "number": 4,
+      "language": "en",
+      "turn_seconds": [
+        0.0042967949993908405,
+        0.005119162146002054,
+        0.005043600918725133,
+        0.0071536588948220015,
+        0.004390076035633683,
+        0.004436315968632698,
+        0.004355355864390731,
+        0.004521156894043088,
+        0.041833742056041956
+      ],
+      "turn_stages": [
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.08621222502551973
+    },
+    {
+      "number": 5,
+      "language": "pl",
+      "turn_seconds": [
+        0.006002689013257623,
+        0.005128682125359774,
+        0.0057726469822227955,
+        0.005673845997080207,
+        0.006968857022002339,
+        0.005001839948818088,
+        0.005938368150964379,
+        0.004889479838311672,
+        0.005156802013516426,
+        0.041625540936365724
+      ],
+      "turn_stages": [
+        "welcome",
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.09863040689378977
+    },
+    {
+      "number": 6,
+      "language": "en",
+      "turn_seconds": [
+        0.004826520103961229,
+        0.0057135268580168486,
+        0.005550885107368231,
+        0.006823936011642218,
+        0.005030081141740084,
+        0.005711127072572708,
+        0.004890719894319773,
+        0.005042281933128834,
+        0.03633209690451622
+      ],
+      "turn_stages": [
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.08528297813609242
+    },
+    {
+      "number": 7,
+      "language": "pl",
+      "turn_seconds": [
+        0.006525212898850441,
+        0.006123209837824106,
+        0.005723647074773908,
+        0.005567925050854683,
+        0.0076495029497891665,
+        0.005072562023997307,
+        0.005283882841467857,
+        0.004864600021392107,
+        0.005282722879201174,
+        0.04198766406625509
+      ],
+      "turn_stages": [
+        "welcome",
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.09955693501979113
+    },
+    {
+      "number": 8,
+      "language": "en",
+      "turn_seconds": [
+        0.004878559149801731,
+        0.00574876694008708,
+        0.005998088978230953,
+        0.006760575110092759,
+        0.004762118915095925,
+        0.004863440059125423,
+        0.0051280418410897255,
+        0.005614046007394791,
+        0.04338979488238692
+      ],
+      "turn_stages": [
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.09293100005015731
+    },
+    {
+      "number": 9,
+      "language": "pl",
+      "turn_seconds": [
+        0.004706478910520673,
+        0.004757478833198547,
+        0.005302282981574535,
+        0.005420204950496554,
+        0.006530452985316515,
+        0.005070442100986838,
+        0.005096120992675424,
+        0.004945480031892657,
+        0.00658073415979743,
+        0.03780294884927571
+      ],
+      "turn_stages": [
+        "welcome",
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.09122202591970563
+    },
+    {
+      "number": 10,
+      "language": "en",
+      "turn_seconds": [
+        0.00497260014526546,
+        0.00602876883931458,
+        0.006174210924655199,
+        0.008358028018847108,
+        0.005155561957508326,
+        0.0051170820370316505,
+        0.004877879982814193,
+        0.004924519918859005,
+        0.03391643799841404
+      ],
+      "turn_stages": [
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.08491437509655952
+    },
+    {
+      "number": 11,
+      "language": "pl",
+      "turn_seconds": [
+        0.004510116996243596,
+        0.004684197949245572,
+        0.0051240811590105295,
+        0.005196641897782683,
+        0.006340731866657734,
+        0.00456155720166862,
+        0.004533316940069199,
+        0.004381594946607947,
+        0.005616766167804599,
+        0.04112141695804894
+      ],
+      "turn_stages": [
+        "welcome",
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.0911064250394702
+    },
+    {
+      "number": 12,
+      "language": "en",
+      "turn_seconds": [
+        0.005277363117784262,
+        0.0058136070147156715,
+        0.005309443920850754,
+        0.006973896874114871,
+        0.0048399989027529955,
+        0.005277523072436452,
+        0.005275883013382554,
+        0.005393283907324076,
+        0.038237472996115685
+      ],
+      "turn_stages": [
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.08953685220330954
+    },
+    {
+      "number": 13,
+      "language": "pl",
+      "turn_seconds": [
+        0.008090666960924864,
+        0.009388077072799206,
+        0.00756690208800137,
+        0.005962728057056665,
+        0.009778480045497417,
+        0.005598925054073334,
+        0.0049702811520546675,
+        0.004935401026159525,
+        0.005146282026544213,
+        0.021779497852548957
+      ],
+      "turn_stages": [
+        "welcome",
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.09660366992466152
+    },
+    {
+      "number": 14,
+      "language": "en",
+      "turn_seconds": [
+        0.004373756004497409,
+        0.005159443011507392,
+        0.005154201993718743,
+        0.006376411998644471,
+        0.004425036022439599,
+        0.004380796104669571,
+        0.0044217961840331554,
+        0.004553798120468855,
+        0.04165045986883342
+      ],
+      "turn_stages": [
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.0855037400033325
+    },
+    {
+      "number": 15,
+      "language": "pl",
+      "turn_seconds": [
+        0.004922719905152917,
+        0.006009689997881651,
+        0.005430603865534067,
+        0.0062651711050421,
+        0.007277060067281127,
+        0.005110201891511679,
+        0.004873639903962612,
+        0.005021281074732542,
+        0.005433524027466774,
+        0.04313671286217868
+      ],
+      "turn_stages": [
+        "welcome",
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.09859852585941553
+    },
+    {
+      "number": 16,
+      "language": "en",
+      "turn_seconds": [
+        0.005161241861060262,
+        0.0056018459144979715,
+        0.005942248972132802,
+        0.0071021378971636295,
+        0.005254083080217242,
+        0.005072041880339384,
+        0.004986519925296307,
+        0.00506456196308136,
+        0.03771050786599517
+      ],
+      "turn_stages": [
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.08949065301567316
+    },
+    {
+      "number": 17,
+      "language": "pl",
+      "turn_seconds": [
+        0.006216370966285467,
+        0.005690246820449829,
+        0.006096410099416971,
+        0.006009649019688368,
+        0.00732194003649056,
+        0.005361524177715182,
+        0.005880488082766533,
+        0.00927067594602704,
+        0.03402591892518103,
+        0.012109659146517515
+      ],
+      "turn_stages": [
+        "welcome",
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.10337112587876618
+    },
+    {
+      "number": 18,
+      "language": "en",
+      "turn_seconds": [
+        0.0048799600917845964,
+        0.005890808068215847,
+        0.0059152881149202585,
+        0.006611973978579044,
+        0.004965321160852909,
+        0.005174482008442283,
+        0.004787039011716843,
+        0.0048321199137717485,
+        0.03142745699733496
+      ],
+      "turn_stages": [
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.07982329302467406
+    },
+    {
+      "number": 19,
+      "language": "pl",
+      "turn_seconds": [
+        0.004265194991603494,
+        0.004694679053500295,
+        0.005123120965436101,
+        0.005057280883193016,
+        0.006238330854102969,
+        0.004517716821283102,
+        0.004569836892187595,
+        0.0089869131334126,
+        0.011996817775070667,
+        0.04479232686571777
+      ],
+      "turn_stages": [
+        "welcome",
+        "check_in",
+        "check_out",
+        "guests",
+        "room",
+        "confirm",
+        "delivery",
+        "email",
+        "contact_confirm",
+        "completed"
+      ],
+      "completed": true,
+      "seconds": 0.1055170230101794
+    }
+  ],
+  "cleanup": {
+    "hotel-mixed-ad22fdc584ef49bda750a3ef30637f77-web": "removed",
+    "hotel-mixed-ad22fdc584ef49bda750a3ef30637f77-asr": "removed",
+    "hotel-mixed-ad22fdc584ef49bda750a3ef30637f77-piper": "removed",
+    "hotel-mixed-ad22fdc584ef49bda750a3ef30637f77": "removed"
+  },
+  "conditions": {
+    "memory_caps_mib": {
+      "web": 512,
+      "piper": 1024,
+      "asr": 1536
+    },
+    "cpu_cap_each": 0.5,
+    "speech_concurrency_per_engine": 2,
+    "booking_session_concurrency": 1,
+    "minimum_pause_between_pairs_seconds": 1,
+    "minimum_pause_between_sessions_seconds": 3,
+    "request_timeout_seconds": {
+      "speech": 20,
+      "booking": 10
+    },
+    "deadline_behavior": "No new session, booking turn, or speech pair starts after deadline. An in-flight request may finish afterward.",
+    "limitations": [
+      "Fixed fictional synthetic fixtures and typed booking turns provide no guest speech accuracy estimate.",
+      "Speech uses direct internal adapters while chat exercises HTTP sessions, CSRF, and final booking writes.",
+      "Cached-image startup and short bounded load do not establish saturation or long-run capacity.",
+      "All staging bookings and pending notifications exist only in ephemeral tmpfs SQLite."
+    ]
+  },
+  "memory_available_bytes": 10312482816,
+  "health_baseline": [
+    {
+      "seconds": 0.011298852041363716,
+      "status": 200
+    },
+    {
+      "seconds": 0.009426676901057363,
+      "status": 200
+    },
+    {
+      "seconds": 0.007972625084221363,
+      "status": 200
+    }
+  ],
+  "fixture_audio_seconds": [
+    {
+      "language": "en",
+      "length": "short",
+      "seconds": 1.3931875
+    },
+    {
+      "language": "pl",
+      "length": "short",
+      "seconds": 1.428
+    },
+    {
+      "language": "en",
+      "length": "long",
+      "seconds": 4.14475
+    },
+    {
+      "language": "pl",
+      "length": "long",
+      "seconds": 7.6974375
+    }
+  ],
+  "load_wall_seconds": 61.06585520412773,
+  "aborted_on_health": false,
+  "resources_final": {
+    "piper": {
+      "memory.current": 459059200,
+      "memory.peak": 459620352,
+      "cpu.stat": {
+        "usage_usec": 21306520,
+        "user_usec": 21018958,
+        "system_usec": 287561,
+        "nice_usec": 0,
+        "core_sched.force_idle_usec": 0,
+        "nr_periods": 480,
+        "nr_throttled": 403,
+        "throttled_usec": 18847303,
+        "nr_bursts": 0,
+        "burst_usec": 0
+      },
+      "memory.events": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0,
+        "sock_throttled": 0
+      }
+    },
+    "asr": {
+      "memory.current": 328929280,
+      "memory.peak": 350031872,
+      "cpu.stat": {
+        "usage_usec": 21128743,
+        "user_usec": 20584382,
+        "system_usec": 544360,
+        "nice_usec": 0,
+        "core_sched.force_idle_usec": 0,
+        "nr_periods": 468,
+        "nr_throttled": 405,
+        "throttled_usec": 19154847,
+        "nr_bursts": 0,
+        "burst_usec": 0
+      },
+      "memory.events": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0,
+        "sock_throttled": 0
+      }
+    },
+    "web": {
+      "memory.current": 73007104,
+      "memory.peak": 73175040,
+      "cpu.stat": {
+        "usage_usec": 5053641,
+        "user_usec": 4659290,
+        "system_usec": 394351,
+        "nice_usec": 0,
+        "core_sched.force_idle_usec": 0,
+        "nr_periods": 141,
+        "nr_throttled": 95,
+        "throttled_usec": 4279132,
+        "nr_bursts": 0,
+        "burst_usec": 0
+      },
+      "memory.events": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0,
+        "sock_throttled": 0
+      }
+    }
+  },
+  "ephemeral_database": {
+    "bookings": 20,
+    "clients": 20,
+    "pending_confirmations": 20,
+    "other_confirmations": 0,
+    "admins": 0
+  },
+  "achieved": {
+    "completed_bookings": 20,
+    "completed_bookings_per_second": 0.32751526909997497,
+    "speech_requests": {
+      "piper": 54,
+      "asr": 48
+    }
+  },
+  "production_health_samples": [
+    {
+      "seconds": 0.00887691299431026,
+      "status": 200
+    },
+    {
+      "seconds": 0.008792311884462833,
+      "status": 200
+    },
+    {
+      "seconds": 0.01385051291435957,
+      "status": 200
+    },
+    {
+      "seconds": 0.010245244018733501,
+      "status": 200
+    },
+    {
+      "seconds": 0.00955015909858048,
+      "status": 200
+    },
+    {
+      "seconds": 0.01465180004015565,
+      "status": 200
+    },
+    {
+      "seconds": 0.008971313945949078,
+      "status": 200
+    },
+    {
+      "seconds": 0.009783719899132848,
+      "status": 200
+    },
+    {
+      "seconds": 0.01632333407178521,
+      "status": 200
+    },
+    {
+      "seconds": 0.009396037086844444,
+      "status": 200
+    },
+    {
+      "seconds": 0.009417596971616149,
+      "status": 200
+    },
+    {
+      "seconds": 0.009573358809575438,
+      "status": 200
+    },
+    {
+      "seconds": 0.009102993877604604,
+      "status": 200
+    },
+    {
+      "seconds": 0.01362607185728848,
+      "status": 200
+    },
+    {
+      "seconds": 0.009816681034862995,
+      "status": 200
+    },
+    {
+      "seconds": 0.009402796858921647,
+      "status": 200
+    },
+    {
+      "seconds": 0.009861440863460302,
+      "status": 200
+    },
+    {
+      "seconds": 0.009743799921125174,
+      "status": 200
+    },
+    {
+      "seconds": 0.01074192812666297,
+      "status": 200
+    },
+    {
+      "seconds": 0.009098633890971541,
+      "status": 200
+    },
+    {
+      "seconds": 0.00902787409722805,
+      "status": 200
+    },
+    {
+      "seconds": 0.008957514073699713,
+      "status": 200
+    },
+    {
+      "seconds": 0.009084634017199278,
+      "status": 200
+    },
+    {
+      "seconds": 0.01180265680886805,
+      "status": 200
+    },
+    {
+      "seconds": 0.009162554983049631,
+      "status": 200
+    },
+    {
+      "seconds": 0.019664040999487042,
+      "status": 200
+    },
+    {
+      "seconds": 0.012421941850334406,
+      "status": 200
+    },
+    {
+      "seconds": 0.009707760065793991,
+      "status": 200
+    },
+    {
+      "seconds": 0.009209636133164167,
+      "status": 200
+    },
+    {
+      "seconds": 0.010424325009807944,
+      "status": 200
+    },
+    {
+      "seconds": 0.009271036135032773,
+      "status": 200
+    },
+    {
+      "seconds": 0.00947679695673287,
+      "status": 200
+    },
+    {
+      "seconds": 0.009279794991016388,
+      "status": 200
+    },
+    {
+      "seconds": 0.026786419097334146,
+      "status": 200
+    },
+    {
+      "seconds": 0.009871121030300856,
+      "status": 200
+    },
+    {
+      "seconds": 0.00903723412193358,
+      "status": 200
+    },
+    {
+      "seconds": 0.00907947402447462,
+      "status": 200
+    },
+    {
+      "seconds": 0.009088995167985559,
+      "status": 200
+    },
+    {
+      "seconds": 0.014009554171934724,
+      "status": 200
+    },
+    {
+      "seconds": 0.03419507993385196,
+      "status": 200
+    },
+    {
+      "seconds": 0.009278035955503583,
+      "status": 200
+    },
+    {
+      "seconds": 0.009495598031207919,
+      "status": 200
+    },
+    {
+      "seconds": 0.009188754949718714,
+      "status": 200
+    },
+    {
+      "seconds": 0.009277915116399527,
+      "status": 200
+    },
+    {
+      "seconds": 0.016479335026815534,
+      "status": 200
+    },
+    {
+      "seconds": 0.013316628988832235,
+      "status": 200
+    },
+    {
+      "seconds": 0.012383861001580954,
+      "status": 200
+    },
+    {
+      "seconds": 0.010051841847598553,
+      "status": 200
+    },
+    {
+      "seconds": 0.008711350848898292,
+      "status": 200
+    },
+    {
+      "seconds": 0.008542830124497414,
+      "status": 200
+    },
+    {
+      "seconds": 0.008747590938583016,
+      "status": 200
+    },
+    {
+      "seconds": 0.009709759149700403,
+      "status": 200
+    },
+    {
+      "seconds": 0.008686072193086147,
+      "status": 200
+    },
+    {
+      "seconds": 0.008856232045218349,
+      "status": 200
+    },
+    {
+      "seconds": 0.017981747165322304,
+      "status": 200
+    },
+    {
+      "seconds": 0.008568670134991407,
+      "status": 200
+    },
+    {
+      "seconds": 0.008744630962610245,
+      "status": 200
+    },
+    {
+      "seconds": 0.008860992966219783,
+      "status": 200
+    },
+    {
+      "seconds": 0.008794511901214719,
+      "status": 200
+    },
+    {
+      "seconds": 0.008496789960190654,
+      "status": 200
+    },
+    {
+      "seconds": 0.0181987090036273,
+      "status": 200
+    },
+    {
+      "seconds": 0.008761991979554296,
+      "status": 200
+    },
+    {
+      "seconds": 0.008565109921619296,
+      "status": 200
+    },
+    {
+      "seconds": 0.008741830941289663,
+      "status": 200
+    },
+    {
+      "seconds": 0.011173131875693798,
+      "status": 200
+    },
+    {
+      "seconds": 0.008722072001546621,
+      "status": 200
+    },
+    {
+      "seconds": 0.013269427930936217,
+      "status": 200
+    },
+    {
+      "seconds": 0.008470708969980478,
+      "status": 200
+    },
+    {
+      "seconds": 0.008745991857722402,
+      "status": 200
+    },
+    {
+      "seconds": 0.011048729997128248,
+      "status": 200
+    },
+    {
+      "seconds": 0.009485237067565322,
+      "status": 200
+    },
+    {
+      "seconds": 0.010247644037008286,
+      "status": 200
+    },
+    {
+      "seconds": 0.008970513008534908,
+      "status": 200
+    },
+    {
+      "seconds": 0.0092395159881562,
+      "status": 200
+    },
+    {
+      "seconds": 0.009261315921321511,
+      "status": 200
+    },
+    {
+      "seconds": 0.009940881980583072,
+      "status": 200
+    },
+    {
+      "seconds": 0.008720671059563756,
+      "status": 200
+    },
+    {
+      "seconds": 0.0084774699062109,
+      "status": 200
+    },
+    {
+      "seconds": 0.010370564879849553,
+      "status": 200
+    },
+    {
+      "seconds": 0.008792831795290112,
+      "status": 200
+    },
+    {
+      "seconds": 0.00903219380415976,
+      "status": 200
+    },
+    {
+      "seconds": 0.009152635000646114,
+      "status": 200
+    },
+    {
+      "seconds": 0.009110754122957587,
+      "status": 200
+    },
+    {
+      "seconds": 0.008839352987706661,
+      "status": 200
+    },
+    {
+      "seconds": 0.008617350133135915,
+      "status": 200
+    },
+    {
+      "seconds": 0.008751631015911698,
+      "status": 200
+    },
+    {
+      "seconds": 0.016708455979824066,
+      "status": 200
+    },
+    {
+      "seconds": 0.009832839947193861,
+      "status": 200
+    },
+    {
+      "seconds": 0.011904456885531545,
+      "status": 200
+    },
+    {
+      "seconds": 0.012382461922243237,
+      "status": 200
+    },
+    {
+      "seconds": 0.009477558080106974,
+      "status": 200
+    },
+    {
+      "seconds": 0.010048642056062818,
+      "status": 200
+    },
+    {
+      "seconds": 0.009595919167622924,
+      "status": 200
+    },
+    {
+      "seconds": 0.00922223599627614,
+      "status": 200
+    },
+    {
+      "seconds": 0.017911546863615513,
+      "status": 200
+    },
+    {
+      "seconds": 0.009076914051547647,
+      "status": 200
+    },
+    {
+      "seconds": 0.014660720014944673,
+      "status": 200
+    },
+    {
+      "seconds": 0.009091953979805112,
+      "status": 200
+    },
+    {
+      "seconds": 0.008983673062175512,
+      "status": 200
+    },
+    {
+      "seconds": 0.009792960016056895,
+      "status": 200
+    },
+    {
+      "seconds": 0.018168149050325155,
+      "status": 200
+    },
+    {
+      "seconds": 0.00945331808179617,
+      "status": 200
+    },
+    {
+      "seconds": 0.00914771482348442,
+      "status": 200
+    },
+    {
+      "seconds": 0.008906953036785126,
+      "status": 200
+    },
+    {
+      "seconds": 0.010167562868446112,
+      "status": 200
+    },
+    {
+      "seconds": 0.009893720969557762,
+      "status": 200
+    },
+    {
+      "seconds": 0.009655199013650417,
+      "status": 200
+    },
+    {
+      "seconds": 0.015229045180603862,
+      "status": 200
+    },
+    {
+      "seconds": 0.012832544976845384,
+      "status": 200
+    },
+    {
+      "seconds": 0.009144834941253066,
+      "status": 200
+    },
+    {
+      "seconds": 0.00906575401313603,
+      "status": 200
+    },
+    {
+      "seconds": 0.009365636156871915,
+      "status": 200
+    },
+    {
+      "seconds": 0.008612149860709906,
+      "status": 200
+    },
+    {
+      "seconds": 0.008659990038722754,
+      "status": 200
+    },
+    {
+      "seconds": 0.009000593097880483,
+      "status": 200
+    },
+    {
+      "seconds": 0.009941481053829193,
+      "status": 200
+    },
+    {
+      "seconds": 0.008711630944162607,
+      "status": 200
+    },
+    {
+      "seconds": 0.011694576125591993,
+      "status": 200
+    },
+    {
+      "seconds": 0.014236756833270192,
+      "status": 200
+    },
+    {
+      "seconds": 0.008780471980571747,
+      "status": 200
+    },
+    {
+      "seconds": 0.008652950869873166,
+      "status": 200
+    },
+    {
+      "seconds": 0.00921971583738923,
+      "status": 200
+    },
+    {
+      "seconds": 0.016433615004643798,
+      "status": 200
+    },
+    {
+      "seconds": 0.009139835136011243,
+      "status": 200
+    },
+    {
+      "seconds": 0.008996034041047096,
+      "status": 200
+    },
+    {
+      "seconds": 0.008842992130666971,
+      "status": 200
+    },
+    {
+      "seconds": 0.009787159971892834,
+      "status": 200
+    },
+    {
+      "seconds": 0.008636311162263155,
+      "status": 200
+    },
+    {
+      "seconds": 0.009414157131686807,
+      "status": 200
+    },
+    {
+      "seconds": 0.008948713075369596,
+      "status": 200
+    },
+    {
+      "seconds": 0.009141355054453015,
+      "status": 200
+    },
+    {
+      "seconds": 0.009016114054247737,
+      "status": 200
+    },
+    {
+      "seconds": 0.012891145888715982,
+      "status": 200
+    },
+    {
+      "seconds": 0.008652430959045887,
+      "status": 200
+    },
+    {
+      "seconds": 0.008572950027883053,
+      "status": 200
+    },
+    {
+      "seconds": 0.00943151698447764,
+      "status": 200
+    },
+    {
+      "seconds": 0.008846272947266698,
+      "status": 200
+    },
+    {
+      "seconds": 0.008966712979599833,
+      "status": 200
+    },
+    {
+      "seconds": 0.009026073152199388,
+      "status": 200
+    },
+    {
+      "seconds": 0.010329364100471139,
+      "status": 200
+    },
+    {
+      "seconds": 0.008635229896754026,
+      "status": 200
+    },
+    {
+      "seconds": 0.010977368801832199,
+      "status": 200
+    },
+    {
+      "seconds": 0.009624119149520993,
+      "status": 200
+    },
+    {
+      "seconds": 0.009951001033186913,
+      "status": 200
+    },
+    {
+      "seconds": 0.009073714027181268,
+      "status": 200
+    },
+    {
+      "seconds": 0.00853982986882329,
+      "status": 200
+    },
+    {
+      "seconds": 0.008670350071042776,
+      "status": 200
+    },
+    {
+      "seconds": 0.008754231967031956,
+      "status": 200
+    },
+    {
+      "seconds": 0.012075259117409587,
+      "status": 200
+    },
+    {
+      "seconds": 0.021852578967809677,
+      "status": 200
+    },
+    {
+      "seconds": 0.009121075039729476,
+      "status": 200
+    },
+    {
+      "seconds": 0.008792671840637922,
+      "status": 200
+    },
+    {
+      "seconds": 0.009356557158753276,
+      "status": 200
+    },
+    {
+      "seconds": 0.008892992977052927,
+      "status": 200
+    },
+    {
+      "seconds": 0.009040473960340023,
+      "status": 200
+    },
+    {
+      "seconds": 0.008923472836613655,
+      "status": 200
+    },
+    {
+      "seconds": 0.00873239105567336,
+      "status": 200
+    },
+    {
+      "seconds": 0.011353171896189451,
+      "status": 200
+    },
+    {
+      "seconds": 0.008986192988231778,
+      "status": 200
+    },
+    {
+      "seconds": 0.009505877969786525,
+      "status": 200
+    },
+    {
+      "seconds": 0.01098581007681787,
+      "status": 200
+    },
+    {
+      "seconds": 0.008678351063281298,
+      "status": 200
+    },
+    {
+      "seconds": 0.008822353091090918,
+      "status": 200
+    }
+  ],
+  "production_health_errors": 0,
+  "production_after": {
+    "hotel-ai-web-1": {
+      "id": "4ff563692b1c0612f157ca98d1c1be4f7c77f86a2c5317180c3fbefc7340d732",
+      "started_at": "2026-11-16T09:32:45.188464508Z",
+      "running": true,
+      "health": "healthy"
+    },
+    "hotel-ai-piper-1": {
+      "id": "ad3a6727ac3229fae664a58385b4afb8a0b51967243b40443c8fbb2ad9db4615",
+      "started_at": "2026-11-14T16:43:24.171168695Z",
+      "running": true,
+      "health": "healthy"
+    },
+    "hotel-ai-asr-1": {
+      "id": "d9bf3b727d570089d98270f6a6f4b0abbdea66c899ceb4f344182341d35c0faf",
+      "started_at": "2026-11-14T17:08:00.546535131Z",
+      "running": true,
+      "health": "healthy"
+    }
+  }
+}
