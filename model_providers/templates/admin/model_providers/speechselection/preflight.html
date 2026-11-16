@@ -1,0 +1,17 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p><a href="{% url 'admin:model_providers_speechselection_changelist' %}">Back to planned assignments</a></p>
+{% if passed %}
+<p class="success">Static plan checks passed. This is not authorization to activate providers.</p>
+{% else %}
+<h2>Plan blockers</h2>
+<ul class="errorlist">{% for issue in issues %}<li>{{ issue }}</li>{% endfor %}</ul>
+{% endif %}
+<h2>Planned host totals</h2>
+<p>Totals include only deployments with valid catalog fields; invalid records are reported as blockers above. Each shared deployment is counted once. Budgets are locally reserved speech allocations, not physical host capacity.</p>
+<table>
+<thead><tr><th>Host</th><th>Deployments</th><th>CPU</th><th>CPU budget</th><th>RAM (MiB)</th><th>RAM budget (MiB)</th></tr></thead>
+<tbody>{% for total in totals %}<tr><td>{{ total.host }}</td><td>{{ total.deployments }}</td><td>{{ total.cpu }}</td><td>{{ total.cpu_budget|default_if_none:"Unconfigured" }}</td><td>{{ total.memory_mib }}</td><td>{{ total.memory_budget|default_if_none:"Unconfigured" }}</td></tr>{% empty %}<tr><td colspan="6">No valid planned deployments.</td></tr>{% endfor %}</tbody>
+</table>
+<p>This read-only check uses current catalog metadata. It does not contact hosts, verify downloaded artifacts or licensing rights, measure live usage, disk space or transition headroom, check readiness, reserve resources, or start/stop containers. Existing services and guest routing remain unchanged. A controller must revalidate the plan and observed host state before any future activation.</p>
+{% endblock %}

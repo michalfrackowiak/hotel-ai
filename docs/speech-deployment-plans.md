@@ -12,4 +12,6 @@ Referenced deployments/providers are protected from deletion. Clear affected ass
 
 ## Remaining lifecycle work
 
+The [static plan preflight](speech-plan-preflight.md) checks metadata, locally approved images, architecture and reserved CPU/RAM allocations before lifecycle work begins. Passing these checks does not authorize activation.
+
 A private authenticated controller must compare plans with observed state, validate approved images and host budgets, serialize changes, drain requests, keep shared providers running while referenced, check replacement readiness and roll back failure. Only after those checks can it atomically update live routing. No such execution or activation action is provided by this planning slice. The remaining hardware, microphone and full-host recovery gates remain open.
