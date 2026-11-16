@@ -1,0 +1,389 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-11-16T09:12:52.261473+00:00",
+  "run_id": "d23e707ed04e454299e3e793345c206d",
+  "conditions": {
+    "rounds_per_engine_per_language": 3,
+    "simultaneous_requests": 2,
+    "image_download_included": false,
+    "health_url": "http://127.0.0.1:8080/healthz/",
+    "limitations": [
+      "Readiness starts immediately before docker start and includes process/model loading with existing host page cache.",
+      "Synthetic fixtures and two simultaneous requests measure admission behavior, not real guest accuracy or sustainable throughput.",
+      "Rounds and engines run sequentially; only one engine is loaded with concurrent requests at a time.",
+      "Health latency measures the loopback web health route, excluding booking database work and public network latency.",
+      "No production container is restarted or attached to staging. Staging has no host ports or data mounts."
+    ]
+  },
+  "production_before": {
+    "hotel-ai-web-1": {
+      "id": "f337be74bdae7b9bc32d2409c7f5eed5e22db38cc9bb19bec871758e9954d9c8",
+      "started_at": "2026-11-15T22:11:26.56578481Z",
+      "running": true,
+      "health": "healthy"
+    },
+    "hotel-ai-piper-1": {
+      "id": "ad3a6727ac3229fae664a58385b4afb8a0b51967243b40443c8fbb2ad9db4615",
+      "started_at": "2026-11-14T16:43:24.171168695Z",
+      "running": true,
+      "health": "healthy"
+    },
+    "hotel-ai-asr-1": {
+      "id": "d9bf3b727d570089d98270f6a6f4b0abbdea66c899ceb4f344182341d35c0faf",
+      "started_at": "2026-11-14T17:08:00.546535131Z",
+      "running": true,
+      "health": "healthy"
+    }
+  },
+  "startup": {
+    "piper": {
+      "image_id": "sha256:ec96b0ad0db437f31edc954faffbc9231c77b47a9e31bdd59033fb4e7f8c4d12",
+      "process_to_ready_seconds": 1.5966790921520442,
+      "cpu_limit": 1,
+      "memory_limit": "1g",
+      "resources_ready": {
+        "memory.current": 212664320,
+        "memory.peak": 212664320,
+        "cpu.stat": {
+          "usage_usec": 1428801,
+          "user_usec": 1292036,
+          "system_usec": 136765,
+          "nice_usec": 0,
+          "core_sched.force_idle_usec": 0,
+          "nr_periods": 15,
+          "nr_throttled": 0,
+          "throttled_usec": 0,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    },
+    "asr": {
+      "image_id": "sha256:9f26fbdc6596e6b851323edbe8275f6e95ddb1a6154c92ae5939519b4ebf1091",
+      "process_to_ready_seconds": 1.739047059090808,
+      "cpu_limit": 1,
+      "memory_limit": "1536m",
+      "resources_ready": {
+        "memory.current": 311701504,
+        "memory.peak": 311701504,
+        "cpu.stat": {
+          "usage_usec": 1542076,
+          "user_usec": 1291147,
+          "system_usec": 250928,
+          "nice_usec": 0,
+          "core_sched.force_idle_usec": 0,
+          "nr_periods": 16,
+          "nr_throttled": 2,
+          "throttled_usec": 20915,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        },
+        "memory.events": {
+          "low": 0,
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0
+        }
+      }
+    }
+  },
+  "load": {
+    "piper": [
+      {
+        "round": 1,
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.24972640699706972
+          },
+          {
+            "status": 429,
+            "seconds": 0.010262004099786282
+          }
+        ]
+      },
+      {
+        "round": 2,
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.2525858711451292
+          },
+          {
+            "status": 429,
+            "seconds": 0.009648679057136178
+          }
+        ]
+      },
+      {
+        "round": 3,
+        "language": "en",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.009492838056758046
+          },
+          {
+            "status": 200,
+            "seconds": 0.251429860945791
+          }
+        ]
+      },
+      {
+        "round": 1,
+        "language": "pl",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.26601906097494066
+          },
+          {
+            "status": 429,
+            "seconds": 0.01703886012546718
+          }
+        ]
+      },
+      {
+        "round": 2,
+        "language": "pl",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.25731915002688766
+          },
+          {
+            "status": 429,
+            "seconds": 0.01843927102163434
+          }
+        ]
+      },
+      {
+        "round": 3,
+        "language": "pl",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.00967331905849278
+          },
+          {
+            "status": 200,
+            "seconds": 0.2543932448606938
+          }
+        ]
+      }
+    ],
+    "asr": [
+      {
+        "round": 1,
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.587641459191218,
+            "transcript": "for three nights"
+          },
+          {
+            "status": 429,
+            "seconds": 0.010180203011259437
+          }
+        ]
+      },
+      {
+        "round": 2,
+        "language": "en",
+        "requests": [
+          {
+            "status": 200,
+            "seconds": 0.5956394039094448,
+            "transcript": "for three nights"
+          },
+          {
+            "status": 429,
+            "seconds": 0.010282763978466392
+          }
+        ]
+      },
+      {
+        "round": 3,
+        "language": "en",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.011225732043385506
+          },
+          {
+            "status": 200,
+            "seconds": 0.5977389409672469,
+            "transcript": "for three nights"
+          }
+        ]
+      },
+      {
+        "round": 1,
+        "language": "pl",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.009873281000182033
+          },
+          {
+            "status": 200,
+            "seconds": 0.44815119495615363,
+            "transcript": "na trzy noce"
+          }
+        ]
+      },
+      {
+        "round": 2,
+        "language": "pl",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.010819809045642614
+          },
+          {
+            "status": 200,
+            "seconds": 0.45115665905177593,
+            "transcript": "na trzy noce"
+          }
+        ]
+      },
+      {
+        "round": 3,
+        "language": "pl",
+        "requests": [
+          {
+            "status": 429,
+            "seconds": 0.00959987798705697
+          },
+          {
+            "status": 200,
+            "seconds": 0.46243367181159556,
+            "transcript": "na trzy noce"
+          }
+        ]
+      }
+    ]
+  },
+  "cleanup": {
+    "hotel-capacity-d23e707ed04e454299e3e793345c206d-asr": "removed",
+    "hotel-capacity-d23e707ed04e454299e3e793345c206d-piper": "removed",
+    "hotel-capacity-d23e707ed04e454299e3e793345c206d": "removed"
+  },
+  "web_health_baseline": [
+    {
+      "seconds": 0.012072458863258362,
+      "status": 200
+    },
+    {
+      "seconds": 0.00921939592808485,
+      "status": 200
+    },
+    {
+      "seconds": 0.008996592834591866,
+      "status": 200
+    },
+    {
+      "seconds": 0.0100213629193604,
+      "status": 200
+    },
+    {
+      "seconds": 0.008294268045574427,
+      "status": 200
+    }
+  ],
+  "resources_final": {
+    "piper": {
+      "memory.current": 269889536,
+      "memory.peak": 270368768,
+      "cpu.stat": {
+        "usage_usec": 3498413,
+        "user_usec": 3315902,
+        "system_usec": 182510,
+        "nice_usec": 0,
+        "core_sched.force_idle_usec": 0,
+        "nr_periods": 41,
+        "nr_throttled": 0,
+        "throttled_usec": 0,
+        "nr_bursts": 0,
+        "burst_usec": 0
+      },
+      "memory.events": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0,
+        "sock_throttled": 0
+      }
+    },
+    "asr": {
+      "memory.current": 327970816,
+      "memory.peak": 336199680,
+      "cpu.stat": {
+        "usage_usec": 4688112,
+        "user_usec": 4375395,
+        "system_usec": 312717,
+        "nice_usec": 0,
+        "core_sched.force_idle_usec": 0,
+        "nr_periods": 50,
+        "nr_throttled": 2,
+        "throttled_usec": 20915,
+        "nr_bursts": 0,
+        "burst_usec": 0
+      },
+      "memory.events": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0,
+        "sock_throttled": 0
+      }
+    }
+  },
+  "web_health_during_staging": {
+    "samples": 35,
+    "errors": 0,
+    "p50_seconds": 0.010124163003638387,
+    "p95_seconds": 0.017556224018335342,
+    "max_seconds": 0.030176686821505427
+  },
+  "production_after": {
+    "hotel-ai-web-1": {
+      "id": "f337be74bdae7b9bc32d2409c7f5eed5e22db38cc9bb19bec871758e9954d9c8",
+      "started_at": "2026-11-15T22:11:26.56578481Z",
+      "running": true,
+      "health": "healthy"
+    },
+    "hotel-ai-piper-1": {
+      "id": "ad3a6727ac3229fae664a58385b4afb8a0b51967243b40443c8fbb2ad9db4615",
+      "started_at": "2026-11-14T16:43:24.171168695Z",
+      "running": true,
+      "health": "healthy"
+    },
+    "hotel-ai-asr-1": {
+      "id": "d9bf3b727d570089d98270f6a6f4b0abbdea66c899ceb4f344182341d35c0faf",
+      "started_at": "2026-11-14T17:08:00.546535131Z",
+      "running": true,
+      "health": "healthy"
+    }
+  },
+  "preflight_memory_available_bytes": 10358792192
+}
