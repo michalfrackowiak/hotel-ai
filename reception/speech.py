@@ -4,6 +4,7 @@ import wave
 from functools import lru_cache
 from http.client import HTTPException
 from threading import BoundedSemaphore
+from urllib.error import HTTPError
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 from django.conf import settings
@@ -13,11 +14,20 @@ MAX_AUDIO_BYTES = 8 * 1024 * 1024
 MAX_TEXT_CHARACTERS = 1000
 MAX_PCM_BYTES = 480000
 MAX_TRANSCRIPT_BYTES = 8192
-generation_slot = BoundedSemaphore(1)
-transcription_slot = BoundedSemaphore(1)
+# Bound outbound requests to one inference plus one runtime queue slot. Waiting
+# happens only at the engine, so the web process adds no second queue.
+generation_slot = BoundedSemaphore(2)
+transcription_slot = BoundedSemaphore(2)
+# The deployed Gunicorn worker has four threads. Leave one available for chat
+# and health even when both engines have waiting requests.
+speech_slots = BoundedSemaphore(3)
 
 
 class SpeechUnavailable(RuntimeError):
+    pass
+
+
+class SpeechBusy(SpeechUnavailable):
     pass
 
 
@@ -30,7 +40,10 @@ def synthesize(reply, language):
     if language not in {"en", "pl"} or not reply or len(reply) > MAX_TEXT_CHARACTERS:
         raise SpeechUnavailable("The speech engine cannot synthesize this reply.")
     if not generation_slot.acquire(blocking=False):
-        raise SpeechUnavailable("The speech engine is busy.")
+        raise SpeechBusy("The speech engine is busy.")
+    if not speech_slots.acquire(blocking=False):
+        generation_slot.release()
+        raise SpeechBusy("The speech service is busy.")
     try:
         request = Request(
             f"{settings.HOTEL_PIPER_URL}/synthesize",
@@ -41,9 +54,14 @@ def synthesize(reply, language):
         opener = build_opener(ProxyHandler({}), _NoRedirect())
         with opener.open(request, timeout=settings.HOTEL_PIPER_TIMEOUT) as response:
             audio = response.read(MAX_AUDIO_BYTES + 1)
+    except HTTPError as error:
+        if error.code == 429:
+            raise SpeechBusy("The speech engine is busy.") from error
+        raise SpeechUnavailable("The speech engine did not return audio.") from error
     except (OSError, HTTPException, ValueError) as error:
         raise SpeechUnavailable("The speech engine did not return audio.") from error
     finally:
+        speech_slots.release()
         generation_slot.release()
     if len(audio) > MAX_AUDIO_BYTES:
         raise SpeechUnavailable("The speech engine returned invalid audio.")
@@ -86,8 +104,13 @@ def synthesize_welcome(parts):
 
 
 def transcribe(pcm, language):
-    if language not in {"en", "pl"} or not transcription_slot.acquire(blocking=False):
+    if language not in {"en", "pl"}:
         raise SpeechUnavailable("The speech recognizer is unavailable.")
+    if not transcription_slot.acquire(blocking=False):
+        raise SpeechBusy("The speech recognizer is busy.")
+    if not speech_slots.acquire(blocking=False):
+        transcription_slot.release()
+        raise SpeechBusy("The speech service is busy.")
     try:
         request = Request(
             f"{settings.HOTEL_ASR_URL}/transcribe?language={language}",
@@ -104,9 +127,14 @@ def transcribe(pcm, language):
         text = result.get("text") if isinstance(result, dict) else None
         if not isinstance(text, str):
             raise ValueError("invalid transcript response")
+    except HTTPError as error:
+        if error.code == 429:
+            raise SpeechBusy("The speech recognizer is busy.") from error
+        raise SpeechUnavailable("The speech recognizer did not return a transcript.") from error
     except (OSError, HTTPException, ValueError, RecursionError) as error:
         raise SpeechUnavailable("The speech recognizer did not return a transcript.") from error
     finally:
+        speech_slots.release()
         transcription_slot.release()
     return text.strip()
 

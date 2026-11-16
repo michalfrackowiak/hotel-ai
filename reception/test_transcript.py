@@ -1,10 +1,11 @@
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from .models import Conversation
-from .speech import MAX_PCM_BYTES, MAX_TRANSCRIPT_BYTES, SpeechUnavailable, transcribe
+from .speech import MAX_PCM_BYTES, MAX_TRANSCRIPT_BYTES, SpeechBusy, SpeechUnavailable, transcribe, transcription_slot
 
 
 @override_settings(HOTEL_ASR_URL="http://asr:5001")
@@ -86,6 +87,45 @@ class ReceptionTranscriptTests(TestCase):
             return "Stale text"
 
         recognize.side_effect = change_revision
+        self.assertEqual(self.upload().status_code, 409)
+
+    @patch("reception.speech.build_opener")
+    def test_admission_and_upstream_busy_recover_without_leaking_slots(self, opener):
+        connection = opener.return_value.open
+        connection.return_value.__enter__.return_value.read.return_value = b'{"text":"Hello"}'
+        self.assertTrue(transcription_slot.acquire(blocking=False))
+        try:
+            self.assertEqual(transcribe(self.pcm, "en"), "Hello")
+            self.assertTrue(transcription_slot.acquire(blocking=False))
+            try:
+                with self.assertRaises(SpeechBusy):
+                    transcribe(self.pcm, "en")
+            finally:
+                transcription_slot.release()
+            connection.side_effect = HTTPError("http://asr", 429, "busy", {}, None)
+            with self.assertRaises(SpeechBusy):
+                transcribe(self.pcm, "pl")
+            connection.side_effect = None
+            self.assertEqual(transcribe(self.pcm, "pl"), "Hello")
+        finally:
+            transcription_slot.release()
+
+    @patch("reception.views.transcribe", side_effect=SpeechBusy)
+    def test_busy_keeps_draft_and_stale_revision_takes_precedence(self, recognize):
+        before = Conversation.objects.get().state
+        response = self.upload()
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.json(), {"error": "speech_busy"})
+        self.assertEqual(response["Retry-After"], "1")
+        self.assertEqual(Conversation.objects.get().state, before)
+
+        def changed(*_):
+            conversation = Conversation.objects.get()
+            conversation.state["revision"] = "b" * 32
+            conversation.save(update_fields=["state"])
+            raise SpeechBusy
+
+        recognize.side_effect = changed
         self.assertEqual(self.upload().status_code, 409)
 
     @patch("reception.speech.build_opener")

@@ -2,6 +2,7 @@ import io
 import json
 import wave
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from django.contrib.sessions.models import Session
 from django.test import Client, TestCase, override_settings
@@ -10,7 +11,7 @@ from django.utils import timezone
 
 from .conversation import ARRIVAL_PARTS, WELCOME_PARTS, new_conversation
 from .models import Conversation, ScenarioPrompt
-from .speech import MAX_AUDIO_BYTES, SpeechUnavailable, synthesize
+from .speech import MAX_AUDIO_BYTES, SpeechBusy, SpeechUnavailable, generation_slot, speech_slots, synthesize, transcribe
 
 
 def wav_fixture(*, channels=1, sample_width=2, rate=22050):
@@ -203,6 +204,60 @@ class ReceptionAudioTests(TestCase):
         response = self.request_audio(self.payload, token=self.token)
         self.assertEqual(response.status_code, 503)
         self.assertEqual(Conversation.objects.get().state["revision"], self.payload["revision"])
+
+    @patch("reception.views.synthesize", side_effect=SpeechBusy)
+    def test_busy_is_retryable_and_never_overrides_a_new_revision(self, generate):
+        before = Conversation.objects.get().state
+        response = self.request_audio(self.payload, token=self.token)
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.json(), {"error": "speech_busy"})
+        self.assertEqual(response["Retry-After"], "1")
+        self.assertEqual(Conversation.objects.get().state, before)
+
+        def changed(*_):
+            conversation = Conversation.objects.get()
+            conversation.state["revision"] = "b" * 32
+            conversation.save(update_fields=["state"])
+            raise SpeechBusy
+
+        generate.side_effect = changed
+        self.assertEqual(self.request_audio(self.payload, token=self.token).status_code, 409)
+
+    @patch("reception.speech.build_opener")
+    def test_combined_speech_limit_preserves_a_web_thread_and_recovers(self, opener):
+        for _ in range(3):
+            self.assertTrue(speech_slots.acquire(blocking=False))
+        try:
+            for operation in (lambda: synthesize("Hello", "en"), lambda: transcribe(b"\0\0", "pl")):
+                with self.assertRaises(SpeechBusy):
+                    operation()
+            opener.assert_not_called()
+        finally:
+            for _ in range(3):
+                speech_slots.release()
+        opener.return_value.open.return_value.__enter__.return_value.read.return_value = wav_fixture()
+        self.assertEqual(synthesize("Hello", "en"), wav_fixture())
+
+    @patch("reception.speech.build_opener")
+    def test_two_outbound_slots_and_runtime_busy_release_admission(self, opener):
+        connection = opener.return_value.open
+        connection.return_value.__enter__.return_value.read.return_value = wav_fixture()
+        self.assertTrue(generation_slot.acquire(blocking=False))
+        try:
+            self.assertEqual(synthesize("Hello", "en"), wav_fixture())
+            self.assertTrue(generation_slot.acquire(blocking=False))
+            try:
+                with self.assertRaises(SpeechBusy):
+                    synthesize("Hello", "en")
+            finally:
+                generation_slot.release()
+            connection.side_effect = HTTPError("http://piper", 429, "busy", {}, None)
+            with self.assertRaises(SpeechBusy):
+                synthesize("Hello", "en")
+            connection.side_effect = None
+            self.assertEqual(synthesize("Hello", "en"), wav_fixture())
+        finally:
+            generation_slot.release()
 
     @patch("reception.speech.build_opener")
     def test_runtime_request_is_bounded_and_sends_the_exact_piper_payload(self, opener):

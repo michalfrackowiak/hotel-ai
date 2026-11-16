@@ -30,6 +30,7 @@
         microphone: "Nie można użyć mikrofonu. Sprawdź, czy jest podłączony, lub skorzystaj z czatu.",
         transcribing: "Rozpoznaję odpowiedź…",
         recognition: "Rozpoznawanie mowy jest niedostępne. Spróbuj ponownie lub skorzystaj z czatu.",
+        busy: "Obsługa głosu jest teraz zajęta. Włącz rozmowę głosową ponownie za chwilę lub wpisz odpowiedź na czacie.",
         silence: "Nie usłyszano odpowiedzi. Spróbuj ponownie lub skorzystaj z czatu.",
         error: "Rozmowa głosowa została przerwana. Spróbuj ponownie lub skorzystaj z czatu.",
         finished: "Rozmowa głosowa zakończona.",
@@ -49,6 +50,7 @@
         microphone: "The microphone is unavailable. Check that it is connected or use chat.",
         transcribing: "Transcribing your answer…",
         recognition: "Speech recognition is unavailable. Try again or use chat.",
+        busy: "Voice service is busy. Start voice booking again in a moment, or type your answer in chat.",
         silence: "No response was heard. Try again or use chat.",
         error: "Voice booking was interrupted. Try again or use chat.",
         finished: "Voice booking ended.",
@@ -277,6 +279,11 @@
                 button.disabled = true;
                 return;
             }
+            if (response.status === 429) {
+                stop(copy.busy);
+                input.focus();
+                return;
+            }
             if (!response.ok) throw new Error("Transcription request failed");
             const result = await response.json();
             if (recording === current) submitTranscript(result.text);
@@ -455,6 +462,11 @@
                 }
                 stop(copy.stale);
                 button.disabled = true;
+                return;
+            }
+            if (responseStatus === 429) {
+                stop(copy.busy);
+                input.focus();
                 return;
             }
             if (!bytes) {

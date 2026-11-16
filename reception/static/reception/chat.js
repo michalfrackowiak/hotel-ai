@@ -368,7 +368,7 @@
             if (voiceActive) {
                 displayedTurn.spoken.clear();
                 displayedTurn.item.querySelector("p").textContent = "";
-            } else if (displayedTurn.spoken.size === 0) {
+            } else {
                 displayedTurn.item.querySelector("p").textContent = displayedTurn.result.reply;
             }
         }

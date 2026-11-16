@@ -23,7 +23,7 @@ from .parser_review import review_booking_input
 from .parsing import parse_stay_input
 from .receipt import DELIVERY_PENDING, refresh_receipt
 from .scenario import ENGLISH_WEB_GREETING, render_chat, scenario_overrides, set_prompt, voice_segments
-from .speech import MAX_PCM_BYTES, SpeechUnavailable, synthesize, synthesize_welcome, transcribe, transcribe_welcome
+from .speech import MAX_PCM_BYTES, SpeechBusy, SpeechUnavailable, synthesize, synthesize_welcome, transcribe, transcribe_welcome
 
 
 MAX_BODY_BYTES = 4096
@@ -332,6 +332,7 @@ def audio(request):
         return HttpResponse(status=409)
     if part is not None and part >= len(parts):
         return _invalid()
+    busy = False
     try:
         if part is not None:
             segment = parts[part]
@@ -340,10 +341,14 @@ def audio(request):
             speech = synthesize_welcome(WELCOME_PARTS)
         else:
             speech = synthesize(state["reply"], state["language"])
+    except SpeechBusy:
+        speech, busy = None, True
     except SpeechUnavailable:
         speech = None
     if not conversation.filter(state__revision=revision).exists():
         return HttpResponse(status=409)
+    if busy:
+        return JsonResponse({"error": "speech_busy"}, status=429, headers={"Retry-After": "1"})
     if speech is None:
         return HttpResponse(status=503)
     return HttpResponse(speech, content_type="audio/wav", headers={"X-Content-Type-Options": "nosniff"})
@@ -378,16 +383,21 @@ def transcript(request):
     if not pcm or len(pcm) % 2:
         return _invalid()
 
+    busy = False
     try:
         if state["stage"] == "welcome":
             text = transcribe_welcome(pcm, state["language"])
         else:
             text = transcribe(pcm, state["language"])
+    except SpeechBusy:
+        text, busy = None, True
     except SpeechUnavailable:
         text = None
     current = conversation.filter(state__revision=revision)
     if not current.exists():
         return HttpResponse(status=409)
+    if busy:
+        return JsonResponse({"error": "speech_busy"}, status=429, headers={"Retry-After": "1"})
     if text is None:
         return HttpResponse(status=503)
     return JsonResponse({"text": text})
