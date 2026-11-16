@@ -17,6 +17,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Check isolated benchmark safety gates
+        run: python -m unittest discover -s scripts -p 'test_benchmark_*.py'
       - name: Build the app image
         run: docker compose build
       - name: Check Django, migrations, and tests
