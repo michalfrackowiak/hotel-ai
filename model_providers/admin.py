@@ -2,7 +2,7 @@ from django.contrib import admin
 from django import forms
 from django.forms.models import BaseInlineFormSet
 
-from .models import AgentConfiguration, SPEECH_LANGUAGES, SpeechModel, SpeechProvider
+from .models import AgentConfiguration, SPEECH_LANGUAGES, SpeechModel, SpeechProvider, SpeechDeployment, SpeechSelection
 
 
 @admin.register(AgentConfiguration)
@@ -64,3 +64,32 @@ class SpeechProviderAdmin(admin.ModelAdmin):
     @admin.display(description="Languages")
     def supported_languages(self, obj):
         return ", ".join(obj.languages)
+
+
+@admin.register(SpeechDeployment)
+class SpeechDeploymentAdmin(admin.ModelAdmin):
+    list_display = ("name", "provider", "host", "container_name", "observed_state", "reference_count")
+    readonly_fields = ("observed_state", "reference_count")
+    prepopulated_fields = {"slug": ("name",)}
+    fieldsets = (("Planning only — does not change live containers or routing", {
+        "fields": ("name", "slug", "provider", "host", "container_name", "observed_state", "reference_count", "notes"),
+    }),)
+
+    @admin.display(description="Planned assignment count")
+    def reference_count(self, obj):
+        return obj.planned_selections.count() if obj.pk else 0
+
+
+@admin.register(SpeechSelection)
+class SpeechSelectionAdmin(admin.ModelAdmin):
+    list_display = ("language", "task", "deployment")
+    readonly_fields = ("language", "task")
+    fieldsets = (("Planned assignment only — does not activate a provider", {
+        "fields": ("language", "task", "deployment"),
+    }),)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

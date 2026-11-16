@@ -93,6 +93,12 @@ class SpeechProvider(models.Model):
     def __str__(self):
         return self.name
 
+    def clean(self):
+        if self.pk and self.deployments.filter(planned_selections__isnull=False).exists():
+            original = type(self).objects.get(pk=self.pk)
+            if self.task != original.task or self.languages != original.languages:
+                raise ValidationError("Clear planned assignments before changing this provider's task or languages.")
+
 
 class SpeechModel(models.Model):
     provider = models.ForeignKey(SpeechProvider, on_delete=models.CASCADE, related_name="speech_models")
@@ -115,3 +121,56 @@ class SpeechModel(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class SpeechDeployment(models.Model):
+    name = models.CharField(max_length=120, unique=True)
+    slug = models.SlugField(unique=True)
+    provider = models.ForeignKey(SpeechProvider, on_delete=models.PROTECT, related_name="deployments")
+    host = models.SlugField(help_text="Planning label only; not a URL or remote command.")
+    container_name = models.CharField(max_length=128, validators=[RegexValidator(
+        r"\A[a-zA-Z0-9][a-zA-Z0-9_.-]*\Z", "Use a container identifier, not a command.")])
+    observed_state = models.CharField(max_length=7, default="unknown", editable=False)
+    notes = models.TextField(blank=True, max_length=4000)
+
+    class Meta:
+        ordering = ("name",)
+        verbose_name = "planned speech deployment"
+        constraints = [
+            models.UniqueConstraint(fields=("host", "container_name"), name="speech_deployment_identity"),
+            models.CheckConstraint(condition=models.Q(observed_state="unknown"), name="speech_deployment_unobserved"),
+        ]
+
+    def clean(self):
+        if self.pk and self.planned_selections.exists():
+            original = type(self).objects.get(pk=self.pk)
+            if self.provider_id != original.provider_id:
+                raise ValidationError({"provider": "Clear planned assignments before changing the provider."})
+
+    def __str__(self):
+        return self.name
+
+
+class SpeechSelection(models.Model):
+    language = models.CharField(max_length=2, choices=SPEECH_LANGUAGES)
+    task = models.CharField(max_length=3, choices=SpeechProvider.Task.choices)
+    deployment = models.ForeignKey(SpeechDeployment, null=True, blank=True, on_delete=models.PROTECT,
+                                   related_name="planned_selections")
+
+    class Meta:
+        ordering = ("language", "task")
+        verbose_name = "planned speech assignment"
+        constraints = [
+            models.UniqueConstraint(fields=("language", "task"), name="speech_selection_slot"),
+            models.CheckConstraint(condition=models.Q(language__in=("en", "pl")), name="speech_selection_language"),
+            models.CheckConstraint(condition=models.Q(task__in=("stt", "tts")), name="speech_selection_task"),
+        ]
+
+    def clean(self):
+        if self.deployment_id:
+            provider = self.deployment.provider
+            if self.task != provider.task or self.language not in provider.languages:
+                raise ValidationError({"deployment": "The provider must support this assignment's task and language."})
+
+    def __str__(self):
+        return f"{self.get_language_display()} — {self.get_task_display()} (planned)"
