@@ -8,6 +8,7 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 - [x] 0.4 first baseline: inventory accessible server/MacBook hardware, add bounded bilingual synthetic speech tooling, measure warm latency and semantic extraction, and verify isolated SQLite backup/restore. See [results and remaining checks](hardware-speech-baseline.md).
 - [ ] 0.4 completion: staging cold-start/concurrent-load/peak-resource checks, physical microphone evaluation, full off-host recovery and any separately used PC/macOS inventory.
+- [x] 0.4 staging increment: cached-image process readiness, two-request admission, cgroup memory peaks and web-health responsiveness. See [staging results](staging-speech-capacity.md). Sustained mixed workload and microphone evaluation remain open.
 
 ## Alpha
 
