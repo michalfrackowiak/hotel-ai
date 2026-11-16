@@ -10,7 +10,7 @@ from django.contrib.auth.models import Permission
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
-from .controller_client import InventoryError, fetch_inventory, inventory_report
+from .controller_client import InventoryError, fetch_inventory, inventory_report, validate_inventory
 from .models import SpeechDeployment, SpeechProvider, SpeechSelection
 
 
@@ -60,6 +60,21 @@ def controller_response(body=None, redirect=False, malformed_status=False):
 
 
 class ControllerTransportTests(SimpleTestCase):
+    def test_host_resources_optional_strict_and_unknown(self):
+        self.assertNotIn("host_resources", validate_inventory(snapshot(), "fixture-host"))
+        resources = dict(scope="controller_host", platform="linux", cpu_count=4,
+            memory_total_mib=8192, memory_available_mib=0, disk_total_mib=16384, disk_free_mib=4096)
+        data = snapshot() | {"host_resources": resources}
+        self.assertEqual(validate_inventory(data, "fixture-host")["host_resources"], resources)
+        unknown = {key: None for key in resources if key not in ("scope", "platform")}
+        validate_inventory(snapshot() | {"host_resources": unknown | {"scope": "controller_host", "platform": "unsupported"}}, "fixture-host")
+        for change in ({"scope": "docker_host"}, {"platform": "unsupported"}, {"cpu_count": True},
+                       {"cpu_count": 1.5}, {"memory_available_mib": 9000}, {"disk_free_mib": -1},
+                       {"disk_total_mib": None}, {"disk_total_mib": 0}, {"memory_total_mib": float("inf")},
+                       {"disk_free_mib": float("nan")}, {"path": "/private"}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                validate_inventory(snapshot() | {"host_resources": resources | change}, "fixture-host")
+
     def test_real_http_auth_and_redirect_never_forwarded(self):
         with controller_response() as calls, patch.dict("os.environ", {"http_proxy": "http://invalid.test:1"}):
             self.assertEqual(fetch_inventory()["host"], "fixture-host")
@@ -144,3 +159,15 @@ class ControllerAdminTests(TestCase):
             report = inventory_report()
             self.assertEqual(report["rows"], [])
             self.assertIn("not configured", report["inventory_error"])
+
+    def test_resource_snapshot_rendered_without_changing_plan(self):
+        user = get_user_model().objects.create_superuser("resource-viewer", password="fictional")
+        self.client.force_login(user)
+        data = snapshot() | {"host_resources": dict(scope="controller_host", platform="linux", cpu_count=4,
+            memory_total_mib=8192, memory_available_mib=2048, disk_total_mib=None, disk_free_mib=None)}
+        with patch("model_providers.controller_client.fetch_inventory", return_value=data):
+            response = self.client.get(reverse("admin:model_providers_speechselection_inventory"))
+        self.assertContains(response, "Controller-host resources")
+        self.assertContains(response, "Logical CPUs: 4")
+        self.assertContains(response, "Unknown / Unknown")
+        self.assertContains(response, "not reserved capacity")

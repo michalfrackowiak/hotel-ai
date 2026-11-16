@@ -3,6 +3,13 @@
 <p><a href="{% url 'admin:model_providers_speechselection_changelist' %}">Back to planned assignments</a></p>
 {% if inventory_error %}<p class="errornote">{{ inventory_error }}</p>{% else %}
 <p>Host: {{ observed_host }}. Observed at: {{ observed_at }}. This snapshot may already be stale.</p>
+<h2>Controller-host resources</h2>
+{% if host_resources %}
+<p>Platform: {{ host_resources.platform }}. Logical CPUs: {{ host_resources.cpu_count|default_if_none:"Unknown" }}.</p>
+<p>Memory total / available (MiB): {{ host_resources.memory_total_mib|default_if_none:"Unknown" }} / {{ host_resources.memory_available_mib|default_if_none:"Unknown" }}.</p>
+<p>Configured storage filesystem total / free (MiB): {{ host_resources.disk_total_mib|default_if_none:"Unknown" }} / {{ host_resources.disk_free_mib|default_if_none:"Unknown" }}.</p>
+{% else %}<p>Unknown: this controller did not report host resources.</p>{% endif %}
+<p>These are controller-host observations, not reserved capacity or permission to switch. A remote Docker daemon may use a different host. Container or process limits may be lower than physical host resources.</p>
 <table>
 <thead><tr><th>Container / planned deployment</th><th>State / health</th><th>Configured image / image ID</th><th>CPU / RAM (MiB)</th><th>Plan comparison</th></tr></thead>
 <tbody>{% for row in rows %}<tr>
