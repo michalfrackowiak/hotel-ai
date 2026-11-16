@@ -14,6 +14,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 ## Alpha
 
+- [x] 0.5 first slice: private speech-provider catalog with STT/TTS metadata, EN/PL model/voice entries, pinned artifact validation and resource budgets. See [catalog](speech-provider-catalog.md). Live selection and Docker switching remain unimplemented; remaining 0.4 gates stay open.
+
 - [x] Off-host SQLite/Django recovery: private online snapshot transferred intact, restored on Windows/x86-64, integrity/migration/bilingual entry/booking replay checks passed and temporary copies deleted. See [drill](offhost-recovery.md). Full replacement-host and speech-service recovery remains open.
 
 - [x] Two-minute deployed-queue staging validation: 39 fictional bookings and 126 successful speech requests; unchanged production health and verified cleanup. See [report](queue-load-validation.md). [Physical microphone protocol](microphone-evaluation.md) prepared; execution remains pending.
