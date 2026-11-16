@@ -14,6 +14,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 ## Alpha
 
+- [x] 0.5 controller inventory: separate authenticated loopback service observes only allowlisted container state, image identity and configured limits through bounded read-only Docker calls. See [controller](speech-controller.md). Django integration, observed transition admission and mutation remain unimplemented.
+
 - [x] 0.5 static preflight: private admin checks complete assignments against local host/image approvals, architecture, metadata completeness and reserved CPU/RAM budgets, counting shared deployments once. See [preflight](speech-plan-preflight.md). This does not authorize activation or replace observed transition admission in the future controller.
 
 - [x] 0.5 planning slice: deployment metadata and four fixed EN/PL STT/TTS planned assignments, shared-deployment reference counts and compatibility validation. See [deployment plans](speech-deployment-plans.md). Assignments do not activate providers; lifecycle control and live routing remain next.

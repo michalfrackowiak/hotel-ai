@@ -21,6 +21,8 @@ jobs:
         run: python -m unittest discover -s scripts -p 'test_benchmark_*.py'
       - name: Check speech queue admission and recovery
         run: python -m unittest discover -s scripts -p 'test_runtime_*.py'
+      - name: Check private speech controller inventory
+        run: python -m unittest discover -s scripts -p 'test_controller_*.py'
       - name: Build the app image
         run: docker compose build
       - name: Check Django, migrations, and tests
@@ -42,6 +44,22 @@ jobs:
           curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8080/static/reception/voice.js
           curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8080/admin/login/
           curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8080/static/admin/css/base.css
+      - name: Check controller projection against Docker
+        run: |
+          python - <<'PY'
+          import subprocess
+          from speech_controller.service import Configuration, inventory
+          image = subprocess.check_output(["docker", "compose", "images", "-q", "web"], text=True).strip()
+          name = "hotel-ai-controller-ci-fixture"
+          subprocess.run(["docker", "create", "--name", name, "--network", "none",
+                          "--memory", "32m", "--cpus", "0.25", "--read-only", image], check=True)
+          try:
+              item = inventory(Configuration("x" * 32, "ci-fixture", (name,)))["deployments"][0]
+              assert item["state"] == "created" and item["health"] == "none"
+              assert item["cpu_limit"] == 0.25 and item["memory_mib"] == 32
+          finally:
+              subprocess.run(["docker", "rm", name], check=True)
+          PY
       - name: Smoke-test the optional phone service
         env:
           DJANGO_SECRET_KEY: django-insecure-ci-phone-fixture
