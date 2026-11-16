@@ -1,0 +1,18 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p><a href="{% url 'admin:model_providers_speechselection_changelist' %}">Back to planned assignments</a></p>
+{% if passed %}<p>Configured overlap fits reserved budget. This is not permission to activate.</p>{% endif %}
+{% if issues %}<h2>Budget blockers</h2><ul class="errorlist">{% for issue in issues %}<li>{{ issue }}</li>{% endfor %}</ul>{% endif %}
+{% if observed_at %}<p>Host: {{ observed_host }}. Observed at: {{ observed_at }}.</p>{% endif %}
+{% if cpu_budget %}
+<p>Observed active containers: {{ active_count }}. Distinct planned deployments: {{ planned_count }}.</p>
+<table><thead><tr><th>Configured limits</th><th>CPU</th><th>RAM (MiB)</th></tr></thead><tbody>
+<tr><td>Observed active</td><td>{{ active_cpu|default_if_none:"Unknown" }}</td><td>{{ active_memory|default_if_none:"Unknown" }}</td></tr>
+<tr><td>Conservative overlap</td><td>{{ overlap_cpu|default_if_none:"Unknown" }}</td><td>{{ overlap_memory|default_if_none:"Unknown" }}</td></tr>
+<tr><td>Reserved budget</td><td>{{ cpu_budget }}</td><td>{{ memory_budget }}</td></tr>
+</tbody></table>
+{% endif %}
+<ul>{% for row in rows %}<li>{{ row.name }}: {{ row.action }}</li>{% endfor %}</ul>
+<p>All observed active containers are retained, including unplanned containers. Shared matching active deployments count once; inactive or unobserved planned deployments add their limits. No resource credit is taken for stopping containers. Unobserved names may exist outside the controller allowlist; their availability is not verified.</p>
+<p>This read-only preview does not reserve resources, verify disk space, measure live headroom, establish model readiness or authorize a switch. CPU reports NanoCpus only. Inventory and plans can change after this report. No containers, routes or stored observations are changed. A lifecycle controller must validate execution inputs and current host state before activation.</p>
+{% endblock %}
