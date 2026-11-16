@@ -103,6 +103,8 @@ class TransitionBudgetTests(TestCase):
             before = [list(model.objects.values()) for model in models]
             response = self.client.get(url)
             self.assertContains(response, "Configured overlap fits reserved budget")
+            self.assertContains(response, "No local resource admission policy")
+            self.assertNotContains(response, "Resource preview checks passed")
             self.assertIn("no-store", response.headers["Cache-Control"])
             self.assertEqual(self.client.post(url).status_code, 405)
             self.assertEqual(before, [list(model.objects.values()) for model in models])

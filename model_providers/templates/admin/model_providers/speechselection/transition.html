@@ -13,6 +13,20 @@
 </tbody></table>
 {% endif %}
 <ul>{% for row in rows %}<li>{{ row.name }}: {{ row.action }}</li>{% endfor %}</ul>
+<h2>Observed resource preview</h2>
+{% if resource_report %}
+{% if resource_report.passed %}<p>Resource preview checks passed—not execution authorization.</p>{% endif %}
+<ul class="errorlist">{% for issue in resource_report.issues %}<li>{{ issue }}</li>{% endfor %}</ul>
+{% if resource_report.memory_required %}
+<table><thead><tr><th>Resource</th><th>Required</th><th>Observed available</th></tr></thead><tbody>
+<tr><td>Logical CPUs</td><td>{{ resource_report.cpu_required }}</td><td>{{ resource_report.cpu_count }}</td></tr>
+<tr><td>Memory (MiB), full overlap plus reserve</td><td>{{ resource_report.memory_required }}</td><td>{{ resource_report.memory_available }}</td></tr>
+<tr><td>Storage (MiB), peak artifacts plus reserve</td><td>{{ resource_report.disk_required }}</td><td>{{ resource_report.disk_free }}</td></tr>
+</tbody></table>
+<p>Distinct planned images: {{ resource_report.image_count }}. Peak artifact estimates (MiB): {{ resource_report.artifact_required }}. Cached artifacts receive no credit.</p>
+{% endif %}
+{% else %}<p>Blocked until the configured transition-budget checks pass.</p>{% endif %}
+<p>Topology is an operator assertion in private configuration, not machine verification. Full active-worker memory limits are reserved again because their future growth is unknown. Measurements may change immediately; no resource reservation or execution token is issued.</p>
 <p>All observed active containers are retained, including unplanned containers. Shared matching active deployments count once; inactive or unobserved planned deployments add their limits. No resource credit is taken for stopping containers. Unobserved names may exist outside the controller allowlist; their availability is not verified.</p>
-<p>This read-only preview does not reserve resources, verify disk space, measure live headroom, establish model readiness or authorize a switch. CPU reports NanoCpus only. Inventory and plans can change after this report. No containers, routes or stored observations are changed. A lifecycle controller must validate execution inputs and current host state before activation.</p>
+<p>This read-only preview does not reserve resources or storage, verify execution-time headroom, establish model readiness or authorize a switch. CPU reports NanoCpus only. Inventory and plans can change after this report. No containers, routes or stored observations are changed. A lifecycle controller must validate execution inputs and current host state before activation.</p>
 {% endblock %}
