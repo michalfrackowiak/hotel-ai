@@ -87,6 +87,7 @@ jobs:
           docker compose -f compose.yaml -f compose.server.yaml -f compose.piper.yaml -f compose.asr.yaml up --build --wait --wait-timeout 90 web piper asr
           curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8082/static/admin/css/base.css
           python scripts/smoke_piper.py http://127.0.0.1:8082 --asr
+          docker compose exec -T web python scripts/smoke_controller_readiness.py --tts-url http://piper:5000 --stt-url http://asr:5001
       - name: Print Compose logs after a failure
         if: failure()
         run: docker compose -f compose.yaml -f compose.piper.yaml -f compose.asr.yaml logs --no-color

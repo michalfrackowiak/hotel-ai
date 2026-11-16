@@ -14,4 +14,6 @@ These fixtures run sleeping Python processes, not speech models. Their injected 
 
 ## Remaining production integration
 
+The [Piper/Vosk readiness callback](speech-readiness-probes.md) now supplies real bilingual synthetic inference checks. Production endpoint-to-container binding and the remaining admission/traffic/routing implementations are still required.
+
 The HTTP controller remains read-only and no admin switch button is exposed. A production backend still needs authoritative resource admission from immutable policy, bounded language-model probes, actual guest admission/draining and atomic routing publication, plus authenticated operation dispatch. The durable journal and controls must share stable ownership and verified daemon configuration. No production deployment is included.
