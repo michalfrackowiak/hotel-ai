@@ -1,16 +1,18 @@
 """Durable fail-closed wrapper; interrupted operations require reconciliation.
 
 Use a dedicated database in a private local directory, never the guest database.
-No lease expiry, automatic replay, reconciliation or Docker integration is supplied.
+No lease expiry, automatic replay or Docker integration is supplied.
 """
 from contextlib import contextmanager
 from dataclasses import asdict
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
 import sqlite3
 
 from .lifecycle import LifecycleExecutor, State, SwitchRequest, SwitchResult, identifier
+from .file_lock import exclusive_lock
 
 
 class JournalUnavailable(Exception):
@@ -30,6 +32,7 @@ class DurableLifecycleExecutor:
         self._path = Path(path)
         if not self._path.is_absolute() or self._path.is_symlink():
             raise ValueError("Use a dedicated absolute journal file path.")
+        self._path = self._path.resolve()
         self._limit = journal_limit
         catalog = sorted((item.name, item.task, sorted(item.languages)) for item in self._deployments)
         self._fingerprint = hashlib.sha256(encode(catalog).encode()).hexdigest()
@@ -40,9 +43,18 @@ class DurableLifecycleExecutor:
                 db.execute("CREATE TABLE operations (request_id TEXT PRIMARY KEY, request TEXT NOT NULL, outcome TEXT)")
                 db.execute("INSERT INTO metadata VALUES (1,?,?,?,0)",
                            (self._fingerprint, self._limit, encode(asdict(initial))))
-            elif tables != {"metadata", "operations"}:
+            elif tables not in ({"metadata", "operations"}, {"metadata", "operations", "reconciliations"}):
                 raise ValueError("Unrecognized journal.")
             self._load(db)
+            db.execute("CREATE TABLE IF NOT EXISTS reconciliations (recovery_id TEXT PRIMARY KEY, request TEXT NOT NULL, outcome TEXT NOT NULL, recorded_at TEXT NOT NULL, prior_state TEXT NOT NULL, pending_requests TEXT NOT NULL)")
+
+    @contextmanager
+    def _exclusive(self):
+        try:
+            with exclusive_lock(str(self._path) + ".lock") as acquired:
+                yield acquired
+        except OSError:
+            raise JournalUnavailable("Lifecycle journal lock unavailable.") from None
 
     @contextmanager
     def _transaction(self):
@@ -87,7 +99,7 @@ class DurableLifecycleExecutor:
     def _outcome(self, raw):
         value = json.loads(raw)
         if (not isinstance(value, dict) or set(value) != {"status", "reason", "state"}
-                or value["status"] not in {"succeeded", "unchanged", "rejected", "rolled_back", "recovery_required", "cleanup_required"}
+                or value["status"] not in {"succeeded", "unchanged", "rejected", "rolled_back", "recovery_required", "cleanup_required", "reconciled"}
                 or not identifier(value["reason"])):
             raise ValueError
         return SwitchResult(value["status"], value["reason"], self._state_from(value["state"]))
@@ -108,6 +120,12 @@ class DurableLifecycleExecutor:
     def execute(self, request):
         if not isinstance(request, SwitchRequest):
             raise ValueError("A validated switch request is required.")
+        with self._exclusive() as acquired:
+            if not acquired:
+                return SwitchResult("rejected", "busy", self.state)
+            return self._execute_locked(request)
+
+    def _execute_locked(self, request):
         payload = encode(asdict(request))
         with self._transaction() as db:
             state, blocked = self._load(db)
@@ -139,3 +157,58 @@ class DurableLifecycleExecutor:
             db.execute("UPDATE metadata SET state=?,blocked=? WHERE id=1", (
                 encode(asdict(result.state)), int(result.status in ("recovery_required", "cleanup_required"))))
             db.execute("UPDATE operations SET outcome=? WHERE request_id=?", (encode(asdict(result)), request.request_id))
+
+    def reconcile(self, recovery_id, expected_revision, routes, actor, reason):
+        """Explicit operator action after read-only backend verification, never a reset.
+
+        The verifier must check actual routing, all required models, drain state and
+        cleanup/ownership. It must return exactly True and implement a deadline.
+        """
+        if (not identifier(recovery_id) or type(expected_revision) is not int or expected_revision < 0
+                or not isinstance(actor, str) or not actor.strip() or len(actor) > 120
+                or not isinstance(reason, str) or not reason.strip() or len(reason) > 500
+                or any(ord(char) < 32 for char in actor + reason)):
+            raise ValueError("Invalid reconciliation request.")
+        proposed = LifecycleExecutor(self._backend, self._deployments, routes, revision=expected_revision + 1).state
+        payload = encode(dict(expected_revision=expected_revision, proposed=asdict(proposed), actor=actor, reason=reason))
+        with self._exclusive() as acquired:
+            if not acquired:
+                return SwitchResult("rejected", "busy", self.state)
+            with self._transaction() as db:
+                current, blocked = self._load(db)
+                previous = db.execute("SELECT request,outcome FROM reconciliations WHERE recovery_id=?", (recovery_id,)).fetchone()
+                if previous:
+                    return self._outcome(previous[1]) if previous[0] == payload else SwitchResult("rejected", "recovery_id_conflict", current)
+                if current.revision != expected_revision:
+                    return SwitchResult("rejected", "stale_revision", current)
+                pending = tuple(row[0] for row in db.execute("SELECT request_id FROM operations WHERE outcome IS NULL ORDER BY request_id"))
+                if not blocked and not pending:
+                    return SwitchResult("rejected", "reconciliation_not_required", current)
+                if db.execute("SELECT COUNT(*) FROM reconciliations").fetchone()[0] >= self._limit:
+                    return SwitchResult("rejected", "reconciliation_history_full", current)
+            try:
+                verified = self._backend.verify_reconciliation(current, proposed, pending) is True
+            except Exception:
+                verified = False
+            if not verified:
+                return SwitchResult("rejected", "reconciliation_unverified", current)
+            result = SwitchResult("reconciled", "operator_reconciled", proposed)
+            with self._transaction() as db:
+                actual, actual_blocked = self._load(db)
+                actual_pending = tuple(row[0] for row in db.execute("SELECT request_id FROM operations WHERE outcome IS NULL ORDER BY request_id"))
+                if actual != current or actual_blocked != blocked or actual_pending != pending:
+                    raise ValueError
+                db.execute("UPDATE metadata SET state=?,blocked=0 WHERE id=1", (encode(asdict(proposed)),))
+                db.execute("UPDATE operations SET outcome=? WHERE outcome IS NULL", (encode(asdict(result)),))
+                db.execute("INSERT INTO reconciliations VALUES (?,?,?,?,?,?)", (
+                    recovery_id, payload, encode(asdict(result)), datetime.now(timezone.utc).isoformat(),
+                    encode(asdict(current)), encode(pending)))
+            return result
+
+    def reconciliation_history(self):
+        with self._transaction() as db:
+            self._load(db)
+            return tuple(dict(recovery_id=row[0], request=json.loads(row[1]), outcome=self._outcome(row[2]),
+                              recorded_at=row[3], prior_state=self._state_from(json.loads(row[4])),
+                              pending_requests=tuple(json.loads(row[5]))) for row in db.execute(
+                "SELECT recovery_id,request,outcome,recorded_at,prior_state,pending_requests FROM reconciliations ORDER BY rowid LIMIT ?", (self._limit,)))
