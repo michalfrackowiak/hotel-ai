@@ -1,8 +1,13 @@
 from django.contrib import admin
 from django import forms
 from django.forms.models import BaseInlineFormSet
+from django.core.exceptions import PermissionDenied
+from django.template.response import TemplateResponse
+from django.urls import path
+from django.views.decorators.http import require_GET
 
 from .models import AgentConfiguration, SPEECH_LANGUAGES, SpeechModel, SpeechProvider, SpeechDeployment, SpeechSelection
+from .preflight import check_speech_plan
 
 
 @admin.register(AgentConfiguration)
@@ -82,6 +87,7 @@ class SpeechDeploymentAdmin(admin.ModelAdmin):
 
 @admin.register(SpeechSelection)
 class SpeechSelectionAdmin(admin.ModelAdmin):
+    change_list_template = "admin/model_providers/speechselection/change_list.html"
     list_display = ("language", "task", "deployment")
     readonly_fields = ("language", "task")
     fieldsets = (("Planned assignment only — does not activate a provider", {
@@ -93,3 +99,24 @@ class SpeechSelectionAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    def can_preflight(self, request):
+        return request.user.has_perms([
+            f"model_providers.view_{model}"
+            for model in ("speechselection", "speechdeployment", "speechprovider", "speechmodel")
+        ])
+
+    def changelist_view(self, request, extra_context=None):
+        return super().changelist_view(request, {**(extra_context or {}), "can_preflight": self.can_preflight(request)})
+
+    def get_urls(self):
+        return [path("preflight/", self.admin_site.admin_view(require_GET(self.preflight_view)),
+                     name="model_providers_speechselection_preflight")] + super().get_urls()
+
+    def preflight_view(self, request):
+        if not self.can_preflight(request):
+            raise PermissionDenied
+        return TemplateResponse(request, "admin/model_providers/speechselection/preflight.html", {
+            **self.admin_site.each_context(request), "opts": self.model._meta,
+            "title": "Static speech plan preflight", **check_speech_plan(),
+        })
