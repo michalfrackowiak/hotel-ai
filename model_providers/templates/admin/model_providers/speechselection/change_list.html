@@ -3,4 +3,5 @@
   {% if can_preflight %}<li><a href="{% url 'admin:model_providers_speechselection_preflight' %}">Check complete speech plan</a></li>{% endif %}
   {% if can_preflight %}<li><a href="{% url 'admin:model_providers_speechselection_inventory' %}">Observe speech containers</a></li>{% endif %}
   {{ block.super }}
+  {% if can_preflight %}<li><a href="{% url 'admin:model_providers_speechselection_transition' %}">Check transition budget</a></li>{% endif %}
 {% endblock %}

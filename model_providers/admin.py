@@ -9,6 +9,7 @@ from django.views.decorators.http import require_GET
 from .models import AgentConfiguration, SPEECH_LANGUAGES, SpeechModel, SpeechProvider, SpeechDeployment, SpeechSelection
 from .preflight import check_speech_plan
 from .controller_client import inventory_report
+from .transition_budget import transition_budget_report
 
 
 @admin.register(AgentConfiguration)
@@ -114,7 +115,17 @@ class SpeechSelectionAdmin(admin.ModelAdmin):
         return [path("preflight/", self.admin_site.admin_view(require_GET(self.preflight_view)),
                      name="model_providers_speechselection_preflight"),
                 path("inventory/", self.admin_site.admin_view(require_GET(self.inventory_view)),
-                     name="model_providers_speechselection_inventory")] + super().get_urls()
+                     name="model_providers_speechselection_inventory"),
+                path("transition/", self.admin_site.admin_view(require_GET(self.transition_view)),
+                     name="model_providers_speechselection_transition")] + super().get_urls()
+
+    def transition_view(self, request):
+        if not self.can_preflight(request):
+            raise PermissionDenied
+        return TemplateResponse(request, "admin/model_providers/speechselection/transition.html", {
+            **self.admin_site.each_context(request), "opts": self.model._meta,
+            "title": "Configured speech transition budget", **transition_budget_report(),
+        })
 
     def inventory_view(self, request):
         if not self.can_preflight(request):
