@@ -54,9 +54,32 @@ def controller_configuration():
     return url.rstrip("/") + "/v1/inventory", token, host
 
 
-def validate_inventory(data, host):
-    if not isinstance(data, dict) or set(data) != {"host", "observed_at", "deployments"} or data["host"] != host:
+def validate_host_resources(resources):
+    metrics = {"cpu_count", "memory_total_mib", "memory_available_mib", "disk_total_mib", "disk_free_mib"}
+    if (not isinstance(resources, dict) or set(resources) != metrics | {"scope", "platform"}
+            or resources["scope"] != "controller_host" or resources["platform"] not in ("linux", "unsupported")):
         raise ValueError
+    for key in metrics:
+        value = resources[key]
+        if value is not None and (type(value) not in (int, float) or not math.isfinite(value) or value < 0):
+            raise ValueError
+        if resources["platform"] == "unsupported" and value is not None:
+            raise ValueError
+    cpu = resources["cpu_count"]
+    if cpu is not None and (type(cpu) is not int or cpu <= 0):
+        raise ValueError
+    for total_key, free_key in (("memory_total_mib", "memory_available_mib"), ("disk_total_mib", "disk_free_mib")):
+        total, free = resources[total_key], resources[free_key]
+        if (total is None) != (free is None) or total is not None and (total <= 0 or free > total):
+            raise ValueError
+
+
+def validate_inventory(data, host):
+    required = {"host", "observed_at", "deployments"}
+    if not isinstance(data, dict) or set(data) not in (required, required | {"host_resources"}) or data["host"] != host:
+        raise ValueError
+    if "host_resources" in data:
+        validate_host_resources(data["host_resources"])
     observed = datetime.fromisoformat(data["observed_at"])
     if observed.tzinfo is None or not -5 <= (datetime.now(timezone.utc) - observed).total_seconds() <= 30:
         raise ValueError
@@ -121,4 +144,5 @@ def inventory_report():
                                  and deployment.provider.memory_mib == Decimal(str(observed["memory_mib"]))),
         })
     rows.extend({"planned": item, "observed": None} for item in planned.values())
-    return {"rows": rows, "observed_at": snapshot["observed_at"], "observed_host": snapshot["host"]}
+    return {"rows": rows, "observed_at": snapshot["observed_at"], "observed_host": snapshot["host"],
+            "host_resources": snapshot.get("host_resources")}

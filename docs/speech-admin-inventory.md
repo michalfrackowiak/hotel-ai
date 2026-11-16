@@ -18,6 +18,8 @@ The controller itself still binds only to loopback. For a same-host development 
 
 ## Reading the snapshot
 
+New controllers also report [controller-host resources](speech-host-resources.md): CPU count, physical memory and explicitly configured filesystem space. Older controllers omit this data and the page displays unknown observations. These readings do not prove Docker-daemon capacity or authorize activation.
+
 Staff need view permissions for speech assignments, deployments, providers and models/voices. The snapshot page accepts GET only and is not cached. Invalid responses, wrong host labels, timestamps older than 30 seconds or more than five seconds in the future, and unreachable controllers produce an unavailable report rather than a successful comparison. Keep the web and controller clocks synchronized.
 
 Matching uses the exact host label and container name. Containers without a planning record are identified separately. Planned containers absent from the response are unobserved; this does not prove they were deleted, since the controller inspects only its allowlist. The configured image reference is compared with the catalog reference. Docker's resolved image ID is shown separately and is not treated as the repository manifest digest or model checksum.

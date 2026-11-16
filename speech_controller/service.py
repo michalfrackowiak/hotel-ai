@@ -9,6 +9,8 @@ import re
 import subprocess
 import threading
 
+from .resources import host_resources
+
 
 IDENTIFIER = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}\Z")
 INSPECT_FORMAT = (
@@ -25,6 +27,7 @@ class Configuration:
     host: str
     containers: tuple
     port: int = 8092
+    storage_path: str = field(default="", repr=False)
 
     @classmethod
     def from_env(cls, env):
@@ -33,16 +36,18 @@ class Configuration:
             host = env.get("HOTEL_SPEECH_CONTROLLER_HOST", "")
             containers = json.loads(env.get("HOTEL_SPEECH_CONTROLLER_CONTAINERS", "[]"))
             port = int(env.get("HOTEL_SPEECH_CONTROLLER_PORT", "8092"))
+            storage_path = env.get("HOTEL_SPEECH_CONTROLLER_STORAGE_PATH", "")
             if (not 32 <= len(token) <= 256 or not token.isascii()
                     or any(not 33 <= ord(char) <= 126 for char in token)
                     or not re.fullmatch(r"[a-zA-Z0-9_-]{1,50}", host)
                     or not isinstance(containers, list) or not 1 <= len(containers) <= 8
                     or any(not isinstance(name, str) or not IDENTIFIER.fullmatch(name) for name in containers)
-                    or len(set(containers)) != len(containers) or not 1 <= port <= 65535):
+                    or len(set(containers)) != len(containers) or not 1 <= port <= 65535
+                    or storage_path and (not os.path.isabs(storage_path) or any(ord(c) < 32 for c in storage_path))):
                 raise ValueError
         except (ValueError, TypeError):
-            raise ValueError("Invalid controller configuration: set a strong ASCII token, host label, 1–8 unique container identifiers and valid port.") from None
-        return cls(token, host, tuple(containers), port)
+            raise ValueError("Invalid controller configuration: set a strong ASCII token, host label, 1–8 unique container identifiers, valid port and optional absolute storage path.") from None
+        return cls(token, host, tuple(containers), port, storage_path)
 
 
 class InventoryUnavailable(Exception):
@@ -89,6 +94,7 @@ def inventory(config):
                 "memory_mib": record["memory_bytes"] / 1048576 or None,
             }
         return {"host": config.host, "observed_at": datetime.now(timezone.utc).isoformat(),
+                "host_resources": host_resources(config.storage_path),
                 "deployments": [deployments[name] for name in config.containers]}
     except (OSError, subprocess.SubprocessError, ValueError, TypeError, KeyError):
         raise InventoryUnavailable("Inventory unavailable.") from None
