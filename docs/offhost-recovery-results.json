@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-11-16T15:34:17.749389+00:00",
+  "seconds": 2.690740799997002,
+  "passed": true,
+  "checks": {
+    "backup_unchanged": true,
+    "integrity": true,
+    "foreign_keys": true,
+    "source_counts_match_restore": true,
+    "probe_writes_rolled_back": true,
+    "system_check": true,
+    "migrations_current": true,
+    "languages": {
+      "en": {
+        "page": true,
+        "chat_start": true,
+        "health": true
+      },
+      "pl": {
+        "page": true,
+        "chat_start": true,
+        "health": true
+      }
+    },
+    "booking_write": true,
+    "idempotent_replay": true,
+    "confirmation_pending": true
+  },
+  "tables_checked": 24,
+  "limitations": [
+    "In-process Django client; no listening HTTP server or container restore.",
+    "Speech models, credentials, notification delivery, TLS and DNS are not exercised."
+  ]
+}

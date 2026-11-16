@@ -29,6 +29,7 @@ jobs:
             python manage.py check
             python manage.py makemigrations --check --dry-run
             python manage.py test
+            python -m unittest discover -s scripts -p "test_recovery.py"
           '
       - name: Smoke-test startup, reception, and admin assets
         run: |
