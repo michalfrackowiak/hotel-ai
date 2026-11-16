@@ -84,6 +84,14 @@ class DockerControls:
     def start(self, name):
         return self._change(name, "start")
 
+    @property
+    def approved_names(self):
+        return frozenset(self._approved)
+
+    def inspect(self, name):
+        """Validate daemon/container approval and return state without mutation."""
+        return self._change(name, "inspect")
+
     def stop(self, name):
         return self._change(name, "stop")
 
@@ -130,6 +138,8 @@ class DockerControls:
                 return record["state"]
 
             before = inspect()
+            if action == "inspect":
+                return before
             if action == "start" and before == "running" or action == "stop" and before in ("created", "exited"):
                 return before
             arguments = ["start", approved.container_id] if action == "start" else ["stop", "--time", "3", approved.container_id]
