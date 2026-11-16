@@ -14,6 +14,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 ## Alpha
 
+- [x] 0.5 speech readiness callback: real bilingual Piper synthesis and Vosk silence probes through approved local endpoints, with bounded responses and strict format checks. See [probe scope](speech-readiness-probes.md). Guest gating/routing and production activation remain pending.
+
 - [x] 0.5 Docker lifecycle composition: approved controls connected to durable execution through required admission/traffic/readiness/recovery interfaces, with isolated switching and rollback coverage. See [scope](speech-docker-lifecycle.md). Production gate/model implementations and guest dispatch remain pending.
 
 - [x] 0.5 Docker control adapter: bounded start/stop of approved full container IDs with pinned daemon and pre/post identity, image, limit and ownership checks. See [control boundary](speech-docker-control.md). Lifecycle/HTTP/guest integration remains disconnected.
