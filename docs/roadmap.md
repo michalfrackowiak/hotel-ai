@@ -14,6 +14,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 ## Alpha
 
+- [x] 0.5 Docker lifecycle composition: approved controls connected to durable execution through required admission/traffic/readiness/recovery interfaces, with isolated switching and rollback coverage. See [scope](speech-docker-lifecycle.md). Production gate/model implementations and guest dispatch remain pending.
+
 - [x] 0.5 Docker control adapter: bounded start/stop of approved full container IDs with pinned daemon and pre/post identity, image, limit and ownership checks. See [control boundary](speech-docker-control.md). Lifecycle/HTTP/guest integration remains disconnected.
 
 - [x] 0.5 explicit reconciliation: exclusive execution/recovery lock, verifier-gated revision changes and atomic idempotent audit records. See [recovery contract](speech-journal-reconciliation.md). Production verification and Docker/guest mutation remain unwired.

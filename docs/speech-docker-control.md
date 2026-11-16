@@ -14,4 +14,4 @@ This layer cannot pull images, create or remove containers, execute arbitrary co
 
 The caller must perform authoritative resource admission, reconcile ownership and drain guest requests before mutation. Docker running/stopped state is not model readiness. Starting an approved container can still fail after partial effects, so this adapter must only be connected through the durable lifecycle machinery after integration tests.
 
-The next step is to compose these controls with bounded model-readiness probes, guest admission/draining, durable execution and an authoritative reconciliation verifier. Until then only isolated test fixtures are eligible for execution in the project's verification workflow.
+The [lifecycle composition](speech-docker-lifecycle.md) now connects these controls to durable execution with required injected admission, readiness, traffic and reconciliation interfaces. Production implementations of those interfaces remain pending. Only isolated test fixtures are eligible for execution in the project's verification workflow.
