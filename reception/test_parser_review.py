@@ -82,7 +82,10 @@ class ParserReviewTests(TestCase):
         self.assertFalse(sample.succeeded)
         sample.corrected_result = "guest@example.com"
         sample.save(update_fields=["corrected_result"])
-        receipt = self.answer(turn, "guest monkey example dot com", voice=True, transcript=True)
+        candidate = self.answer(turn, "guest monkey example dot com", voice=True, transcript=True)
+        self.assertEqual(candidate["stage"], "contact_confirm")
+        self.assertFalse(Booking.objects.exists())
+        receipt = self.answer(candidate, "yes")
         self.assertEqual(receipt["stage"], "completed")
         self.assertEqual(Booking.objects.get().client.email, "guest@example.com")
         ParserSample.objects.filter(pk=sample.pk).update(created_at=timezone.now() - timedelta(days=31))

@@ -1,6 +1,10 @@
 """Render staff-edited booking prompts without changing conversation state."""
 
 from decimal import Decimal
+from textwrap import wrap
+
+from .contacts import speak_contact
+from .speech import MAX_TEXT_CHARACTERS
 
 
 ENGLISH_WEB_GREETING = "Hi, this is Neptun Resort Jastrzębia Góra."
@@ -141,6 +145,8 @@ def room_options(state, *, voice, overrides=None):
 
 def _values(state, overrides, *, voice):
     values = state.get("prompt_values", {})
+    if voice and state.get("stage") == "contact_confirm":
+        return {**values, "contact": speak_contact(state["contact_candidate"], state["language"])}
     if state.get("prompt_key") != "rooms":
         return values
     return {**values, "options": room_options(state, voice=voice, overrides=overrides)}
@@ -179,14 +185,27 @@ def voice_segments(state, *, overrides=None):
         return []
     overrides = scenario_overrides(state) if overrides is None else overrides
     edited = any(row.voice_parts for row in overrides.values())
-    if not edited and specs[0][1] not in ("check_in", "web_check_in"):
+    contact = state.get("stage") == "contact_confirm"
+    if not (edited or contact) and specs[0][1] not in ("check_in", "web_check_in"):
         return []
     try:
         values = _values(state, overrides, voice=True)
-        return [
+        parts = [
             {**part, "language": language, "text": part["text"].format_map(values)}
             for language, key in specs
             for part in _voice_parts(language, key, overrides)
         ]
+        if contact:
+            return _split_contact_parts(parts)
+        return parts
     except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         return []
+
+
+def _split_contact_parts(parts):
+    result = []
+    for part in parts:
+        chunks = wrap(part["text"], width=MAX_TEXT_CHARACTERS) or [part["text"]]
+        result.extend({**part, "text": chunk, "seconds": 0, "listen": False} for chunk in chunks[:-1])
+        result.append({**part, "text": chunks[-1]})
+    return result

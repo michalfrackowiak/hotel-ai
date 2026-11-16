@@ -6,6 +6,9 @@
     const resetButton = document.getElementById("chat-reset");
     const retryButton = document.getElementById("chat-retry");
     const confirmation = document.getElementById("chat-confirmation");
+    const contactValue = document.getElementById("chat-contact-value");
+    const changeDelivery = document.getElementById("chat-change-delivery");
+    const typeInstead = document.getElementById("chat-type-instead");
     const languageChoice = document.getElementById("chat-language");
     const delivery = document.getElementById("chat-delivery");
     const suggestions = document.getElementById("chat-suggestions");
@@ -39,6 +42,10 @@
             retry: "Reconnect",
             yes: "Yes, confirm",
             no: "No",
+            correct: "Yes, this is correct",
+            change: "Change contact details",
+            changeDelivery: "Change delivery method",
+            typeInstead: "Type instead",
         },
         pl: {
             guest: "Ty",
@@ -61,6 +68,10 @@
             retry: "Połącz ponownie",
             yes: "Tak, potwierdzam",
             no: "Nie",
+            correct: "Tak, dane są poprawne",
+            change: "Popraw dane kontaktowe",
+            changeDelivery: "Zmień sposób dostawy",
+            typeInstead: "Wpisz zamiast dyktować",
         },
     };
 
@@ -79,6 +90,7 @@
     let suggestedAnswers = [];
     let displayedTurn = null;
     let transcriptShown = false;
+    let canChangeDelivery = false;
 
     function updateControls() {
         const copy = labels[language];
@@ -96,11 +108,19 @@
         resetButton.textContent = copy.reset;
         retryButton.textContent = copy.retry;
         languageChoice.hidden = language !== "pl" || !["welcome", "check_in"].includes(stage);
-        confirmation.hidden = stage !== "confirm";
+        const contactConfirmation = stage === "contact_confirm";
+        confirmation.hidden = stage !== "confirm" && !contactConfirmation;
+        contactValue.hidden = !contactConfirmation;
+        changeDelivery.hidden = !contactConfirmation || !canChangeDelivery;
+        changeDelivery.textContent = copy.changeDelivery;
+        changeDelivery.disabled = !canSend;
+        typeInstead.hidden = !voiceActive || !["email", "phone", "contact_confirm"].includes(stage);
+        typeInstead.disabled = !canSend;
+        typeInstead.textContent = copy.typeInstead;
         const [yes, no] = confirmation.querySelectorAll("button");
-        yes.textContent = copy.yes;
+        yes.textContent = contactConfirmation ? copy.correct : copy.yes;
         yes.dataset.answer = language === "pl" ? "Tak" : "Yes";
-        no.textContent = copy.no;
+        no.textContent = contactConfirmation ? copy.change : copy.no;
         no.dataset.answer = copy.no;
         delivery.hidden = stage !== "delivery";
         answerButtons.forEach((button) => {
@@ -142,6 +162,8 @@
     }
 
     function displayReply(result) {
+        contactValue.textContent = result.contact_candidate || "";
+        canChangeDelivery = result.can_change_delivery === true;
         const item = appendMessage(result.reply, "reception", result.reference);
         displayedTurn = { revision: result.revision, result, item, spoken: new Map() };
         if (voiceActive) item.querySelector("p").textContent = "";
@@ -351,6 +373,7 @@
             }
         }
         if (voiceActive && voiceWelcome && !pending) requestChat({ voice_start: true, revision });
+        updateControls();
         trackSilence();
     });
     form.addEventListener("reception:voice-silence", replyTimeout);
@@ -375,6 +398,13 @@
 
     answerButtons.forEach((button) => {
         button.addEventListener("click", () => sendMessage(button.dataset.answer));
+    });
+    changeDelivery.addEventListener("click", () => {
+        sendMessage(language === "pl" ? "zmień sposób dostawy" : "change delivery");
+    });
+    typeInstead.addEventListener("click", () => {
+        form.dispatchEvent(new CustomEvent("reception:type-instead"));
+        messageInput.focus();
     });
     resetButton.addEventListener("click", () => requestChat({ reset: true }));
     retryButton.addEventListener("click", () => requestChat({ start: true }));

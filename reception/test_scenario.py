@@ -10,10 +10,22 @@ from bookings.models import Booking, Price, Room
 from .contacts import parse_email, parse_phone
 from .conversation import WELCOME_PARTS, advance, new_conversation
 from .parsing import parse_stay_input
-from .speech import SpeechUnavailable, synthesize_welcome, transcribe_welcome
+from .scenario import voice_segments
+from .speech import MAX_TEXT_CHARACTERS, SpeechUnavailable, synthesize_welcome, transcribe_welcome
 
 
 class ScenarioInputTests(TestCase):
+    def test_baseline_email_failures_stay_rejected_and_polish_date_does_not_guess(self):
+        for transcript in (
+            "guess that example dot com", "guess that example dot com",
+            "gość małpa jak sample kropka kom", "gość małpa g sample kropka kon",
+        ):
+            with self.subTest(transcript=transcript):
+                self.assertIsNone(parse_email(transcript))
+        for today, arrival in ((date(2026, 11, 16), date(2026, 11, 17)), (date(2026, 12, 31), date(2027, 1, 1))):
+            with patch("reception.parsing.timezone.localdate", return_value=today):
+                self.assertEqual(parse_stay_input("check_in", "jutro", "pl"), arrival)
+                self.assertIsNone(parse_stay_input("check_in", "i oto", "pl"))
     @patch("reception.parsing.timezone.localdate", return_value=date(2026, 11, 15))
     def test_yearless_ordinals_and_month_rollover(self, _today):
         for language, text, expected in (
@@ -143,7 +155,10 @@ class ScenarioConversationTests(TestCase):
         self.assertEqual(state["stage"], "phone")
         self.assertEqual(self.turn(state, "123")["stage"], "phone")
         self.assertFalse(Booking.objects.exists())
-        receipt = self.turn(state, "501 234 567")
+        pending = self.turn(state, "501 234 567")
+        self.assertEqual(pending["stage"], "contact_confirm")
+        self.assertFalse(Booking.objects.exists())
+        receipt = self.turn(pending, "yes")
         self.assertEqual(receipt["stage"], "completed")
         self.assertEqual(self.turn(receipt, "501 234 567"), receipt)
         booking = Booking.objects.get()
@@ -152,6 +167,19 @@ class ScenarioConversationTests(TestCase):
         self.assertEqual(str(booking.reference), receipt["reference"])
         self.assertNotIn("501234567", receipt["reply"])
         self.assertNotIn("501 234 567", receipt["reply"])
+
+    def test_long_valid_contact_readback_respects_synthesizer_limit(self):
+        state = self.turn(self.choose_room(), "R1")
+        state = self.turn(self.turn(state, "yes"), "email")
+        email = "A" * 64 + "@" + ".".join(["B" * 60] * 3 + ["COM"])
+        pending = self.turn(state, email)
+        self.assertEqual(pending["contact_candidate"], email)
+        parts = voice_segments(pending)
+        self.assertGreater(len(parts), 1)
+        self.assertTrue(all(0 < len(part["text"]) <= MAX_TEXT_CHARACTERS for part in parts))
+        spoken = " ".join(part["text"] for part in parts)
+        self.assertIn("capital A, at sign, capital B", spoken)
+        self.assertIn("Is this correct?", spoken)
 
     def test_handover_on_unrelated_or_silent_arrival_turn(self):
         for message in ("I need to speak to reception", ""):

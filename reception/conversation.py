@@ -57,10 +57,12 @@ COPY = {
         "and": "and",
         "confirm": "You have selected room {room} from {check_in} to {check_out} for {guests} guests. Would you like to confirm your reservation?",
         "delivery": "Your reservation has been tentatively created! Would you like your booking confirmation sent to your email address or via SMS to your phone number?",
-        "email": "Please dictate or type your email address.",
+        "email": "Please give your email address.",
         "phone": "Please provide the phone number where we should send the SMS confirmation.",
-        "invalid_email": "Please give a valid email address. If you are dictating it, spell it and say at and dot.",
-        "invalid_phone": "Please give a Polish mobile number or include the international country code. If you are speaking, say the digits one at a time.",
+        "confirm_email": "The email address is {contact}. Is this correct? Say yes to confirm or no to change it.",
+        "confirm_phone": "The phone number is {contact}. Is this correct? Say yes to confirm or no to change it.",
+        "invalid_email": "Please give a valid email address. If you are dictating it, spell it and say at and dot. For help, say reception.",
+        "invalid_phone": "Please give a Polish mobile number or include the international country code. If you are speaking, say the digits one at a time. For help, say reception.",
         "cancelled": "Thank you for your call, and feel free to contact Neptun Resort again. Goodbye!",
         "handover": "Redirecting you to a reception employee. Please hold.",
         "unavailable": "No room is available for that stay. What arrival date would you like to try?",
@@ -80,10 +82,12 @@ COPY = {
         "and": "oraz",
         "confirm": "Wybrałeś pokój {room} w terminie od {check_in} do {check_out} dla {guests} osób. Czy chcesz potwierdzić rezerwację?",
         "delivery": "Rezerwacja została wstępnie utworzona! Czy chcesz, aby potwierdzenie rezerwacji zostało wysłane na adres e-mail, czy na numer telefonu przez SMS?",
-        "email": "Proszę, podyktuj lub wpisz swój adres e-mail.",
+        "email": "Proszę podaj swój adres e-mail.",
         "phone": "Proszę, podaj numer telefonu, na który mamy wysłać potwierdzenie SMS-em.",
-        "invalid_email": "Podaj poprawny adres e-mail. Jeśli dyktujesz, przeliteruj go i powiedz małpa oraz kropka.",
-        "invalid_phone": "Podaj polski numer komórkowy lub numer z międzynarodowym kodem kraju. Jeśli dyktujesz, podawaj cyfry pojedynczo.",
+        "confirm_email": "Podany adres e-mail to {contact}. Czy to się zgadza? Powiedz tak, aby potwierdzić, lub nie, aby zmienić.",
+        "confirm_phone": "Podany numer telefonu to {contact}. Czy to się zgadza? Powiedz tak, aby potwierdzić, lub nie, aby zmienić.",
+        "invalid_email": "Podaj poprawny adres e-mail. Jeśli dyktujesz, przeliteruj go i powiedz małpa oraz kropka. Aby uzyskać pomoc, powiedz recepcja.",
+        "invalid_phone": "Podaj polski numer komórkowy lub numer z międzynarodowym kodem kraju. Jeśli dyktujesz, podawaj cyfry pojedynczo. Aby uzyskać pomoc, powiedz recepcja.",
         "cancelled": "Dziękuję za rozmowę i zapraszam do ponownego kontaktu z Resortem Neptun. Do widzenia!",
         "handover": "Przekierowuję do pracownika recepcji. Proszę czekać.",
         "unavailable": "Brak dostępnych pokoi na ten pobyt. Jaką datę przyjazdu chcesz sprawdzić?",
@@ -96,6 +100,19 @@ EMAIL_ANSWERS = {"email", "e-mail", "mail", "e-mailem", "mailem"}
 SMS_ANSWERS = {
     "phone", "phone number", "sms", "s m s", "es em es", "text", "text message",
     "telefon", "numer", "numer telefonu", "sms-em",
+}
+CONTACT_STAGES = ("email", "phone", "contact_confirm")
+CONTACT_CHANGES = {
+    "en": {"change", "change contact"},
+    "pl": {"zmień", "zmien", "zmień dane", "zmien dane"},
+}
+DELIVERY_CHANGES = {
+    "en": {"change delivery", "change delivery method"},
+    "pl": {"zmień sposób dostawy", "zmien sposob dostawy", "zmień sposób potwierdzenia"},
+}
+CONTACT_HANDOVER = {
+    "en": {"reception", "receptionist", "speak to reception"},
+    "pl": {"recepcja", "recepcjonista", "połącz z recepcją"},
 }
 
 
@@ -146,9 +163,18 @@ def advance(state, message, parsed, *, voice=False, input_parsed=False):
             return state
         stage = "check_in"
     if state.get("flow") != "neptun":
-        if stage != "check_in":
+        # Old drafts could reach the stay quote with an unread email already saved.
+        if (
+            stage == "confirm" and answer == legacy_conversation.CONFIRMATIONS[language][0]
+            and not state.get("scenario") and not state.get("legacy_contact_confirmed")
+        ):
+            state = {**state, "revision": uuid4().hex, "legacy_quote_approved": True}
+            candidate = parse_email(state.pop("email", ""))
+            return _set_candidate(state, "email", candidate) if candidate else _contact_entry(state, "email")
+        if stage not in (*CONTACT_STAGES, "check_in"):
             return legacy_conversation.advance(state, message, parsed)
-        state = new_conversation(language, "check_in")
+        if stage == "check_in":
+            state = new_conversation(language, "check_in")
 
     state = {**state, "revision": uuid4().hex}
     if stage == "check_in":
@@ -192,17 +218,67 @@ def advance(state, message, parsed, *, voice=False, input_parsed=False):
         elif answer in SMS_ANSWERS:
             state["stage"] = "phone"
             set_prompt(state, "phone")
-    elif stage == "email":
-        email = parsed if input_parsed else parse_email(message)
-        if email is not None:
-            return _book(state, email=email, phone="", method="email")
-        set_prompt(state, "invalid_email")
-    elif stage == "phone":
-        phone = parsed if input_parsed else parse_phone(message)
-        if phone is not None:
-            return _book(state, email="", phone=phone, method="sms")
-        set_prompt(state, "invalid_phone")
+    elif stage in CONTACT_STAGES:
+        return _contact_turn(state, message, answer, parsed if input_parsed else None)
     return state
+
+
+def _clear_contact(state):
+    state.pop("contact_candidate", None)
+    state.pop("contact_method", None)
+
+
+def _contact_entry(state, stage):
+    _clear_contact(state)
+    state["stage"] = stage
+    return set_prompt(state, stage)
+
+
+def _set_candidate(state, method, candidate):
+    entry = "email" if method == "email" else "phone"
+    state.update(stage="contact_confirm", contact_method=method, contact_candidate=candidate)
+    return set_prompt(state, f"confirm_{entry}", {"contact": candidate})
+
+
+def _contact_turn(state, message, answer, parsed):
+    language = state["language"]
+    stage = state["stage"]
+    reviewing = stage == "contact_confirm"
+    method = state["contact_method"] if reviewing else ("email" if stage == "email" else "sms")
+    entry = "email" if method == "email" else "phone"
+    if answer in CONTACT_HANDOVER[language]:
+        return _terminal(state, "handover")
+    if state.get("flow") == "neptun":
+        if answer in DELIVERY_CHANGES[language]:
+            return _contact_entry(state, "delivery")
+        if answer in EMAIL_ANSWERS:
+            return _contact_entry(state, "email")
+        if answer in SMS_ANSWERS:
+            return _contact_entry(state, "phone")
+    if reviewing:
+        if answer in CANCEL[language] or answer in CONTACT_CHANGES[language]:
+            return _contact_entry(state, entry)
+        if answer in CONFIRM[language]:
+            candidate = state["contact_candidate"]
+            if state.get("flow") != "neptun":
+                _clear_contact(state)
+                for field in ("prompt_key", "prompt_values", "prompt_tail"):
+                    state.pop(field, None)
+                if state.get("legacy_quote_approved"):
+                    state.update(stage="confirm", email=candidate)
+                    yes = legacy_conversation.CONFIRMATIONS[language][0]
+                    return legacy_conversation.advance(state, yes, None)
+                state.update(stage="email", legacy_contact_confirmed=True)
+                return legacy_conversation.advance(state, candidate, None)
+            return _book(
+                state, email=candidate if method == "email" else "",
+                phone=candidate if method == "sms" else "", method=method,
+            )
+    parse_contact = parse_email if method == "email" else parse_phone
+    candidate = parsed or parse_contact(message)
+    if candidate is None:
+        return state if reviewing else set_prompt(state, f"invalid_{entry}")
+    return _set_candidate(state, method, candidate)
 
 
 def _offer_rooms(state, guests, voice):
@@ -293,6 +369,7 @@ def _book(state, *, email, phone, method):
         )
     except BookingError as error:
         if error.code in {"invalid_email", "invalid_phone"}:
+            _contact_entry(state, "email" if method == "email" else "phone")
             return set_prompt(state, error.code)
         return new_conversation(language, "offer_changed")
     return start_receipt(state, str(booking.reference), method)
