@@ -17,6 +17,8 @@ Existing static-preflight blockers remain blockers. Totals are compared with the
 
 ## Limits and next step
 
+When configured overlap checks pass, the page also runs the separate [resource preview](speech-resource-admission.md) against the same snapshot. That section requires local reserves, artifact estimates and operator-confirmed topology; it defaults to blocked independently of the configured-budget result.
+
 A passing overlap preview means only that the configured allocations fit the reserved budget under this conservative accounting. It does not establish free memory, disk availability, model readiness, artifact integrity, active route ownership or safe execution order. It cannot detect workers outside the controller allowlist or prevent the state changing immediately afterward.
 
 The future controller must revalidate immutable execution inputs against actual host resources, serialize changes, drain in-flight speech, preserve shared workers, verify replacement readiness and restore the old route on failure. The snapshot and preview must never be used as a durable authorization token for activation.

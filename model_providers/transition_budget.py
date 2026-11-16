@@ -5,6 +5,7 @@ from django.db import transaction
 from .controller_client import InventoryError, fetch_inventory
 from .models import SpeechDeployment
 from .preflight import check_speech_plan
+from .admission import evaluate_admission
 
 
 ACTIVE_STATES = {"running", "paused", "restarting", "removing"}
@@ -82,4 +83,6 @@ def transition_budget_report():
         if overlap_memory > budget["memory_budget"]:
             result["issues"].append("Configured overlap RAM exceeds the reserved speech budget.")
     result["passed"] = not result["issues"]
+    if result["passed"]:
+        result["resource_report"] = evaluate_admission(snapshot, planned, overlap_memory, overlap_cpu)
     return result
