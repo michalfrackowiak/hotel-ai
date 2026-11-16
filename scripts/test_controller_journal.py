@@ -85,7 +85,7 @@ class JournalTests(unittest.TestCase):
             future = pool.submit(first.execute, self.request())
             self.assertTrue(entered.wait(1))
             try:
-                self.assertEqual(second.execute(self.request("other")).reason, "reconciliation_required")
+                self.assertEqual(second.execute(self.request("other")).reason, "busy")
                 self.assertFalse(self.backend.calls)
             finally:
                 release.set()
