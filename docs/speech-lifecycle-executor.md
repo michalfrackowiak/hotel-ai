@@ -14,6 +14,8 @@ Retries with the same idempotency key and request return the recorded outcome. A
 
 ## Integration requirements
 
+An optional [durable wrapper](speech-durable-journal.md) now persists requests and outcomes and blocks uncertain work after restart. The base executor still uses its process-local journal; neither version provides automatic reconciliation or a production Docker backend.
+
 The injected backend must enforce deadlines for each operation and perform authoritative admission immediately before execution. Admission must reconcile observed ownership: an unreferenced target is not necessarily stopped or safe to take over. The backend must reject an unmanaged target or establish ownership before the core can start and potentially clean it up. Readiness checks receive the affected language/task slot and must verify the required model, including when reusing an existing shared worker. This synchronous core does not interrupt hung backend calls. Its lock and journal are process-local; they do not provide restart recovery, persistent auditing or coordination across processes. Routes in this core are not guest-facing routes.
 
 Before enabling a production endpoint, implement and verify a durable operation journal and reconciliation, a pinned/allowlisted Docker backend, model-readiness probes, actual guest admission/draining and atomic routing integration. Keep booking drafts independent of provider switches. Recovery must account for partial Docker actions, shared ownership and process restarts. No live activation is authorized by a successful unit-test run or admin resource preview.
