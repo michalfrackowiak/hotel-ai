@@ -3,6 +3,10 @@
 <p><a href="{% url 'admin:model_providers_speechselection_changelist' %}">Back to planned assignments</a></p>
 {% if inventory_error %}<p class="errornote">{{ inventory_error }}</p>{% else %}
 <p>Host: {{ observed_host }}. Observed at: {{ observed_at }}. This snapshot may already be stale.</p>
+<h2>Docker daemon identity</h2>
+{% if daemon_identity %}<p>Name: {{ daemon_identity.name }}. ID: {{ daemon_identity.id }}. OS: {{ daemon_identity.os_type }}. Connection: {{ daemon_identity.connection }}.</p>
+{% else %}<p>Unknown: this controller did not report daemon identity.</p>{% endif %}
+<p>A pinned local socket identifies the expected daemon; it does not prove that the daemon and controller share physical resources. A proxy socket or virtual machine may separate them.</p>
 <h2>Controller-host resources</h2>
 {% if host_resources %}
 <p>Platform: {{ host_resources.platform }}. Logical CPUs: {{ host_resources.cpu_count|default_if_none:"Unknown" }}.</p>

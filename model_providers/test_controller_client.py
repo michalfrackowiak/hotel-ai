@@ -60,6 +60,15 @@ def controller_response(body=None, redirect=False, malformed_status=False):
 
 
 class ControllerTransportTests(SimpleTestCase):
+    def test_daemon_identity_optional_and_strict(self):
+        self.assertNotIn("daemon_identity", validate_inventory(snapshot(), "fixture-host"))
+        identity = dict(id="fixture-daemon", name="fixture-host", os_type="linux", connection="pinned_local_socket")
+        self.assertEqual(validate_inventory(snapshot() | {"daemon_identity": identity}, "fixture-host")["daemon_identity"], identity)
+        for change in ({"id": ""}, {"id": "bad id"}, {"name": "bad\nname"}, {"os_type": "other"},
+                       {"connection": "verified_host"}, {"socket": "/private"}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                validate_inventory(snapshot() | {"daemon_identity": identity | change}, "fixture-host")
+
     def test_host_resources_optional_strict_and_unknown(self):
         self.assertNotIn("host_resources", validate_inventory(snapshot(), "fixture-host"))
         resources = dict(scope="controller_host", platform="linux", cpu_count=4,
@@ -171,3 +180,14 @@ class ControllerAdminTests(TestCase):
         self.assertContains(response, "Logical CPUs: 4")
         self.assertContains(response, "Unknown / Unknown")
         self.assertContains(response, "not reserved capacity")
+
+    def test_daemon_identity_rendered_with_scope_warning(self):
+        user = get_user_model().objects.create_superuser("identity-viewer", password="fictional")
+        self.client.force_login(user)
+        data = snapshot() | {"daemon_identity": dict(id="fixture-daemon", name="<script>fixture</script>",
+            os_type="linux", connection="pinned_local_socket")}
+        with patch("model_providers.controller_client.fetch_inventory", return_value=data):
+            response = self.client.get(reverse("admin:model_providers_speechselection_inventory"))
+        self.assertContains(response, "&lt;script&gt;fixture&lt;/script&gt;")
+        self.assertContains(response, "pinned_local_socket")
+        self.assertContains(response, "does not prove")

@@ -19,6 +19,10 @@ ENV = {"HOTEL_SPEECH_CONTROLLER_TOKEN": TOKEN, "HOTEL_SPEECH_CONTROLLER_HOST": "
        "HOTEL_SPEECH_CONTROLLER_CONTAINERS": '["fixture-asr", "fixture-tts"]'}
 
 
+def info_output():
+    return json.dumps(dict(id="fixture-daemon", name="fixture-host", os_type="linux")).encode()
+
+
 def docker_output():
     return b"\n".join(json.dumps({"container_name": "/" + name, "id": "a" * 64,
         "state": "running", "health": "healthy", "image_id": "sha256:" + "b" * 64,
@@ -71,7 +75,7 @@ class ControllerTests(unittest.TestCase):
             self.assertNotIn(TOKEN, str(caught.exception))
 
     def test_inventory_projects_allowlist_and_fixed_command(self):
-        with patch("speech_controller.service.subprocess.run", return_value=subprocess.CompletedProcess([], 0, docker_output())) as run:
+        with patch("speech_controller.service.subprocess.run", side_effect=[subprocess.CompletedProcess([], 0, info_output()), subprocess.CompletedProcess([], 0, docker_output())]) as run:
             result = inventory(Configuration.from_env(ENV))
         self.assertEqual(result["host"], "fixture-host")
         self.assertEqual(len(result["deployments"]), 2)
@@ -83,7 +87,8 @@ class ControllerTests(unittest.TestCase):
         self.assertNotIn("{{json .}}", argv[5])
         self.assertNotIn("Env", argv[5])
         self.assertFalse(run.call_args.kwargs["shell"])
-        self.assertEqual(run.call_args.kwargs["timeout"], 5)
+        self.assertGreater(run.call_args.kwargs["timeout"], 0)
+        self.assertLessEqual(run.call_args.kwargs["timeout"], 5)
         self.assertEqual(run.call_args.kwargs["stderr"], subprocess.DEVNULL)
 
     def test_failure_and_malformed_inventory_fail_closed(self):
@@ -101,7 +106,7 @@ class ControllerTests(unittest.TestCase):
                                        for i, record in enumerate(records)))
         for output in invalid:
             with self.subTest(output=output[:50]), patch("speech_controller.service.subprocess.run",
-                    return_value=subprocess.CompletedProcess([], 0, output)):
+                    side_effect=[subprocess.CompletedProcess([], 0, info_output()), subprocess.CompletedProcess([], 0, output)]):
                 with self.assertRaises(InventoryUnavailable):
                     inventory(Configuration.from_env(ENV))
 

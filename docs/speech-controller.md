@@ -15,6 +15,8 @@ The listener binds only to `127.0.0.1`. Access from another machine must use a p
 | `HOTEL_SPEECH_CONTROLLER_CONTAINERS` | JSON list of explicitly allowed container names; no client-supplied names |
 | `HOTEL_SPEECH_CONTROLLER_PORT` | Integer port from 1 to 65535; defaults to `8092` |
 | `HOTEL_SPEECH_CONTROLLER_STORAGE_PATH` | Optional absolute path on the speech-storage filesystem; empty means disk observations are unknown |
+| `HOTEL_SPEECH_CONTROLLER_DOCKER_SOCKET` | Optional explicit local Unix socket, paired with an expected daemon ID |
+| `HOTEL_SPEECH_CONTROLLER_EXPECTED_DAEMON_ID` | Expected daemon ID for the explicitly selected socket; see [identity limits](speech-daemon-identity.md) |
 
 Start the service with `python -m speech_controller.service` from the repository root, after configuring the environment. The controller is not enabled in Compose or installed as a production service by this change.
 

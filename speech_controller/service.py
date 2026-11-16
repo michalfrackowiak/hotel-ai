@@ -5,14 +5,19 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import hmac
 import json
 import os
+import platform
 import re
+import stat
 import subprocess
 import threading
+from time import monotonic
 
 from .resources import host_resources
 
 
 IDENTIFIER = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}\Z")
+DAEMON_ID = re.compile(r"[a-zA-Z0-9:_-]{1,128}\Z")
+INFO_FORMAT = '{"id":{{json .ID}},"name":{{json .Name}},"os_type":{{json .OSType}}}'
 INSPECT_FORMAT = (
     '{"container_name":{{json .Name}},"id":{{json .Id}},'
     '"state":{{json .State.Status}},"health":{{with index .State "Health"}}{{json .Status}}{{else}}"none"{{end}},'
@@ -28,6 +33,8 @@ class Configuration:
     containers: tuple
     port: int = 8092
     storage_path: str = field(default="", repr=False)
+    docker_socket: str = field(default="", repr=False)
+    expected_daemon_id: str = ""
 
     @classmethod
     def from_env(cls, env):
@@ -37,6 +44,8 @@ class Configuration:
             containers = json.loads(env.get("HOTEL_SPEECH_CONTROLLER_CONTAINERS", "[]"))
             port = int(env.get("HOTEL_SPEECH_CONTROLLER_PORT", "8092"))
             storage_path = env.get("HOTEL_SPEECH_CONTROLLER_STORAGE_PATH", "")
+            docker_socket = env.get("HOTEL_SPEECH_CONTROLLER_DOCKER_SOCKET", "")
+            expected_daemon_id = env.get("HOTEL_SPEECH_CONTROLLER_EXPECTED_DAEMON_ID", "")
             if (not 32 <= len(token) <= 256 or not token.isascii()
                     or any(not 33 <= ord(char) <= 126 for char in token)
                     or not re.fullmatch(r"[a-zA-Z0-9_-]{1,50}", host)
@@ -45,9 +54,16 @@ class Configuration:
                     or len(set(containers)) != len(containers) or not 1 <= port <= 65535
                     or storage_path and (not os.path.isabs(storage_path) or any(ord(c) < 32 for c in storage_path))):
                 raise ValueError
-        except (ValueError, TypeError):
-            raise ValueError("Invalid controller configuration: set a strong ASCII token, host label, 1–8 unique container identifiers, valid port and optional absolute storage path.") from None
-        return cls(token, host, tuple(containers), port, storage_path)
+            if bool(docker_socket) != bool(expected_daemon_id):
+                raise ValueError
+            if docker_socket:
+                if (not DAEMON_ID.fullmatch(expected_daemon_id) or platform.system() != "Linux"
+                        or not os.path.isabs(docker_socket) or any(ord(c) < 32 for c in docker_socket)
+                        or not stat.S_ISSOCK(os.lstat(docker_socket).st_mode)):
+                    raise ValueError
+        except (OSError, ValueError, TypeError):
+            raise ValueError("Invalid controller configuration: check token, host, containers, port, absolute storage path and paired local socket/daemon ID.") from None
+        return cls(token, host, tuple(containers), port, storage_path, docker_socket, expected_daemon_id)
 
 
 class InventoryUnavailable(Exception):
@@ -57,10 +73,37 @@ class InventoryUnavailable(Exception):
 def inventory(config):
     """Only allowlisted names enter a fixed argv; Docker output is never forwarded."""
     try:
-        result = subprocess.run(
-            ["docker", "inspect", "--type", "container", "--format", INSPECT_FORMAT, *config.containers],
-            shell=False, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=5, check=True,
-        )
+        deadline = monotonic() + 5
+        if bool(config.docker_socket) != bool(config.expected_daemon_id):
+            raise ValueError
+        argv, environment = ["docker"], os.environ.copy()
+        if config.docker_socket:
+            if platform.system() != "Linux" or not stat.S_ISSOCK(os.lstat(config.docker_socket).st_mode):
+                raise ValueError
+            argv += ["--host", "unix://" + config.docker_socket]
+            for key in ("DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH", "DOCKER_TLS"):
+                environment.pop(key, None)
+
+        def docker(arguments):
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise ValueError
+            return subprocess.run(argv + arguments, shell=False, env=environment,
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=remaining, check=True)
+
+        info = docker(["info", "--format", INFO_FORMAT])
+        if len(info.stdout) > 4096:
+            raise ValueError
+        identity = json.loads(info.stdout)
+        if (not isinstance(identity, dict) or set(identity) != {"id", "name", "os_type"}
+                or not isinstance(identity["id"], str) or not DAEMON_ID.fullmatch(identity["id"])
+                or not isinstance(identity["name"], str) or not 1 <= len(identity["name"]) <= 128
+                or any(ord(c) < 32 for c in identity["name"])
+                or identity["os_type"] not in ("linux", "windows")
+                or config.expected_daemon_id and identity["id"] != config.expected_daemon_id):
+            raise ValueError
+        identity["connection"] = "pinned_local_socket" if config.docker_socket else "unverified_context"
+        result = docker(["inspect", "--type", "container", "--format", INSPECT_FORMAT, *config.containers])
         if len(result.stdout) > 65536:
             raise ValueError
         records = [json.loads(line) for line in result.stdout.decode("utf-8").splitlines()]
@@ -94,9 +137,10 @@ def inventory(config):
                 "memory_mib": record["memory_bytes"] / 1048576 or None,
             }
         return {"host": config.host, "observed_at": datetime.now(timezone.utc).isoformat(),
+                "daemon_identity": identity,
                 "host_resources": host_resources(config.storage_path),
                 "deployments": [deployments[name] for name in config.containers]}
-    except (OSError, subprocess.SubprocessError, ValueError, TypeError, KeyError):
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError, KeyError, RecursionError):
         raise InventoryUnavailable("Inventory unavailable.") from None
 
 
