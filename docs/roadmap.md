@@ -14,6 +14,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 ## Alpha
 
+- [x] 0.5 daemon identity: observed daemon identity and optional explicit Unix-socket/daemon-ID pinning, with legacy connections labeled unverified. See [identity limits](speech-daemon-identity.md). Pinning alone does not establish resource co-location or admission.
+
 - [x] 0.5 host observations: Linux controller-host CPU/memory and explicitly configured filesystem space in inventory/admin, with unknown unsupported metrics and legacy response compatibility. See [scope](speech-host-resources.md). Observations are not admission or verified Docker-daemon capacity.
 
 - [x] 0.5 transition budget preview: retain observed active workers while counting planned allocations once, with blockers for unknown limits, name conflicts and uncovered hosts. See [overlap accounting](speech-transition-budget.md). No stop credit, measured headroom or activation authorization.

@@ -54,7 +54,10 @@ jobs:
           subprocess.run(["docker", "create", "--name", name, "--network", "none",
                           "--memory", "32m", "--cpus", "0.25", "--read-only", image], check=True)
           try:
-              item = inventory(Configuration("x" * 32, "ci-fixture", (name,)))["deployments"][0]
+              snapshot = inventory(Configuration("x" * 32, "ci-fixture", (name,)))
+              assert snapshot["daemon_identity"]["id"]
+              assert snapshot["daemon_identity"]["connection"] == "unverified_context"
+              item = snapshot["deployments"][0]
               assert item["state"] == "created" and item["health"] == "none"
               assert item["cpu_limit"] == 0.25 and item["memory_mib"] == 32
           finally:

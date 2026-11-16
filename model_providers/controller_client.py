@@ -76,8 +76,18 @@ def validate_host_resources(resources):
 
 def validate_inventory(data, host):
     required = {"host", "observed_at", "deployments"}
-    if not isinstance(data, dict) or set(data) not in (required, required | {"host_resources"}) or data["host"] != host:
+    if (not isinstance(data, dict) or not required <= set(data)
+            or set(data) - required - {"host_resources", "daemon_identity"} or data["host"] != host):
         raise ValueError
+    if "daemon_identity" in data:
+        identity = data["daemon_identity"]
+        if (not isinstance(identity, dict) or set(identity) != {"id", "name", "os_type", "connection"}
+                or not isinstance(identity["id"], str) or not re.fullmatch(r"[a-zA-Z0-9:_-]{1,128}", identity["id"])
+                or not isinstance(identity["name"], str) or not 1 <= len(identity["name"]) <= 128
+                or any(ord(c) < 32 for c in identity["name"])
+                or identity["os_type"] not in ("linux", "windows")
+                or identity["connection"] not in ("pinned_local_socket", "unverified_context")):
+            raise ValueError
     if "host_resources" in data:
         validate_host_resources(data["host_resources"])
     observed = datetime.fromisoformat(data["observed_at"])
@@ -145,4 +155,4 @@ def inventory_report():
         })
     rows.extend({"planned": item, "observed": None} for item in planned.values())
     return {"rows": rows, "observed_at": snapshot["observed_at"], "observed_host": snapshot["host"],
-            "host_resources": snapshot.get("host_resources")}
+            "host_resources": snapshot.get("host_resources"), "daemon_identity": snapshot.get("daemon_identity")}
