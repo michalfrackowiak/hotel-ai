@@ -1,6 +1,6 @@
 # Private speech operation dispatch
 
-`speech_controller.dispatch.ControlServer` exposes the durable routed controller through a separate authenticated loopback listener. It must be constructed with a `ControlConfiguration` and an already configured `RoutedLifecycleExecutor`. There is no environment-driven startup command, Compose activation or public proxy route for this service. The inventory command remains read-only.
+`speech_controller.dispatch.ControlServer` exposes the durable routed controller through a separate authenticated loopback listener. It must be constructed with a `ControlConfiguration` and an already configured `RoutedLifecycleExecutor`. The [explicit startup command](speech-controller-startup.md) composes these from private local configuration; there is no Compose activation or public proxy route. The inventory command remains read-only.
 
 The server binds only to `127.0.0.1` (default port 8093). Use a distinct random bearer token kept in private configuration; the token is omitted from the configuration representation. A configured actor label identifies the service credential in recovery audits. It does not establish the identity of an individual Django administrator. Request bodies cannot supply or override that actor.
 
