@@ -4,6 +4,7 @@ The caller must serialize operations and durably record uncertainty. A timeout m
 occur after Docker acted; this module never automatically retries a mutation.
 """
 from dataclasses import dataclass
+from ipaddress import IPv4Address, IPv4Network
 import json
 import os
 import platform
@@ -23,6 +24,22 @@ INSPECT_FORMAT = (
     '"state":{{json .State.Status}},"owner":{{json (index .Config.Labels "hotel-ai.controller-owner")}},'
     '"privileged":{{json .HostConfig.Privileged}}}'
 )
+ENDPOINT_FORMAT = INSPECT_FORMAT[:-1] + (
+    ',"network_mode":{{json .HostConfig.NetworkMode}},"networks":['
+    '{{$sep := ""}}{{range .NetworkSettings.Networks}}{{$sep}}'
+    '{"id":{{json .NetworkID}},"address":{{json .IPAddress}}}{{$sep = ","}}{{end}}]}'
+)
+NETWORK_FORMAT = '{"id":{{json .Id}},"driver":{{json .Driver}},"scope":{{json .Scope}}}'
+
+
+def private_ipv4(value):
+    """Accept canonical RFC1918 literals only, independently of Python's is_private."""
+    try:
+        address = IPv4Address(value)
+        return isinstance(value, str) and str(address) == value and any(
+            address in IPv4Network(network) for network in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
+    except (ValueError, TypeError):
+        return False
 
 
 @dataclass(frozen=True)
@@ -103,7 +120,14 @@ class DockerControls:
     def stop(self, name):
         return self._change(name, "stop")
 
-    def _change(self, name, action):
+    def verify_endpoint(self, name, network_id, address):
+        """Read current approved container and bridge identity without mutation."""
+        if (not isinstance(network_id, str) or not re.fullmatch(r"[a-f0-9]{64}", network_id)
+                or not private_ipv4(address)):
+            raise ControlUnavailable("Invalid approved endpoint binding.")
+        return self._change(name, "endpoint", endpoint=(network_id, address))
+
+    def _change(self, name, action, *, endpoint=None):
         if not isinstance(name, str) or name not in self._approved:
             raise ControlUnavailable("Container is not approved for control.")
         approved = self._approved[name]
@@ -133,19 +157,39 @@ class DockerControls:
                 raise ValueError
 
             def inspect():
-                record = run(["inspect", "--type", "container", "--format", INSPECT_FORMAT,
+                record = run(["inspect", "--type", "container", "--format", ENDPOINT_FORMAT if endpoint else INSPECT_FORMAT,
                               approved.container_id], project=True)
                 expected = dict(id=approved.container_id, name="/" + approved.name, image_id=approved.image_id,
                                 nano_cpus=approved.nano_cpus, memory_bytes=approved.memory_bytes, owner=approved.owner)
-                if (not isinstance(record, dict) or set(record) != set(expected) | {"state", "privileged"}
+                extra = {"network_mode", "networks"} if endpoint else set()
+                if (not isinstance(record, dict) or set(record) != set(expected) | {"state", "privileged"} | extra
                         or any(record[key] != value for key, value in expected.items())
                         or type(record["nano_cpus"]) is not int or type(record["memory_bytes"]) is not int
                         or record["privileged"] is not False
                         or record["state"] not in ("running", "created", "exited")):
                     raise ValueError
+                if endpoint:
+                    network_id, address = endpoint
+                    networks = record["networks"]
+                    if (record["state"] != "running" or not isinstance(record["network_mode"], str)
+                            or not IDENTIFIER.fullmatch(record["network_mode"])
+                            or record["network_mode"] in ("host", "none")
+                            or not isinstance(networks, list) or not 1 <= len(networks) <= 8
+                            or any(not isinstance(item, dict) or set(item) != {"id", "address"}
+                                   or not isinstance(item["id"], str) or not re.fullmatch(r"[a-f0-9]{64}", item["id"])
+                                   or not isinstance(item["address"], str) for item in networks)
+                            or len({item["id"] for item in networks}) != len(networks)
+                            or {"id": network_id, "address": address} not in networks):
+                        raise ValueError
                 return record["state"]
 
             before = inspect()
+            if endpoint:
+                network_id, _ = endpoint
+                network = run(["network", "inspect", "--format", NETWORK_FORMAT, network_id], project=True)
+                if network != {"id": network_id, "driver": "bridge", "scope": "local"}:
+                    raise ValueError
+                return True
             if action == "inspect":
                 return before
             if action == "start" and before == "running" or action == "stop" and before in ("created", "exited"):
