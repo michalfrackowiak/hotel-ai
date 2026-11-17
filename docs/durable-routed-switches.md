@@ -24,7 +24,7 @@ Route publication and journal writes are separate SQLite transactions. The imple
 - Old-worker cleanup failure keeps the new route selected but admission closed, records the cleanup-required outcome and blocks further switches.
 - Failure to store the final result after resumption leaves a durable selected-route checkpoint and pending operation. Requests already resumed may continue on that recorded route, but further switches remain blocked.
 
-The routed coordinator refuses the legacy reconciliation API because it cannot jointly repair route state, traffic claims, container ownership and journal history. Coordinated operator recovery remains a separate implementation step. Never clear pending operations or uncertain claims merely to permit a retry.
+The routed coordinator refuses the legacy reconciliation API. Its separate [audited recovery method](routed-switch-recovery.md) adopts exact verified route state, requires empty drained slots and verified workers, and records a durable recovery checkpoint before resumption. It does not repair containers or remove claims. Never clear pending operations or uncertain claims merely to permit a retry.
 
 ## Scope and verification
 

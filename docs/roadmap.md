@@ -14,6 +14,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 ## Alpha
 
+- [x] 0.5 routed recovery: explicit verified route adoption, all-slot draining, durable recovery audit before resumption and reverified idempotent retries. See [recovery scope](routed-switch-recovery.md). Authenticated dispatch, admin integration and production activation remain pending.
+
 - [x] 0.5 durable routed coordinator: route publication and durable selected-state checkpoint precede old-worker cleanup and traffic resumption, with pending operations blocking uncertain retries. See [switch ordering](durable-routed-switches.md). Coordinated recovery, authenticated dispatch and production activation remain pending.
 
 - [x] 0.5 atomic route store: approved target/revision selection shares the request-claim transaction, and publication requires a closed, drained slot and exact prior state. See [routing boundary](speech-route-publication.md). Durable lifecycle commit/recovery integration and production activation remain pending.
