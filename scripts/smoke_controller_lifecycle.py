@@ -7,6 +7,7 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 from uuid import uuid4
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from speech_controller.backend import DockerLifecycleBackend
@@ -66,7 +67,7 @@ def main():
             traffic = RoutedTrafficGate(traffic_path, targets)
             path = Path(directory) / "controller.sqlite3"
             backend = DockerLifecycleBackend(controls, deployments, admission=admission, traffic=traffic,
-                readiness=readiness, reconciliation=lambda current, proposed, pending, observations: False)
+                readiness=readiness, reconciliation=lambda current, proposed, pending, observations: True)
             # A valid but impossible CPU budget must reject before draining/starting.
             denied_policy = ResourcePolicy(daemon, "/", True, 1, 128 * 1048576,
                                            32 * 1048576, 32 * 1048576, policy.artifact_bytes)
@@ -100,7 +101,30 @@ def main():
             for slot, target in second.state.routes:
                 with traffic.claim(slot) as claim:
                     require(claim.target.name == target and claim.route_revision == 2)
-        print("Real routed admission, checkpointed switching, sharing, replay and rollback passed; fictional readiness only.")
+            failures.clear()
+            publish = traffic.publish
+
+            def publish_then_interrupt(current, destination):
+                require(publish(current, destination))
+                raise RuntimeError("Fixture lost publication acknowledgement.")
+
+            interrupted_request = SwitchRequest("publication-gap", 2, ("en", "stt"), names["old"])
+            with patch.object(traffic, "publish", side_effect=publish_then_interrupt):
+                interrupted = executor.execute(interrupted_request)
+            require(interrupted.reason == "publication_uncertain" and executor.state.revision == 2)
+            observed = traffic.state
+            require(observed.revision == 3)
+            executor = RoutedLifecycleExecutor(backend, deployments, routes, path)
+            recovered = executor.recover("ci-recovery", 2, observed, "ci-operator", "Verified disposable fixture state")
+            require(recovered.status == "reconciled" and recovered.state == observed)
+            require(executor.recover("ci-recovery", 2, observed, "ci-operator", "Verified disposable fixture state") == recovered)
+            require(executor.execute(interrupted_request) == recovered)
+            require(executor.execute(second_request) == second)
+            require(len(executor.reconciliation_history()) == 1 and not executor.recovery_status()["blocked"])
+            for slot, target in observed.routes:
+                with traffic.claim(slot) as claim:
+                    require(claim.target.name == target and claim.route_revision == 3)
+        print("Real routed switching, rollback and audited publication-gap recovery passed; fictional readiness/verifier only.")
     finally:
         errors = []
         for container_id in reversed(ids):

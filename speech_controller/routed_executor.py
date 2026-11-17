@@ -4,6 +4,7 @@ from dataclasses import asdict
 from .backend import DockerLifecycleBackend
 from .journal import DurableLifecycleExecutor, JournalUnavailable, encode
 from .lifecycle import State, SwitchResult
+from .routed_recovery import recover, recovery_status
 
 
 class RoutedLifecycleExecutor(DurableLifecycleExecutor):
@@ -25,6 +26,12 @@ class RoutedLifecycleExecutor(DurableLifecycleExecutor):
 
     def reconcile(self, *args, **kwargs):
         raise JournalUnavailable("Routed recovery requires coordinated route and traffic reconciliation.")
+
+    def recover(self, recovery_id, expected_revision, observed, actor, reason):
+        return recover(self, recovery_id, expected_revision, observed, actor, reason)
+
+    def recovery_status(self):
+        return recovery_status(self)
 
     def _checkpoint(self, request, payload, prior, destination):
         """Record the route decision while retaining an unfinished operation."""

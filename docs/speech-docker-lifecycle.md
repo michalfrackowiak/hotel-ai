@@ -12,6 +12,8 @@ CI uses three disposable, network-isolated, read-only containers with dropped ca
 
 The fixture now uses the [durable routed coordinator](durable-routed-switches.md) and a real SQLite route/traffic store. It verifies selected targets and route revisions through request claims after switching and rollback. Traffic publication and journal checkpoint ordering are exercised without sending guest data.
 
+It also interrupts publication acknowledgement and runs [audited routed recovery](routed-switch-recovery.md), verifying the observed route is adopted, prior results remain historical, and all slots reopen with the expected targets. Its external reconciliation verifier remains a fixture assertion.
+
 These fixtures run sleeping Python processes, not speech models. Admission uses the [controller resource gate](speech-controller-admission.md), real host observations and a small fixture policy; an intentionally insufficient policy verifies denial before mutation. Readiness remains a test implementation, and traffic claims are fictional. The test verifies Docker/lifecycle/journal/routing composition, not model quality, production capacity or live guest behavior.
 
 ## Remaining production integration

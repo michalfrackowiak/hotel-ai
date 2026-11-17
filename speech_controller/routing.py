@@ -3,6 +3,7 @@ from dataclasses import asdict
 import hashlib
 import json
 from types import MappingProxyType
+from time import monotonic, sleep
 
 from .lifecycle import Deployment, LifecycleExecutor, State
 from .readiness import ProbeTarget, unique_keys
@@ -115,6 +116,51 @@ class RoutedTrafficGate(TrafficGate):
     def state(self):
         with self._transaction() as db:
             return self._read_state(db)
+
+    def _quiescent(self, db, expected):
+        return (self._read_state(db) == expected
+                and not db.execute("SELECT 1 FROM slots WHERE closed=0 LIMIT 1").fetchone()
+                and not db.execute("SELECT 1 FROM claims LIMIT 1").fetchone())
+
+    def quiescent(self, expected):
+        """Check exact routes, closed admission, and absence of every claim."""
+        try:
+            with self._transaction() as db:
+                return self._quiescent(db, expected)
+        except TrafficUnavailable:
+            return False
+
+    def drain_all(self, expected):
+        """Close all slots atomically, then wait within one total drain budget."""
+        deadline = monotonic() + self._timeout
+        try:
+            with self._transaction(deadline) as db:
+                if self._read_state(db) != expected:
+                    return False
+                db.execute("UPDATE slots SET closed=1")
+            while True:
+                with self._transaction(deadline) as db:
+                    if self._quiescent(db, expected):
+                        return True
+                    if self._read_state(db) != expected:
+                        return False
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    return False
+                sleep(min(0.025, remaining))
+        except TrafficUnavailable:
+            return False
+
+    def resume_all(self, expected):
+        """Open all slots only for the exact closed, empty route snapshot."""
+        try:
+            with self._transaction() as db:
+                if not self._quiescent(db, expected):
+                    return False
+                db.execute("UPDATE slots SET closed=0")
+            return True
+        except TrafficUnavailable:
+            return False
 
     def publish(self, current, destination):
         """Compare-and-swap exactly one drained slot; admission stays closed."""
