@@ -4,7 +4,7 @@
 
 ARM64 runtime staging (`develop/arm64-speech-runtime-staging`) reuses the full runtime drill on the native hotel server with capped disposable workers and production health monitoring. The implementation agent owns server-mode isolation and the parent owns controlled execution and release verification, with independent review. [Server staging method](speech-runtime-arm64-staging.md)
 
-Read-only preflight observed two ARM64 cores, 9,984 MiB of available memory, 90,634 MiB of available root filesystem space, three healthy production containers and an HTTP 200 health response. Server execution and release checks are pending.
+The hash-verified ARM64 run passed in 84 seconds. It recovered the staged pending request at revision 0, switched all four slots through revision 4, preserved both booking drafts across real bilingual speech requests and removed its fixture. All 115 production loopback health samples passed with p95 4.28 ms and maximum 42.25 ms. Production container/image identity, start times and health matched before and after. Two local safety tests passed, and independent review verified that bypassing preflight fails the guard test. Next action is the production rollout plan, including private admin connectivity, approved worker topology, backup and rollback rehearsal. Production switching remains disabled.
 
 Speech runtime staging (`develop/speech-runtime-staging`) joins the native Linux controller, pinned Piper/Vosk workers, and Django admin and guest flows in a disposable CI stack. Separate owners implement the fixture and the Django drill. The parent integrates the workflow and records verification with independent review. [Staging scope and limits](speech-runtime-staging.md)
 
