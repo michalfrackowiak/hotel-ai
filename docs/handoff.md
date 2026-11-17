@@ -2,6 +2,8 @@
 
 ## Latest milestone
 
+Private admin cutover rehearsal (`develop/speech-private-cutover-check`) passed on the ARM64 server with the production web UID and a disposable loopback port. The SSH-forwarded Django login passed with CSRF. Direct TCP from the workstation failed, public `/admin/` returned 404, production container state matched, and cleanup was verified. Independent review approved the fixture and the archive and stdin newline fixes. The 1.45-CPU overlap budget includes Django and matches the earlier short ARM64 drill. Production activation still needs final worker approvals, shared-directory ownership and a cutover window. [Rehearsal evidence](speech-private-cutover-check.md)
+
 Speech rollout rehearsal (`develop/speech-rollout-rehearsal`) defines the loopback staff and controller topology and exercises the fixed-endpoint fallback with an isolated booking database backup. The fixture owner implements the rehearsal. The parent records the rollout procedure and verifies it with an independent reviewer. [Production rollout guide](speech-production-rollout.md)
 
 The focused SQLite backup test passed. Independent review approved the fixture and reproduced a failure after removing exclusive snapshot creation. The server read-only check found a healthy loopback web listener and confirmed the existing one-CPU caps on both speech workers. Hosted CI runs the full restore and fixed speech fallback on fictional state. The next cutover gate is an isolated check of the final Gunicorn listener, private staff access, and approved production worker limits.

@@ -36,4 +36,4 @@ Back up route and journal files after all their writers exit, and keep the backu
 
 ## Rehearsal
 
-The hosted fixture exercises a booking backup and a new Django process configured for fixed speech after the controller stops. It is a configuration rollback and restore check on fictional data. The final production listener, user assignment, migration rollout and release timing still belong to the cutover.
+The hosted fixture exercises a booking backup and a new Django process configured for fixed speech after the controller stops. The [ARM64 listener rehearsal](speech-private-cutover-check.md) separately checks a real SSH-forwarded Django login and the proposed web process UID. The remaining production checks apply to the final listener, private controller account, shared traffic directory and approved worker identities during cutover.
