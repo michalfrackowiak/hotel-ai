@@ -27,6 +27,6 @@ With routing enabled, web speech uses the endpoint selected by the claim even wh
 
 This change supplies transactional route storage and dispatch, not a live admin switch button. Publication is an internal primitive requiring serialized controller ownership, approved container/endpoint binding, capacity checks, readiness and draining. It does not start or stop a container, authenticate an operator, or prove model readiness.
 
-The durable lifecycle journal is deliberately not wired to route publication yet: its current sequence resumes traffic before recording the final outcome. Coordinated publication/journal commit, crash recovery and authenticated dispatch must be implemented before enabling end-to-end switching. A successful publication alone must not trigger resumption or old-worker cleanup from an ad hoc script.
+The [durable routed coordinator](durable-routed-switches.md) publishes routes and checkpoints the selected state before cleanup or resumption. The legacy lifecycle sequence is unsuitable for routed stores. Coordinated operator recovery and authenticated dispatch remain required before enabling production switching. A successful publication alone must not trigger resumption or old-worker cleanup from an ad hoc script.
 
 CI initializes a new routed store with private Piper/Vosk targets and exercises real bilingual web speech. Tests cover publication guards, cross-process route visibility, pinned claims, uncertain work, catalog drift, and web no-fallback behavior. No production deployment is included.

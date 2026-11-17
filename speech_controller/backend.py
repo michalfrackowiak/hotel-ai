@@ -7,6 +7,7 @@ from types import MappingProxyType
 
 from .lifecycle import Deployment, LifecycleExecutor
 from .admission import ControllerAdmission
+from .routing import RoutedTrafficGate
 
 
 class BackendUnavailable(Exception):
@@ -30,6 +31,18 @@ class DockerLifecycleBackend:
         self._traffic = traffic
         self._readiness = readiness
         self._reconciliation = reconciliation
+
+    @property
+    def requires_routed_execution(self):
+        return isinstance(self._traffic, RoutedTrafficGate)
+
+    @property
+    def routed_traffic(self):
+        return self._traffic if self.requires_routed_execution else None
+
+    @property
+    def deployments(self):
+        return self._deployments
 
     def _routes(self, state):
         validated = LifecycleExecutor(None, self._deployments, dict(state.routes), revision=state.revision).state

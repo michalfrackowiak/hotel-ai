@@ -86,6 +86,15 @@ class RoutedTrafficGate(TrafficGate):
         self._targets, self._fingerprint = _catalog(targets)
         super().__init__(path, timeout=timeout)
 
+    @property
+    def deployments(self):
+        return tuple(Deployment(target.name, target.task, target.languages) for target in self._targets.values())
+
+    @property
+    def binding(self):
+        """Pin this catalog and physical store to its controller journal."""
+        return (str(self._path), *self._identity, self._fingerprint)
+
     def _read_state(self, db):
         metadata = db.execute("SELECT version,fingerprint,revision FROM metadata LIMIT 2").fetchall()
         if len(metadata) != 1 or metadata[0][:2] != (2, self._fingerprint):
