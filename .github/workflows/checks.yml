@@ -65,6 +65,8 @@ jobs:
           PY
       - name: Check approved Docker start and stop
         run: python scripts/smoke_controller_controls.py
+      - name: Check approved private Docker endpoints
+        run: python scripts/smoke_controller_endpoints.py
       - name: Check Docker lifecycle switching and rollback
         run: python scripts/smoke_controller_lifecycle.py
       - name: Smoke-test the optional phone service

@@ -7,6 +7,7 @@ from types import MappingProxyType
 
 from .lifecycle import Deployment, LifecycleExecutor
 from .admission import ControllerAdmission
+from .endpoint_binding import BoundReadiness
 from .routing import RoutedTrafficGate
 
 
@@ -25,6 +26,14 @@ class DockerLifecycleBackend:
                     admission, readiness, reconciliation,
                     getattr(traffic, "drain", None), getattr(traffic, "resume", None)))):
             raise ValueError("Matching approvals and explicit lifecycle integrations are required.")
+        if isinstance(readiness, BoundReadiness):
+            catalog = sorted((item.name, item.task, sorted(item.languages)) for item in deployments)
+            probe_catalog = sorted((item.name, item.task, sorted(item.languages)) for item in readiness.targets)
+            def endpoints(targets):
+                return sorted((item.name, item.task, item.base_url, sorted(item.languages)) for item in targets)
+            if (readiness.controls is not controls or catalog != probe_catalog
+                    or isinstance(traffic, RoutedTrafficGate) and endpoints(readiness.targets) != endpoints(traffic.targets)):
+                raise ValueError("Bound readiness must match the controller and exact routed endpoints.")
         self._controls = controls
         self._deployments = deployments
         self._admission = admission

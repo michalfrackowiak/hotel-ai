@@ -14,6 +14,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 ## Alpha
 
+- [x] 0.5 endpoint binding: verify approved container identity and private bridge network/address before and after speech readiness; reject mismatched backend catalogs. See [supported topology and limits](speech-endpoint-binding.md). Validated production startup and admin integration remain pending.
+
 - [x] 0.5 private operation dispatch: separate authenticated loopback status/switch/recovery API with strict bounded requests, configured audit actor and durable retries. See [protocol and activation boundary](private-speech-dispatch.md). Production composition, endpoint binding and admin integration remain pending.
 
 - [x] 0.5 routed recovery: explicit verified route adoption, all-slot draining, durable recovery audit before resumption and reverified idempotent retries. See [recovery scope](routed-switch-recovery.md). Authenticated dispatch, admin integration and production activation remain pending.

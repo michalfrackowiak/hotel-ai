@@ -88,6 +88,10 @@ class RoutedTrafficGate(TrafficGate):
         super().__init__(path, timeout=timeout)
 
     @property
+    def targets(self):
+        return tuple(self._targets.values())
+
+    @property
     def deployments(self):
         return tuple(Deployment(target.name, target.task, target.languages) for target in self._targets.values())
 
