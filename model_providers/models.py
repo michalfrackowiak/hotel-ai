@@ -1,5 +1,6 @@
 from urllib.parse import urlsplit
 from decimal import Decimal
+import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -174,3 +175,21 @@ class SpeechSelection(models.Model):
 
     def __str__(self):
         return f"{self.get_language_display()} — {self.get_task_display()} (planned)"
+
+
+class SpeechRecoveryRequest(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    controller_url = models.CharField(max_length=100, editable=False)
+    payload = models.JSONField(editable=False)
+    attempted_at = models.DateTimeField(null=True, editable=False)
+    outcome = models.JSONField(null=True, editable=False)
+    completed = models.BooleanField(default=False, editable=False)
+
+    class Meta:
+        ordering = ("-created_at",)
+        default_permissions = ()
+        permissions = [("recover_speech_controller", "Recover the live speech controller")]
+        constraints = [models.UniqueConstraint(fields=("controller_url",),
+            condition=models.Q(completed=False), name="speech_one_pending_recovery")]

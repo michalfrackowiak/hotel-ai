@@ -4,13 +4,14 @@ from django.forms.models import BaseInlineFormSet
 from django.core.exceptions import PermissionDenied
 from django.template.response import TemplateResponse
 from django.urls import path
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_http_methods
 
 from .models import AgentConfiguration, SPEECH_LANGUAGES, SpeechModel, SpeechProvider, SpeechDeployment, SpeechSelection
 from .preflight import check_speech_plan
 from .controller_client import inventory_report
 from .control_status import control_status_report
 from .transition_budget import transition_budget_report
+from . import recovery_admin
 
 
 @admin.register(AgentConfiguration)
@@ -113,7 +114,11 @@ class SpeechSelectionAdmin(admin.ModelAdmin):
         return super().changelist_view(request, {**(extra_context or {}), "can_preflight": self.can_preflight(request)})
 
     def get_urls(self):
-        return [path("controller-status/", self.admin_site.admin_view(require_GET(self.controller_status_view)),
+        return [path("recovery/", self.admin_site.admin_view(require_http_methods(["GET", "POST"])(self.recovery_prepare_view)),
+                     name="model_providers_speechselection_recovery_prepare"),
+                path("recovery/<uuid:recovery_id>/", self.admin_site.admin_view(require_http_methods(["GET", "POST"])(self.recovery_detail_view)),
+                     name="model_providers_speechselection_recovery_detail"),
+                path("controller-status/", self.admin_site.admin_view(require_GET(self.controller_status_view)),
                      name="model_providers_speechselection_controller_status"),
                 path("preflight/", self.admin_site.admin_view(require_GET(self.preflight_view)),
                      name="model_providers_speechselection_preflight"),
@@ -127,8 +132,15 @@ class SpeechSelectionAdmin(admin.ModelAdmin):
             raise PermissionDenied
         return TemplateResponse(request, "admin/model_providers/speechselection/controller_status.html", {
             **self.admin_site.each_context(request), "opts": self.model._meta,
-            "title": "Live speech controller status", **control_status_report(),
+            "title": "Live speech controller status", "can_recover": recovery_admin.can_recover(self, request),
+            **control_status_report(),
         })
+
+    def recovery_prepare_view(self, request):
+        return recovery_admin.prepare_view(self, request)
+
+    def recovery_detail_view(self, request, recovery_id):
+        return recovery_admin.detail_view(self, request, recovery_id)
 
     def transition_view(self, request):
         if not self.can_preflight(request):

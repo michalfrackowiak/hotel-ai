@@ -1,0 +1,14 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p><a href="{% url 'admin:model_providers_speechselection_controller_status' %}">Back to controller status</a></p>
+<p>Review the observed routes before preparing a recovery. Preparation saves the request; it does not send it to the controller.</p>
+{% if recovery_error %}<p class="errornote">{{ recovery_error }}</p>{% endif %}
+{% if observed_rows %}
+<p>Expected journal revision: {{ revision }}. Observed route revision: {{ observed_revision }}.</p>
+<table><thead><tr><th>Language</th><th>Service</th><th>Observed deployment</th></tr></thead>
+<tbody>{% for row in observed_rows %}<tr><td>{{ row.language }}</td><td>{{ row.task }}</td><td>{{ row.target }}</td></tr>{% endfor %}</tbody></table>
+{% endif %}
+{% if form %}<form method="post">{% csrf_token %}{{ form.as_p }}<input type="submit" value="Save recovery for confirmation"></form>{% endif %}
+<p>The review expires after five minutes. Recovery adopts verified observed routes and may pause all speech slots. It does not start or stop workers or erase uncertain speech claims.</p>
+<p>Only one unresolved recovery can exist for this controller. Saved requests cannot be edited or discarded here; stale or rejected requests require offline operator review.</p>
+{% endblock %}
