@@ -159,9 +159,10 @@ class BoundReadinessTests(unittest.TestCase):
                     BoundReadiness(control, [TARGET, target], [BINDING, binding])
 
     def test_backend_requires_same_controls_deployments_and_routed_urls(self):
-        with TemporaryDirectory() as directory, controls():
+        with TemporaryDirectory() as directory, patch.object(DockerControls, "_check_socket"):
             extra = replace(APPROVED, name="asr", container_id="d" * 64)
-            control = DockerControls("/private/docker.sock", "fixture-daemon", [APPROVED, extra])
+            socket_path = str(Path(directory) / "docker.sock")
+            control = DockerControls(socket_path, "fixture-daemon", [APPROVED, extra])
             targets = (TARGET, ProbeTarget("asr", "stt", "http://172.20.0.3:5001", ("en", "pl")))
             bindings = (BINDING, EndpointBinding("asr", NETWORK, "172.20.0.3"))
             ready = BoundReadiness(control, targets, bindings)
@@ -178,7 +179,7 @@ class BoundReadinessTests(unittest.TestCase):
                         DockerLifecycleBackend(control, deployments, **args)
                 else:
                     self.assertIs(DockerLifecycleBackend(control, deployments, **args).routed_traffic, traffic)
-                    other = DockerControls("/private/docker.sock", "fixture-daemon", [APPROVED, extra])
+                    other = DockerControls(socket_path, "fixture-daemon", [APPROVED, extra])
                     with self.assertRaises(ValueError):
                         DockerLifecycleBackend(other, deployments, **args)
                     changed = (replace(deployments[0], languages=("en",)), deployments[1])
