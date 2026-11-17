@@ -27,16 +27,15 @@ from arm64_stage import (
 from verify_recovery import database_checks, digest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from speech_controller.admission import ControllerAdmission, ResourcePolicy
-from speech_controller.backend import DockerLifecycleBackend
+from speech_controller.admission import ResourcePolicy
 from speech_controller.docker_control import ApprovedContainer, ControlUnavailable, DockerControls, private_ipv4
-from speech_controller.endpoint_binding import BoundReadiness, EndpointBinding
+from speech_controller.endpoint_binding import EndpointBinding
 from speech_controller.lifecycle import SwitchRequest
 from speech_controller.journal import JournalUnavailable
 from speech_controller.readiness import ProbeTarget
 from speech_controller.resources import host_resources
-from speech_controller.routed_executor import RoutedLifecycleExecutor
-from speech_controller.routing import RoutedTrafficGate, initialize_routing
+from speech_controller.runtime import open_runtime
+from speech_controller.runtime_config import RuntimeConfiguration
 from speech_controller.traffic import TrafficUnavailable
 
 
@@ -220,29 +219,18 @@ def ready(url, *, token=None, timeout=20, process=None, check_health=lambda: Non
     raise FixtureError("Staged controller or worker did not become ready.")
 
 
-def make_stores(directory, controls, policy, targets, bindings, names):
-    fixture_dir = directory / "django"
-    fixture_dir.mkdir(mode=0o700)
-    traffic_path = fixture_dir / "traffic.sqlite3"
-    journal_path = directory / "controller.sqlite3"
-    routes = {(language, task): names[task + "-old"] for language in LANGUAGES for task in MEMORY}
-    initialize_routing(traffic_path, targets, routes)
-    traffic = RoutedTrafficGate(traffic_path, targets)
-    admission = ControllerAdmission(controls, policy)
-    backend = DockerLifecycleBackend(controls, traffic.deployments, admission=admission, traffic=traffic,
-        readiness=BoundReadiness(controls, targets, bindings), reconciliation=admission.verify_reconciliation)
-    executor = RoutedLifecycleExecutor(backend, traffic.deployments, routes, journal_path)
-    journal_path.chmod(0o600)
+def seed_interrupted_request(manifest, token, names):
     # Seed one interrupted test request through the real journal. The forced
     # interruption precedes worker or route effects and is gone before startup.
-    with patch.object(executor, "_run_pending", side_effect=InterruptedSwitch):
-        try:
-            executor.execute(SwitchRequest(PENDING_REQUEST, 0, ("en", "stt"), names["stt-new"]))
-        except InterruptedSwitch:
-            pass
-        else:
-            raise FixtureError("Could not seed the interrupted staging request.")
-    return fixture_dir, traffic_path, journal_path
+    config = RuntimeConfiguration.load(str(manifest), token)
+    with open_runtime(config) as executor:
+        with patch.object(executor, "_run_pending", side_effect=InterruptedSwitch):
+            try:
+                executor.execute(SwitchRequest(PENDING_REQUEST, 0, ("en", "stt"), names["stt-new"]))
+            except InterruptedSwitch:
+                pass
+            else:
+                raise FixtureError("Could not seed the interrupted staging request.")
 
 
 @contextmanager
@@ -306,14 +294,10 @@ def stage(docker, socket_path, directory, *, production=None):
         bindings.append(EndpointBinding(name, network, address))
 
     controls = DockerControls(socket_path, info["id"], approvals)
-    for role, binding in zip(roles, bindings, strict=True):
-        if role.endswith("-old"):
-            docker.check_health()
-            controls.start(names[role])
-            ready((binding.address, 5000 if role.startswith("tts") else 5001), check_health=docker.check_health)
-        else:
-            require(controls.inspect(names[role]) == "created", "Replacement worker was already started.")
-    fixture_dir, traffic_path, journal_path = make_stores(directory, controls, policy, targets, bindings, names)
+    fixture_dir = directory / "django"
+    fixture_dir.mkdir(mode=0o700)
+    traffic_path = fixture_dir / "traffic.sqlite3"
+    journal_path = directory / "controller.sqlite3"
 
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -330,6 +314,16 @@ def stage(docker, socket_path, directory, *, production=None):
                      zip(approvals, targets, bindings, strict=True)])), encoding="utf-8")
     command = [sys.executable, "-m", "speech_controller.runtime", "--config", str(manifest)]
     env = docker.env | {"HOTEL_SPEECH_CONTROL_TOKEN": token}
+    subprocess.run([sys.executable, "-m", "speech_controller.initialize", "--config", str(manifest),
+                    "--primary-stt", names["stt-old"], "--primary-tts", names["tts-old"]],
+                   check=True, timeout=60, env=env)
+    for role, binding in zip(roles, bindings, strict=True):
+        require(controls.inspect(names[role]) == "created", "Initialization changed a staged worker.")
+        if role.endswith("-old"):
+            docker.check_health()
+            controls.start(names[role])
+            ready((binding.address, 5000 if role.startswith("tts") else 5001), check_health=docker.check_health)
+    seed_interrupted_request(manifest, token, names)
     endpoint = ("127.0.0.1", port)
     docker.check_health()
     with runtime(command, env) as process:

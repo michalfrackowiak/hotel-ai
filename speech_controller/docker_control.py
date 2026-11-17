@@ -30,6 +30,15 @@ ENDPOINT_FORMAT = INSPECT_FORMAT[:-1] + (
     '{"id":{{json .NetworkID}},"address":{{json .IPAddress}}}{{$sep = ","}}{{end}}]}'
 )
 NETWORK_FORMAT = '{"id":{{json .Id}},"driver":{{json .Driver}},"scope":{{json .Scope}}}'
+STOPPED_ENDPOINT_FORMAT = INSPECT_FORMAT[:-1] + (
+    ',"network_mode":{{json .HostConfig.NetworkMode}},"port_bindings":{{json .HostConfig.PortBindings}},'
+    '"publish_all_ports":{{json .HostConfig.PublishAllPorts}},"networks":['
+    '{{$sep := ""}}{{range $name, $settings := .NetworkSettings.Networks}}{{$sep}}'
+    '{"name":{{json $name}},"id":{{json $settings.NetworkID}},'
+    '"address":{{if $settings.IPAMConfig}}{{json $settings.IPAMConfig.IPv4Address}}{{else}}null{{end}}}'
+    '{{$sep = ","}}{{end}}]}'
+)
+INTERNAL_NETWORK_FORMAT = NETWORK_FORMAT[:-1] + ',"name":{{json .Name}},"internal":{{json .Internal}}}'
 
 
 def private_ipv4(value):
@@ -122,10 +131,17 @@ class DockerControls:
 
     def verify_endpoint(self, name, network_id, address):
         """Read current approved container and bridge identity without mutation."""
+        return self._verify_endpoint("endpoint", name, network_id, address)
+
+    def verify_stopped_endpoint(self, name, network_id, address):
+        """Verify a stopped worker's configured static address on one internal bridge."""
+        return self._verify_endpoint("stopped_endpoint", name, network_id, address)
+
+    def _verify_endpoint(self, action, name, network_id, address):
         if (not isinstance(network_id, str) or not re.fullmatch(r"[a-f0-9]{64}", network_id)
                 or not private_ipv4(address)):
             raise ControlUnavailable("Invalid approved endpoint binding.")
-        return self._change(name, "endpoint", endpoint=(network_id, address))
+        return self._change(name, action, endpoint=(network_id, address))
 
     def _change(self, name, action, *, endpoint=None):
         if not isinstance(name, str) or name not in self._approved:
@@ -157,18 +173,23 @@ class DockerControls:
                 raise ValueError
 
             def inspect():
-                record = run(["inspect", "--type", "container", "--format", ENDPOINT_FORMAT if endpoint else INSPECT_FORMAT,
+                projection = {
+                    "endpoint": ENDPOINT_FORMAT, "stopped_endpoint": STOPPED_ENDPOINT_FORMAT,
+                }.get(action, INSPECT_FORMAT)
+                record = run(["inspect", "--type", "container", "--format", projection,
                               approved.container_id], project=True)
                 expected = dict(id=approved.container_id, name="/" + approved.name, image_id=approved.image_id,
                                 nano_cpus=approved.nano_cpus, memory_bytes=approved.memory_bytes, owner=approved.owner)
                 extra = {"network_mode", "networks"} if endpoint else set()
+                if action == "stopped_endpoint":
+                    extra |= {"port_bindings", "publish_all_ports"}
                 if (not isinstance(record, dict) or set(record) != set(expected) | {"state", "privileged"} | extra
                         or any(record[key] != value for key, value in expected.items())
                         or type(record["nano_cpus"]) is not int or type(record["memory_bytes"]) is not int
                         or record["privileged"] is not False
                         or record["state"] not in ("running", "created", "exited")):
                     raise ValueError
-                if endpoint:
+                if action == "endpoint":
                     network_id, address = endpoint
                     networks = record["networks"]
                     if (record["state"] != "running" or not isinstance(record["network_mode"], str)
@@ -181,10 +202,31 @@ class DockerControls:
                             or len({item["id"] for item in networks}) != len(networks)
                             or {"id": network_id, "address": address} not in networks):
                         raise ValueError
-                return record["state"]
+                return record
 
-            before = inspect()
-            if endpoint:
+            record = inspect()
+            before = record["state"]
+            if action == "stopped_endpoint":
+                network_id, address = endpoint
+                network_mode = record["network_mode"]
+                if (before not in ("created", "exited") or not isinstance(network_mode, str)
+                        or not IDENTIFIER.fullmatch(network_mode) or record["port_bindings"] not in (None, {})
+                        or record["publish_all_ports"] is not False):
+                    raise ValueError
+                network = run(["network", "inspect", "--format", INTERNAL_NETWORK_FORMAT, network_mode], project=True)
+                network_name = network["name"]
+                if (not isinstance(network_name, str) or not IDENTIFIER.fullmatch(network_name)
+                        or network["internal"] is not True
+                        or network != {"id": network_id, "driver": "bridge", "scope": "local",
+                                       "name": network_name, "internal": True}
+                        or network_mode not in (network_name, network_id)
+                        or record["networks"] not in (
+                            [{"name": network_name, "id": "", "address": address}],
+                            [{"name": network_name, "id": network_id, "address": address}],
+                        )):
+                    raise ValueError
+                return True
+            if action == "endpoint":
                 network_id, _ = endpoint
                 network = run(["network", "inspect", "--format", NETWORK_FORMAT, network_id], project=True)
                 if network != {"id": network_id, "driver": "bridge", "scope": "local"}:
@@ -196,7 +238,7 @@ class DockerControls:
                 return before
             arguments = ["start", approved.container_id] if action == "start" else ["stop", "--time", "3", approved.container_id]
             run(arguments)
-            after = inspect()
+            after = inspect()["state"]
             if action == "start" and after != "running" or action == "stop" and after != "exited":
                 raise ValueError
             return after

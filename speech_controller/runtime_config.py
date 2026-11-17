@@ -1,4 +1,4 @@
-"""Strict private local startup manifest; no credentials or state initialization."""
+"""Strict private local controller manifest and state paths."""
 from dataclasses import dataclass
 import json
 import os
@@ -30,6 +30,22 @@ def private_file(value):
     return path, (info.st_dev, info.st_ino)
 
 
+def private_new_store(value):
+    """Require an unused canonical file path in an existing private directory."""
+    if type(value) is not str or not value or any(ord(c) < 32 for c in value):
+        raise ValueError
+    path = Path(value)
+    if str(path) != value or not path.is_absolute() or path.parent.resolve(strict=True) != path.parent:
+        raise ValueError
+    info = path.parent.stat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise ValueError
+    for suffix in ("", "-journal", "-wal", "-shm", ".lock", ".controller.lock"):
+        if os.path.lexists(value + suffix):
+            raise ValueError
+    return path
+
+
 def fields(value, expected):
     if type(value) is not dict or set(value) != set(expected):
         raise ValueError
@@ -50,6 +66,14 @@ class RuntimeConfiguration:
 
     @classmethod
     def load(cls, path, token):
+        return cls._load(path, token, initializing=False)
+
+    @classmethod
+    def load_for_initialization(cls, path, token):
+        return cls._load(path, token, initializing=True)
+
+    @classmethod
+    def _load(cls, path, token, *, initializing):
         try:
             if platform.system() != "Linux":
                 raise ValueError
@@ -68,10 +92,18 @@ class RuntimeConfiguration:
             if type(value["version"]) is not int or value["version"] != 1:
                 raise ValueError
             control = ControlConfiguration(token, value["actor"], value["port"])
-            traffic, traffic_id = private_file(value["traffic_path"])
-            journal, journal_id = private_file(value["journal_path"])
-            if len({identity, traffic_id, journal_id}) != 3:
-                raise ValueError
+            if initializing:
+                traffic = private_new_store(value["traffic_path"])
+                journal = private_new_store(value["journal_path"])
+                if journal.is_relative_to(traffic.parent) or manifest.is_relative_to(traffic.parent):
+                    raise ValueError
+                identities = ()
+            else:
+                traffic, traffic_id = private_file(value["traffic_path"])
+                journal, journal_id = private_file(value["journal_path"])
+                if len({identity, traffic_id, journal_id}) != 3:
+                    raise ValueError
+                identities = (traffic_id, journal_id)
             policy = value["policy"]
             fields(policy, ("storage_path", "topology_confirmed", "cpu_budget_nanos", "memory_budget_bytes",
                             "memory_reserve_bytes", "disk_reserve_bytes", "artifact_bytes"))
@@ -97,9 +129,10 @@ class RuntimeConfiguration:
             if (type(socket) is not str or not Path(socket).is_absolute()
                     or str(Path(socket).resolve(strict=True)) != socket
                     or any(part.is_symlink() for part in (Path(socket), *Path(socket).parents))
-                    or not stat.S_ISSOCK(Path(socket).stat().st_mode)):
+                    or not stat.S_ISSOCK(Path(socket).stat().st_mode)
+                    or initializing and Path(socket).is_relative_to(traffic.parent)):
                 raise ValueError
             return cls(control, tuple(approvals), tuple(targets), tuple(bindings), policy,
-                       str(traffic), str(journal), socket, value["daemon_id"], (traffic_id, journal_id))
+                       str(traffic), str(journal), socket, value["daemon_id"], identities)
         except (OSError, ValueError, TypeError, KeyError, AttributeError, RecursionError):
             raise ValueError("Invalid private controller configuration.") from None
