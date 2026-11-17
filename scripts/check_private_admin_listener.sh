@@ -39,9 +39,11 @@ before=$(snapshot)
 [ "$(printf '%s\n' "$before" | awk '$4 == "healthy" {n++} END {print n+0}')" -eq 3 ] \
     && health 8080 || fail 'Production health preflight failed.'
 [ -z "$(listener)" ] || fail 'Fixture port must be unused.'
-image=$(docker inspect --type container --format '{{.Image}}' hotel-ai-web-1)
+web_id=$(printf '%s\n' "$before" | awk 'NR == 1 {print $1}')
+image=$(printf '%s\n' "$before" | awk 'NR == 1 {print $2}')
+printf '%s\n' "$web_id" | grep -Eq '^[0-9a-f]{64}$' || fail 'Expected a full production container ID.'
 printf '%s\n' "$image" | grep -Eq '^sha256:[0-9a-f]{64}$' || fail 'Expected a cached image ID.'
-[ "$(docker inspect --type container --format '{{index .Config.Labels "com.docker.compose.project"}} {{index .Config.Labels "com.docker.compose.service"}}' hotel-ai-web-1)" = 'hotel-ai web' ] \
+[ "$(docker inspect --type container --format '{{index .Config.Labels "com.docker.compose.project"}} {{index .Config.Labels "com.docker.compose.service"}}' "$web_id")" = 'hotel-ai web' ] \
     && [ "$(docker image inspect --format '{{.Architecture}}' "$image")" = arm64 ] \
     || fail 'The local image does not match the approved web service.'
 IFS= read -r password || fail 'Expected the fixture password on standard input.'
@@ -86,6 +88,7 @@ printf '%s\n' 'DJANGO_DB_PATH=/tmp/fixture.sqlite3' "DJANGO_SECRET_KEY=$secret" 
 unset password secret
 
 [ "$(docker info --format '{{.ID}}')" = "$daemon" ] || fail 'Docker identity changed before fixture creation.'
+[ "$(snapshot)" = "$before" ] && health 8080 || fail 'Production changed before fixture creation.'
 id=$(docker create --pull never --name "$name" --label "$label" --network host \
     --user 10001:10001 --read-only --tmpfs /tmp:rw,nosuid,nodev,noexec,size=64m,uid=10001,gid=10001 \
     --cap-drop ALL --security-opt no-new-privileges --memory 512m --memory-swap 512m --cpus 0.25 --init \
