@@ -49,6 +49,11 @@ def _path(path):
 
 def initialize(path):
     """Explicit offline initialization only; never replace an existing store."""
+    _initialize(path, SCHEMA, lambda db: db.execute("INSERT INTO metadata VALUES (1)"))
+
+
+def _initialize(path, schema, seed):
+    """Shared exclusive creation for supported traffic-store versions."""
     path = _path(path)
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
     os.close(descriptor)
@@ -60,9 +65,9 @@ def initialize(path):
         db.execute("PRAGMA journal_mode=DELETE")
         db.execute("BEGIN IMMEDIATE")
         try:
-            for statement in SCHEMA.values():
+            for statement in schema.values():
                 db.execute(statement)
-            db.execute("INSERT INTO metadata VALUES (1)")
+            seed(db)
             db.executemany("INSERT INTO slots VALUES (?,?,0)", sorted(SLOTS))
             db.commit()
         except Exception:
@@ -73,6 +78,8 @@ def initialize(path):
 
 
 class TrafficGate:
+    _schema = SCHEMA
+
     def __init__(self, path, *, timeout=5):
         if type(timeout) not in (int, float) or not 0 < timeout <= 5:
             raise ValueError("Drain timeout must be positive and at most five seconds.")
@@ -92,16 +99,15 @@ class TrafficGate:
         if not stat.S_ISREG(info.st_mode) or (info.st_dev, info.st_ino) != self._identity:
             raise OSError
 
-    @staticmethod
-    def _validate(db):
+    def _validate(self, db):
         schema = dict(db.execute("SELECT name,sql FROM sqlite_master WHERE type='table'").fetchall())
-        if schema != SCHEMA or db.execute("SELECT 1 FROM sqlite_master WHERE type IN ('trigger','view')").fetchone():
+        if schema != self._schema or db.execute("SELECT 1 FROM sqlite_master WHERE type IN ('trigger','view')").fetchone():
             raise ValueError
-        if db.execute("SELECT version FROM metadata LIMIT 2").fetchall() != [(1,)]:
-            raise ValueError
+        self._validate_metadata(db)
         slots = db.execute("SELECT language,task,closed FROM slots LIMIT 5").fetchall()
         if len(slots) != 4 or {(language, task) for language, task, _ in slots} != SLOTS:
             raise ValueError
+
         if any(type(closed) is not int or closed not in (0, 1) for _, _, closed in slots):
             raise ValueError
         claims = db.execute("SELECT token,language,task FROM claims LIMIT 33").fetchall()
@@ -110,6 +116,13 @@ class TrafficGate:
             for token, language, task in claims
         ):
             raise ValueError
+
+    def _validate_metadata(self, db):
+        if db.execute("SELECT version FROM metadata LIMIT 2").fetchall() != [(1,)]:
+            raise ValueError
+
+    def _new_claim(self, db, slot):
+        return _Claim(self, slot)
 
     @contextmanager
     def _transaction(self, deadline=None):
@@ -153,7 +166,7 @@ class TrafficGate:
             if closed or db.execute("SELECT COUNT(*) FROM claims").fetchone()[0] >= MAX_CLAIMS:
                 raise TrafficBusy("Speech admission is paused or busy.")
             db.execute("INSERT INTO claims VALUES (?,?,?)", (token, *slot))
-        claim = _Claim(self, slot)
+            claim = self._new_claim(db, slot)
         try:
             yield claim
         finally:

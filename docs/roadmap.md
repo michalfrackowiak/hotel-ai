@@ -14,6 +14,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 ## Alpha
 
+- [x] 0.5 atomic route store: approved target/revision selection shares the request-claim transaction, and publication requires a closed, drained slot and exact prior state. See [routing boundary](speech-route-publication.md). Durable lifecycle commit/recovery integration and production activation remain pending.
+
 - [x] 0.5 shared traffic gate: opt-in cross-process speech claims, per-language/task draining, and durable blocking for uncertain requests. See [draining and recovery limits](speech-traffic-draining.md). Fixed endpoints remain; atomic routing and production activation are pending.
 
 - [x] 0.5 controller resource gate: immutable policy and approved container limits checked against fresh host capacity, with all approved running workers included and revalidation after draining. See [admission boundary](speech-controller-admission.md). Guest draining/routing and production activation remain pending.
