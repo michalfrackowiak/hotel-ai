@@ -2,6 +2,10 @@
 
 ## Latest milestone
 
+ARM64 runtime staging (`develop/arm64-speech-runtime-staging`) reuses the full runtime drill on the native hotel server with capped disposable workers and production health monitoring. The implementation agent owns server-mode isolation and the parent owns controlled execution and release verification, with independent review. [Server staging method](speech-runtime-arm64-staging.md)
+
+Read-only preflight observed two ARM64 cores, 9,984 MiB of available memory, 90,634 MiB of available root filesystem space, three healthy production containers and an HTTP 200 health response. Server execution and release checks are pending.
+
 Speech runtime staging (`develop/speech-runtime-staging`) joins the native Linux controller, pinned Piper/Vosk workers, and Django admin and guest flows in a disposable CI stack. Separate owners implement the fixture and the Django drill. The parent integrates the workflow and records verification with independent review. [Staging scope and limits](speech-runtime-staging.md)
 
 The local controller suite passed with 148 collected and two Linux-only checks skipped on Windows. All 18 focused readiness tests passed after independent review reproduced the cold-listener regression by disabling connection retries. The staging scripts compile and refuse execution outside hosted Linux CI. The hosted workflow runs the actual disposable drill, including recovery, cold worker starts, all four switches, guest speech and cleanup. Next action is ARM64 staging against a private server fixture, including capacity and the intended admin connection.

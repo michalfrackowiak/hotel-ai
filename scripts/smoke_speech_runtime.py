@@ -1,4 +1,5 @@
-"""Run the complete speech runtime on a disposable hosted Linux CI runner."""
+"""Run the speech runtime in a disposable Linux fixture."""
+import argparse
 from contextlib import closing, contextmanager
 from dataclasses import asdict
 from http.client import HTTPConnection, HTTPException
@@ -20,6 +21,10 @@ from time import monotonic, sleep
 from unittest.mock import patch
 from uuid import uuid4
 
+from arm64_stage import (
+    FixtureError, ProductionHealth, arm64_source, cleanup_on_disconnect, docker_path, production_snapshot, require,
+)
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from speech_controller.admission import ControllerAdmission, ResourcePolicy
 from speech_controller.backend import DockerLifecycleBackend
@@ -35,7 +40,6 @@ from speech_controller.traffic import TrafficUnavailable
 
 
 GIB = 1024 ** 3
-CPU = 500_000_000
 MEMORY = {"tts": GIB, "stt": 3 * GIB // 2}
 WEB_MEMORY = GIB // 2
 OVERLAP = sum(MEMORY.values()) + max(MEMORY.values())
@@ -44,22 +48,13 @@ OWNER_LABEL = "hotel-ai.controller-owner"
 PENDING_REQUEST = "stage-interrupted"
 
 
-class FixtureError(Exception):
-    pass
-
-
 class InterruptedSwitch(Exception):
     pass
 
 
-def require(condition, message):
-    if not condition:
-        raise FixtureError(message)
-
-
-def native_socket(environment):
-    require(platform.system() == "Linux" and environment.get("GITHUB_ACTIONS") == "true"
-            and environment.get("RUNNER_ENVIRONMENT") == "github-hosted",
+def native_socket(environment, *, server=False):
+    require(platform.system() == "Linux" and (server or (environment.get("GITHUB_ACTIONS") == "true"
+            and environment.get("RUNNER_ENVIRONMENT") == "github-hosted")),
             "Speech runtime staging requires a disposable GitHub-hosted Linux runner.")
     path = Path("/var/run/docker.sock").resolve(strict=True)
     require(stat.S_ISSOCK(path.stat().st_mode), "Native Docker socket unavailable.")
@@ -73,15 +68,28 @@ def full_id(value, *, image=False):
 
 
 class DockerFixture:
-    def __init__(self, socket_path):
+    def __init__(self, socket_path, *, source=None, path=None):
         self.prefix = ["docker", "--host", "unix://" + socket_path]
-        self.env = {"PATH": os.environ.get("PATH", os.defpath)}
+        self.env = {"PATH": path if path is not None else os.environ.get("PATH", os.defpath)}
+        self.source = source
+        self.health = ProductionHealth() if source else None
+        self.worker_cpu = 400_000_000 if source else 500_000_000
+        self.web_cpu = "0.25" if source else "0.5"
+        self.reserve = 3 * GIB if source else GIB
+        self.daemon_id = None
         self.owner = "hotel-ai-stage-" + uuid4().hex
         self.label = OWNER_LABEL + "=" + self.owner
         self.containers = set()
         self.networks = set()
 
+    def check_health(self):
+        if self.health is not None:
+            self.health.check()
+
     def run(self, *args, timeout=10, env=None, stream=False):
+        if self.daemon_id is not None and (args[0] in ("create", "rm", "start")
+                or args[:2] in (("network", "create"), ("network", "rm"))):
+            self.check_daemon()
         try:
             completed = subprocess.run(self.prefix + list(args), check=True, timeout=timeout,
                 env=self.env if env is None else env, text=True,
@@ -89,6 +97,10 @@ class DockerFixture:
         except (OSError, subprocess.SubprocessError):
             raise FixtureError(f"Docker fixture command failed ({args[0]}).") from None
         return completed.stdout.strip() if not stream else None
+
+    def check_daemon(self):
+        require(self.run("info", "--format", "{{.ID}}") == self.daemon_id,
+                "The pinned Docker daemon changed during ARM64 staging.")
 
     def images(self):
         base = ("compose", "--env-file", "/dev/null", "-f", "compose.yaml", "-f", "compose.piper.yaml",
@@ -104,6 +116,7 @@ class DockerFixture:
 
     def network(self):
         options = ("network", "create", "--driver", "bridge", "--internal", "--label", self.label)
+        self.check_health()
         provisional = full_id(self.run(*options, self.owner + "-pool"))
         self.networks.add(provisional)
         ipam = json.loads(self.run("network", "inspect", "--format", "{{json .IPAM.Config}}", provisional))
@@ -114,16 +127,47 @@ class DockerFixture:
                 "Docker pool did not allocate a private IPv4 fixture subnet.")
         self.run("network", "rm", provisional)
         self.networks.remove(provisional)
+        self.check_health()
         network_id = full_id(self.run(*options, "--subnet", str(subnet), self.owner))
         self.networks.add(network_id)
         return network_id, [str(subnet.network_address + host) for host in range(4, 8)]
 
     def create(self, role, *args, env=None):
+        self.check_health()
+        cpu = self.web_cpu if role == "django" else str(self.worker_cpu / 1_000_000_000)
         identity = full_id(self.run("create", "--pull", "never", "--name", self.owner + "-" + role,
             "--label", self.label, "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-            "--init", "--cpus", "0.5", *args, env=env))
+            "--init", "--cpus", cpu, *args, env=env))
         self.containers.add(identity)
         return identity
+
+    def attach_admin(self, identity):
+        self.check_health()
+        if self.health is None:
+            self.run("start", "--attach", identity, timeout=150, stream=True)
+            return
+        self.check_daemon()
+        with subprocess.Popen(self.prefix + ["start", "--attach", identity],
+                              env=self.env, stderr=subprocess.DEVNULL) as process:
+            deadline = monotonic() + 150
+            success = False
+            try:
+                while process.poll() is None:
+                    self.check_health()
+                    require(monotonic() < deadline, "Staged Django timed out.")
+                    self.health.abort.wait(0.2)
+                self.check_health()
+                require(process.returncode == 0, "Staged Django returned an error.")
+                success = True
+            finally:
+                if not success:
+                    try:
+                        self.run("rm", "--force", identity)
+                        self.containers.remove(identity)
+                    finally:
+                        if process.poll() is None:
+                            process.kill()
+                        process.wait(timeout=5)
 
     def owned_ids(self, kind):
         listing = ("ps", "--all") if kind == "container" else ("network", "ls")
@@ -152,9 +196,10 @@ class DockerFixture:
         require(not failed, "Could not remove every staged Docker resource.")
 
 
-def ready(url, *, token=None, timeout=20, process=None):
+def ready(url, *, token=None, timeout=20, process=None, check_health=lambda: None):
     deadline = monotonic() + timeout
     while monotonic() < deadline:
+        check_health()
         if process is not None and process.poll() is not None:
             break
         connection = HTTPConnection(*url, timeout=1)
@@ -219,20 +264,30 @@ def runtime(command, env):
                 raise FixtureError("Native controller did not shut down cleanly.") from None
 
 
-def stage(docker, socket_path, directory):
-    images = docker.images()
+def stage(docker, socket_path, directory, *, production=None):
+    images = docker.images() if production is None else {name: value["image"] for name, value in production.items()}
     info = json.loads(docker.run("info", "--format", '{"id":{{json .ID}},"os":{{json .OSType}},'
                                 '"system":{{json .OperatingSystem}},"storage":{{json .DockerRootDir}}}'))
     require(info["os"] == "linux" and "docker desktop" not in info["system"].lower()
             and Path(info["storage"]).is_absolute(), "Expected native Linux Docker storage.")
+    if production is not None:
+        require(info["id"] == docker.daemon_id, "The pinned Docker daemon changed before ARM64 staging.")
+        for image in images.values():
+            require(docker.run("image", "inspect", "--format", "{{.Architecture}}", image) == "arm64",
+                    "Expected cached ARM64 staging images.")
     resources = host_resources(info["storage"])
     require((resources["cpu_count"] or 0) >= 2 and (resources["memory_available_mib"] or 0) * 1024 ** 2
-            >= OVERLAP + WEB_MEMORY + GIB, "Runner does not have enough reserved CPU and RAM for staging.")
+            >= OVERLAP + WEB_MEMORY + docker.reserve, "Host does not have enough reserved CPU and RAM for staging.")
     estimates = {images[service]: int(docker.run("image", "inspect", "--format", "{{.Size}}", images[service]))
                  for service in ("piper", "asr")}
-    require((resources["disk_free_mib"] or 0) * 1024 ** 2 >= GIB + sum(estimates.values()),
-            "Runner does not have enough reserved disk space for staging.")
-    policy = ResourcePolicy(info["id"], info["storage"], True, 3 * CPU, OVERLAP, GIB, GIB, tuple(estimates.items()))
+    require((resources["disk_free_mib"] or 0) * 1024 ** 2 >= docker.reserve + sum(estimates.values()),
+            "Host does not have enough reserved disk space for staging.")
+    policy = ResourcePolicy(info["id"], info["storage"], True, 3 * docker.worker_cpu, OVERLAP,
+                            docker.reserve, docker.reserve, tuple(estimates.items()))
+    if production is not None:
+        print("ARM64 capacity " + json.dumps({"available_mib": round(resources["memory_available_mib"], 1),
+              "disk_free_mib": round(resources["disk_free_mib"], 1), "logical_cpus": resources["cpu_count"],
+              "image_ids": images}, sort_keys=True), flush=True)
 
     network, addresses = docker.network()
     names, approvals, targets, bindings = {}, [], [], []
@@ -245,15 +300,16 @@ def stage(docker, socket_path, directory):
         container = docker.create(role, "--network", network, "--ip", address, "--memory", memory,
                                   "--memory-swap", memory, image)
         names[role] = name
-        approvals.append(ApprovedContainer(name, container, image, CPU, int(memory), docker.owner))
+        approvals.append(ApprovedContainer(name, container, image, docker.worker_cpu, int(memory), docker.owner))
         targets.append(ProbeTarget(name, task, f"http://{address}:{5000 if task == 'tts' else 5001}", LANGUAGES))
         bindings.append(EndpointBinding(name, network, address))
 
     controls = DockerControls(socket_path, info["id"], approvals)
     for role, binding in zip(roles, bindings, strict=True):
         if role.endswith("-old"):
+            docker.check_health()
             controls.start(names[role])
-            ready((binding.address, 5000 if role.startswith("tts") else 5001))
+            ready((binding.address, 5000 if role.startswith("tts") else 5001), check_health=docker.check_health)
         else:
             require(controls.inspect(names[role]) == "created", "Replacement worker was already started.")
     fixture_dir, traffic_path, journal_path = make_stores(directory, controls, policy, targets, bindings, names)
@@ -273,8 +329,9 @@ def stage(docker, socket_path, directory):
     command = [sys.executable, "-m", "speech_controller.runtime", "--config", str(manifest)]
     env = docker.env | {"HOTEL_SPEECH_CONTROL_TOKEN": token}
     endpoint = ("127.0.0.1", port)
+    docker.check_health()
     with runtime(command, env) as process:
-        initial = ready(endpoint, token=token, process=process)
+        initial = ready(endpoint, token=token, process=process, check_health=docker.check_health)
         require(initial["blocked"] is True and initial["state"]["revision"] == 0
                 and initial["pending_requests"] == [PENDING_REQUEST], "Controller lost its pending switch on startup.")
         with closing(HTTPConnection(*endpoint, timeout=3)) as connection:
@@ -284,7 +341,7 @@ def stage(docker, socket_path, directory):
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         require(duplicate.returncode == 1, "Controller startup permitted a competing owner.")
         launch_admin(docker, images["web"], fixture_dir, targets, names, port, token)
-        final = ready(endpoint, token=token, process=process)
+        final = ready(endpoint, token=token, process=process, check_health=docker.check_health)
         routes = dict(((language, task), name) for (language, task), name in final["state"]["routes"])
         require(final["blocked"] is False and not final["pending_requests"] and not final["pending_recoveries"]
                 and final["state"] == final["observed"] and final["state"]["revision"] == 4
@@ -301,7 +358,6 @@ def stage(docker, socket_path, directory):
 
 def launch_admin(docker, image, fixture_dir, targets, names, port, token):
     settings = {
-        "GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted",
         "DJANGO_SECRET_KEY": secrets.token_hex(32), "DJANGO_ALLOWED_HOSTS": "testserver",
         "DJANGO_DB_PATH": "/fixture/bookings.sqlite3", "HOTEL_SPEECH_TRAFFIC_DB": "/fixture/traffic.sqlite3",
         "HOTEL_SPEECH_ROUTE_TARGETS": json.dumps([asdict(target) for target in targets]),
@@ -309,23 +365,70 @@ def launch_admin(docker, image, fixture_dir, targets, names, port, token):
         "HOTEL_SPEECH_CONTROL_HOST": "runtime-ci", "HOTEL_SPEECH_CONTROL_SWITCH_ENABLED": "1",
         "HOTEL_SPEECH_CONTROL_RECOVERY_ENABLED": "1", "HOTEL_STAGE_WORKERS": json.dumps(names),
     }
-    env_args = [item for key in settings for item in ("--env", key)]
+    if docker.source:
+        settings["HOTEL_STAGE_MODE"] = "arm64-server"
+        env_file = fixture_dir.parent / "admin.env"
+        descriptor = os.open(env_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, "w", encoding="ascii") as stream:
+            stream.writelines(f"{key}={value}\n" for key, value in settings.items())
+        options = ["--env-file", str(env_file), "--workdir", "/stage-src", "--mount",
+                   f"type=bind,src={docker.source},dst=/stage-src,readonly"]
+        env = docker.env
+    else:
+        settings.update(GITHUB_ACTIONS="true", RUNNER_ENVIRONMENT="github-hosted")
+        options = [item for key in settings for item in ("--env", key)]
+        env = docker.env | settings
     web = docker.create("django", "--network", "host", "--user", f"{os.getuid()}:{os.getgid()}",
         "--memory", str(WEB_MEMORY), "--memory-swap", str(WEB_MEMORY), "--tmpfs", "/tmp:rw,nosuid,nodev,size=32m",
-        "--mount", f"type=bind,src={fixture_dir},dst=/fixture", *env_args, image,
-        "python", "scripts/check_staged_speech_admin.py", env=docker.env | settings)
-    docker.run("start", "--attach", web, timeout=150, stream=True)
+        "--mount", f"type=bind,src={fixture_dir},dst=/fixture", *options, image,
+        "python", "scripts/check_staged_speech_admin.py", env=env)
+    docker.attach_admin(web)
 
 
-def main():
+def stage_server(docker, socket_path, directory):
+    identity = docker.run("info", "--format", "{{.ID}}")
+    require(bool(re.fullmatch(r"[a-zA-Z0-9:_-]{1,128}", identity)), "Expected a native Docker daemon identity.")
+    docker.daemon_id = identity
+    before = production_snapshot(docker)
     try:
-        socket_path = native_socket(os.environ)
-        with TemporaryDirectory(prefix="hotel-ai-runtime-") as directory:
-            docker = DockerFixture(socket_path)
+        with docker.health.monitor():
             try:
-                stage(docker, socket_path, Path(directory).resolve())
+                stage(docker, socket_path, directory, production=before)
             finally:
-                docker.cleanup()
+                try:
+                    docker.cleanup()
+                finally:
+                    require(docker.run("info", "--format", "{{.ID}}") == identity
+                            and production_snapshot(docker) == before,
+                            "Production daemon or service identity, start time, or health changed.")
+                    require(docker.health.sample(), "Production health failed after staging cleanup.")
+    finally:
+        docker.health.report()
+    docker.check_health()
+    print("Production container identity, start time, and health matched before and after staging.")
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--arm64-server", action="store_true")
+    parser.add_argument("--source")
+    args = parser.parse_args(argv)
+    try:
+        require(args.arm64_server == (args.source is not None), "ARM64 server mode requires --source.")
+        source = arm64_source(args.source, Path(__file__).resolve().parents[1]) if args.arm64_server else None
+        socket_path = native_socket(os.environ, server=source is not None)
+        with TemporaryDirectory(prefix="hotel-ai-runtime-", dir="/tmp" if source else None) as directory:
+            directory = Path(directory).resolve()
+            if source is not None:
+                path = docker_path(directory)
+                with cleanup_on_disconnect(), patch.dict(os.environ, {"PATH": path}):
+                    stage_server(DockerFixture(socket_path, source=source, path=path), socket_path, directory)
+            else:
+                docker = DockerFixture(socket_path)
+                try:
+                    stage(docker, socket_path, directory)
+                finally:
+                    docker.cleanup()
         print("Real runtime staging passed. Old workers stopped, replacements routed, and fixture removed.")
     except FixtureError as error:
         raise SystemExit(str(error)) from None
