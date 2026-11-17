@@ -19,7 +19,7 @@ The table shows four language/task slots: English STT, English TTS, Polish STT a
 
 Blocked state, unfinished switch IDs and unfinished recovery IDs are displayed explicitly. They do not trigger automatic retries or recovery. Matching routes and an unblocked journal do not prove speech-worker health or available capacity. The page shows when Django fetched the response; the controller reads two separate stores, so the result is an observation rather than an atomic reservation.
 
-Busy, unavailable, invalid and unconfigured states are shown without displaying raw errors or credentials. The page is not cached and refreshes only on a new request. There are no action buttons for switching or recovery in this slice.
+Busy, unavailable, invalid and unconfigured states are shown without displaying raw errors or credentials. The page is not cached and refreshes only on a new request. Authorized staff can enter the separately enabled [recovery workflow](admin-speech-recovery.md); provider switching is not yet exposed.
 
 ## Transport boundary
 

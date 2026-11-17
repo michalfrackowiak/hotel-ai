@@ -1,0 +1,19 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p><a href="{% url 'admin:model_providers_speechselection_controller_status' %}">Back to controller status</a></p>
+<p>Request ID: {{ saved.payload.recovery_id }}</p>
+<p>Prepared by {{ saved.created_by }} at {{ saved.created_at }}. Expected journal revision: {{ saved.payload.expected_revision }}. Observed route revision: {{ saved.payload.observed.revision }}.</p>
+<p>Reason: {{ saved.payload.reason }}</p>
+<table><thead><tr><th>Language</th><th>Service</th><th>Observed deployment</th></tr></thead>
+<tbody>{% for row in observed_rows %}<tr><td>{{ row.language }}</td><td>{{ row.task }}</td><td>{{ row.target }}</td></tr>{% endfor %}</tbody></table>
+{% if recovery_error %}<p class="errornote">{{ recovery_error }}</p>{% endif %}
+{% if saved.completed %}
+<p>Recovery confirmed by the controller. This completed request will not be sent again.</p>
+{% else %}
+{% if saved.attempted_at %}<p class="errornote">This request was submitted at {{ saved.attempted_at }}. Completion is not confirmed. A timeout does not cancel controller work.</p>
+{% else %}<p>This saved request has not been submitted.</p>{% endif %}
+{% if saved.outcome %}<p>Last controller result: {{ saved.outcome.status }} — {{ saved.outcome.reason }}.</p>{% endif %}
+<p>Inspect controller status before retrying. Every submission uses the original request ID and payload. If the controller rejects a stale revision or conflicting route state, repeating it will not fix that conflict; obtain offline operator review. This page cannot edit, reset or discard the request.</p>
+<form method="post">{% csrf_token %}{{ form.as_p }}<input type="submit" value="{% if saved.attempted_at %}Retry saved request{% else %}Confirm and send recovery{% endif %}"></form>
+{% endif %}
+{% endblock %}
