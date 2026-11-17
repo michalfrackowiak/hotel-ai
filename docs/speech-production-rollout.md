@@ -1,6 +1,6 @@
 # Production speech controller rollout
 
-The [ARM64 staging run](speech-runtime-arm64-staging.md) verified the controller and admin workflow on the hotel server. This guide records the proposed production topology and the order for an operator-led cutover. The rehearsal uses disposable hosted CI resources and fictional data.
+The ARM64 staging run verified the controller and admin workflow on the hotel server. This guide records the production topology and order for an operator-led cutover. The opt-in Compose overlay defines the web listener and the worker specifications. The rehearsal uses disposable hosted CI resources and fictional data. [ARM64 staging results](speech-runtime-arm64-staging.md) · [Routed Compose configuration](speech-cutover-config.md)
 
 ## Private connections and worker limits
 
@@ -22,7 +22,7 @@ Start with the two bilingual Piper and Vosk images already used by the hotel. Re
 2. Rehearse the exact Gunicorn bind and SSH admin path on a disposable loopback port. Verify external requests to the Django and controller ports cannot connect, public `/admin/` remains outside the Nginx allowlist, and Django has no Docker socket.
 3. Pause writes for the cutover window. Take a private SQLite backup with the backup API, checksum it, and verify integrity, foreign keys and Django migration compatibility on a disposable restore. Rehearse candidate migrations on the restore when the candidate introduces new tables. Use the [database recovery drill](offhost-recovery.md) for backup handling. Preserve signing configuration securely so active sessions can resume.
 4. Provision the route store and journal together with the reviewed approvals. There must be one controller owner and one shared route-store file. Run the [controller startup check](speech-controller-startup.md) and both language probes. Keep the admin switch and recovery flags off while verifying guest routing and read-only admin status.
-5. Verify booking health, the SSH-only admin path, actual speech in both languages, and current routes. Enable staff actions after the final backup and rollback readiness review. Reserve an operator who can stop the cutover while health or route ownership is uncertain.
+5. Verify booking health, the SSH-only admin path, actual speech in both languages, and current routes. The pilot overlay sets both staff action flags to zero. Enabling either flag requires a later configuration change after backup and rollback readiness review. Reserve an operator who can stop the cutover while health or route ownership is uncertain.
 
 ## Return to fixed speech endpoints
 
