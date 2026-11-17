@@ -1,9 +1,10 @@
-"""Drive the real Django admin and routed guest views in an isolated CI fixture."""
+"""Drive the real Django admin and routed guest views in an isolated fixture."""
 
 import io
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import stat
 import sys
@@ -21,7 +22,7 @@ FIXTURE_ENV = {
     "DJANGO_ALLOWED_HOSTS", "DJANGO_DB_PATH", "DJANGO_DEBUG", "DJANGO_SECRET_KEY",
     "HOTEL_SPEECH_CONTROL_HOST", "HOTEL_SPEECH_CONTROL_RECOVERY_ENABLED", "HOTEL_SPEECH_CONTROL_SWITCH_ENABLED",
     "HOTEL_SPEECH_CONTROL_TOKEN", "HOTEL_SPEECH_CONTROL_URL", "HOTEL_SPEECH_ROUTE_TARGETS",
-    "HOTEL_SPEECH_TRAFFIC_DB", "HOTEL_STAGE_WORKERS",
+    "HOTEL_SPEECH_TRAFFIC_DB", "HOTEL_STAGE_MODE", "HOTEL_STAGE_WORKERS",
 }
 
 
@@ -36,8 +37,20 @@ def require(condition, message):
 
 def fixture_configuration():
     env = os.environ
-    require(sys.platform == "linux" and env.get("GITHUB_ACTIONS") == "true"
-            and env.get("RUNNER_ENVIRONMENT") == "github-hosted", "Hosted Linux CI is required.")
+    mode = env.get("HOTEL_STAGE_MODE")
+    if mode == "arm64-server":
+        source = Path("/stage-src")
+        require(sys.platform == "linux" and platform.machine() == "aarch64" and os.getuid() != 0
+                and Path.cwd() == source and Path(__file__).resolve().parents[1] == source
+                and os.statvfs(source).f_flag & os.ST_RDONLY
+                and "GITHUB_ACTIONS" not in env and "RUNNER_ENVIRONMENT" not in env,
+                "ARM64 staging requires a read-only candidate mount and an ordinary user.")
+        expected = (source / "requirements.txt").read_bytes().replace(b"\r\n", b"\n")
+        actual = Path("/app/requirements.txt").read_bytes().replace(b"\r\n", b"\n")
+        require(actual == expected, "Cached Django dependencies do not match the candidate requirements.")
+    else:
+        require(mode is None and sys.platform == "linux" and env.get("GITHUB_ACTIONS") == "true"
+                and env.get("RUNNER_ENVIRONMENT") == "github-hosted", "Hosted Linux CI is required.")
     require(not {key for key in env if key.startswith(("DJANGO_", "HOTEL_"))} - FIXTURE_ENV,
             "Unexpected Django or hotel environment settings.")
     require(env.get("DJANGO_DB_PATH") == str(DATABASE) and env.get("HOTEL_SPEECH_TRAFFIC_DB") == str(TRAFFIC)
@@ -191,7 +204,8 @@ def create_plan(workers):
 
     for task in ("tts", "stt"):
         provider = SpeechProvider.objects.create(name=f"Staging {task}", slug=f"stage-{task}", task=task,
-                                                  engine="fixture", languages=["en", "pl"], architecture="amd64")
+                                                  engine="fixture", languages=["en", "pl"],
+                                                  architecture="arm64" if os.environ.get("HOTEL_STAGE_MODE") else "amd64")
         deployment = SpeechDeployment.objects.create(name=f"Staging replacement {task}", slug=f"stage-{task}-new",
             provider=provider, host="runtime-ci", container_name=workers[f"{task}-new"])
         for language in ("en", "pl"):
