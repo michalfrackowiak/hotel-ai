@@ -9,6 +9,7 @@ from django.views.decorators.http import require_GET
 from .models import AgentConfiguration, SPEECH_LANGUAGES, SpeechModel, SpeechProvider, SpeechDeployment, SpeechSelection
 from .preflight import check_speech_plan
 from .controller_client import inventory_report
+from .control_status import control_status_report
 from .transition_budget import transition_budget_report
 
 
@@ -112,12 +113,22 @@ class SpeechSelectionAdmin(admin.ModelAdmin):
         return super().changelist_view(request, {**(extra_context or {}), "can_preflight": self.can_preflight(request)})
 
     def get_urls(self):
-        return [path("preflight/", self.admin_site.admin_view(require_GET(self.preflight_view)),
+        return [path("controller-status/", self.admin_site.admin_view(require_GET(self.controller_status_view)),
+                     name="model_providers_speechselection_controller_status"),
+                path("preflight/", self.admin_site.admin_view(require_GET(self.preflight_view)),
                      name="model_providers_speechselection_preflight"),
                 path("inventory/", self.admin_site.admin_view(require_GET(self.inventory_view)),
                      name="model_providers_speechselection_inventory"),
                 path("transition/", self.admin_site.admin_view(require_GET(self.transition_view)),
                      name="model_providers_speechselection_transition")] + super().get_urls()
+
+    def controller_status_view(self, request):
+        if not self.can_preflight(request):
+            raise PermissionDenied
+        return TemplateResponse(request, "admin/model_providers/speechselection/controller_status.html", {
+            **self.admin_site.each_context(request), "opts": self.model._meta,
+            "title": "Live speech controller status", **control_status_report(),
+        })
 
     def transition_view(self, request):
         if not self.can_preflight(request):
