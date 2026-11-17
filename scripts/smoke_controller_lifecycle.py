@@ -2,10 +2,15 @@
 
 This proves orchestration and rollback, not actual speech readiness or guest drain.
 """
+from contextlib import contextmanager
+from dataclasses import asdict
+from http.client import HTTPConnection
+import json
 from pathlib import Path
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
+from threading import Thread
 from uuid import uuid4
 from unittest.mock import patch
 
@@ -13,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from speech_controller.backend import DockerLifecycleBackend
 from speech_controller.admission import ControllerAdmission, ResourcePolicy
 from speech_controller.docker_control import ApprovedContainer, DockerControls
+from speech_controller.dispatch import ControlConfiguration, ControlServer
 from speech_controller.routed_executor import RoutedLifecycleExecutor
 from speech_controller.lifecycle import Deployment, SwitchRequest
 from speech_controller.readiness import ProbeTarget
@@ -22,6 +28,35 @@ from speech_controller.routing import RoutedTrafficGate, initialize_routing
 def require(condition):
     if not condition:
         raise RuntimeError("Lifecycle fixture verification failed.")
+
+
+@contextmanager
+def dispatch(executor):
+    token = "fictional-ci-control-token-00000000"
+    with ControlServer(ControlConfiguration(token, "ci-operator"), executor, port=0) as server:
+        thread = Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        def call(path, payload=None, *, authorized=True):
+            connection = HTTPConnection(*server.server_address, timeout=60)
+            try:
+                headers = {"Authorization": "Bearer " + (token if authorized else "wrong"),
+                           "Content-Type": "application/json"}
+                connection.request("GET" if payload is None else "POST", path,
+                                   body=None if payload is None else json.dumps(payload), headers=headers)
+                response = connection.getresponse()
+                body = response.read(8193)
+                require(len(body) <= 8192)
+                return response.status, json.loads(body)
+            finally:
+                connection.close()
+
+        try:
+            yield call
+        finally:
+            server.shutdown()
+            thread.join(timeout=2)
+            require(not thread.is_alive())
 
 
 def main():
@@ -109,22 +144,34 @@ def main():
                 raise RuntimeError("Fixture lost publication acknowledgement.")
 
             interrupted_request = SwitchRequest("publication-gap", 2, ("en", "stt"), names["old"])
-            with patch.object(traffic, "publish", side_effect=publish_then_interrupt):
-                interrupted = executor.execute(interrupted_request)
-            require(interrupted.reason == "publication_uncertain" and executor.state.revision == 2)
+            with dispatch(executor) as call:
+                require(call("/v1/switch", asdict(interrupted_request), authorized=False)[0] == 401)
+                require(traffic.state == second.state and controls.inspect(names["old"]) == "exited")
+                with patch.object(traffic, "publish", side_effect=publish_then_interrupt):
+                    status, interrupted = call("/v1/switch", asdict(interrupted_request))
+                require(status == 200 and interrupted["reason"] == "publication_uncertain")
+            require(executor.state.revision == 2)
             observed = traffic.state
             require(observed.revision == 3)
             executor = RoutedLifecycleExecutor(backend, deployments, routes, path)
-            recovered = executor.recover("ci-recovery", 2, observed, "ci-operator", "Verified disposable fixture state")
-            require(recovered.status == "reconciled" and recovered.state == observed)
-            require(executor.recover("ci-recovery", 2, observed, "ci-operator", "Verified disposable fixture state") == recovered)
-            require(executor.execute(interrupted_request) == recovered)
+            with dispatch(executor) as call:
+                status, snapshot = call("/v1/status")
+                require(status == 200 and snapshot["blocked"] and snapshot["state"]["revision"] == 2)
+                require(snapshot["observed"]["revision"] == 3)
+                payload = dict(recovery_id="ci-recovery", expected_revision=2, observed=snapshot["observed"],
+                               reason="Verified disposable fixture state")
+                status, recovered = call("/v1/recover", payload)
+                require(status == 200 and recovered["status"] == "reconciled")
+                require(call("/v1/recover", payload) == (200, recovered))
+                require(call("/v1/switch", asdict(interrupted_request)) == (200, recovered))
+            require(executor.state == observed)
             require(executor.execute(second_request) == second)
             require(len(executor.reconciliation_history()) == 1 and not executor.recovery_status()["blocked"])
+            require(executor.reconciliation_history()[0]["request"]["actor"] == "ci-operator")
             for slot, target in observed.routes:
                 with traffic.claim(slot) as claim:
                     require(claim.target.name == target and claim.route_revision == 3)
-        print("Real routed switching, rollback and audited publication-gap recovery passed; fictional readiness/verifier only.")
+        print("Real routed switching, rollback and authenticated HTTP recovery passed; fictional readiness/verifier only.")
     finally:
         errors = []
         for container_id in reversed(ids):

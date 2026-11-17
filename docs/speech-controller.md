@@ -1,6 +1,6 @@
 # Private speech controller: inventory
 
-The standalone controller provides an authenticated, read-only snapshot of explicitly configured Docker containers. It cannot start, stop, pull, remove or switch containers. The [optional admin integration](speech-admin-inventory.md) retrieves these observations when explicitly configured; the private admin's static preflight remains separate.
+The standalone inventory controller provides an authenticated, read-only snapshot of explicitly configured Docker containers. It cannot start, stop, pull, remove or switch containers. The [optional admin integration](speech-admin-inventory.md) retrieves these observations when explicitly configured; the private admin's static preflight remains separate. A [separate control API](private-speech-dispatch.md) supports an explicitly constructed routed executor; this inventory command never enables it.
 
 Run it on the Docker host using Python and the Docker CLI, under a dedicated operating-system account with the necessary Docker access. Docker access itself is privileged: this endpoint's restrictions are not a replacement for isolating that account. Never mount the Docker socket into the public Django service or publish this endpoint through the public reverse proxy.
 

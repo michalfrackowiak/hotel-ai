@@ -12,7 +12,7 @@ CI uses three disposable, network-isolated, read-only containers with dropped ca
 
 The fixture now uses the [durable routed coordinator](durable-routed-switches.md) and a real SQLite route/traffic store. It verifies selected targets and route revisions through request claims after switching and rollback. Traffic publication and journal checkpoint ordering are exercised without sending guest data.
 
-It also interrupts publication acknowledgement and runs [audited routed recovery](routed-switch-recovery.md), verifying the observed route is adopted, prior results remain historical, and all slots reopen with the expected targets. Its external reconciliation verifier remains a fixture assertion.
+It also interrupts publication acknowledgement and runs [audited routed recovery](routed-switch-recovery.md) through the [private control API](private-speech-dispatch.md), verifying unauthorized requests have no effect, status exposes the observed route, prior results remain historical, the configured actor is audited, and all slots reopen with the expected targets. Its external reconciliation verifier remains a fixture assertion.
 
 These fixtures run sleeping Python processes, not speech models. Admission uses the [controller resource gate](speech-controller-admission.md), real host observations and a small fixture policy; an intentionally insufficient policy verifies denial before mutation. Readiness remains a test implementation, and traffic claims are fictional. The test verifies Docker/lifecycle/journal/routing composition, not model quality, production capacity or live guest behavior.
 
@@ -20,4 +20,4 @@ These fixtures run sleeping Python processes, not speech models. Admission uses 
 
 The [Piper/Vosk readiness callback](speech-readiness-probes.md) supplies real bilingual synthetic inference checks, and [controller resource admission](speech-controller-admission.md) checks fresh capacity against local policy. Production topology, policy and endpoint-to-container binding must be verified before connecting guest traffic and routing.
 
-The HTTP controller remains read-only and no admin switch button is exposed. A production backend still needs actual guest admission/draining and atomic routing publication, plus authenticated operation dispatch. The durable journal and controls must share stable ownership and verified daemon configuration. No production deployment is included.
+The inventory HTTP command remains read-only. A separate control API accepts an explicitly constructed routed executor; no admin switch button is exposed. Production startup still requires verified local composition, endpoint/container binding and policy configuration. The durable journal and controls must share stable ownership and verified daemon configuration. No production deployment is included.
