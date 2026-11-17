@@ -1,6 +1,7 @@
 import io
 import json
 import wave
+from contextlib import nullcontext
 from functools import lru_cache
 from http.client import HTTPException
 from threading import BoundedSemaphore
@@ -8,6 +9,7 @@ from urllib.error import HTTPError
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 from django.conf import settings
+from speech_controller.traffic import TrafficBusy, TrafficGate, TrafficUnavailable
 
 
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
@@ -36,6 +38,39 @@ class _NoRedirect(HTTPRedirectHandler):
         return None
 
 
+def _read_response(opener, request, *, timeout, limit, slot):
+    """Track outbound work across processes when private traffic gating is enabled."""
+    try:
+        path = settings.HOTEL_SPEECH_TRAFFIC_DB
+        claim = TrafficGate(path).claim(slot) if path else nullcontext(None)
+    except (ValueError, TrafficUnavailable) as error:
+        raise SpeechUnavailable("The speech traffic gate is unavailable.") from error
+    try:
+        with claim as ticket:
+            try:
+                with opener.open(request, timeout=timeout) as response:
+                    body = response.read(limit + 1)
+                    remaining = getattr(response, "length", None)
+                    if ticket is not None and (len(body) > limit or
+                                               isinstance(remaining, int) and remaining > 0):
+                        raise SpeechUnavailable("The speech response did not complete.")
+                    return body
+            except HTTPError as error:
+                # Only a trusted busy response proves this attempt was not admitted.
+                if ticket is not None and error.code != 429:
+                    ticket.mark_uncertain()
+                raise
+            except BaseException:
+                # A disconnected caller does not prove that remote inference ended.
+                if ticket is not None:
+                    ticket.mark_uncertain()
+                raise
+    except TrafficBusy as error:
+        raise SpeechBusy("The speech service is paused or busy.") from error
+    except TrafficUnavailable as error:
+        raise SpeechUnavailable("The speech traffic gate is unavailable.") from error
+
+
 def synthesize(reply, language):
     if language not in {"en", "pl"} or not reply or len(reply) > MAX_TEXT_CHARACTERS:
         raise SpeechUnavailable("The speech engine cannot synthesize this reply.")
@@ -52,8 +87,8 @@ def synthesize(reply, language):
             headers={"Content-Type": "application/json", "Accept": "audio/wav"},
         )
         opener = build_opener(ProxyHandler({}), _NoRedirect())
-        with opener.open(request, timeout=settings.HOTEL_PIPER_TIMEOUT) as response:
-            audio = response.read(MAX_AUDIO_BYTES + 1)
+        audio = _read_response(opener, request, timeout=settings.HOTEL_PIPER_TIMEOUT,
+                               limit=MAX_AUDIO_BYTES, slot=(language, "tts"))
     except HTTPError as error:
         if error.code == 429:
             raise SpeechBusy("The speech engine is busy.") from error
@@ -119,8 +154,8 @@ def transcribe(pcm, language):
             headers={"Content-Type": "application/octet-stream", "Accept": "application/json"},
         )
         opener = build_opener(ProxyHandler({}), _NoRedirect())
-        with opener.open(request, timeout=12) as response:
-            body = response.read(MAX_TRANSCRIPT_BYTES + 1)
+        body = _read_response(opener, request, timeout=12,
+                              limit=MAX_TRANSCRIPT_BYTES, slot=(language, "stt"))
         if len(body) > MAX_TRANSCRIPT_BYTES:
             raise ValueError("transcript response too large")
         result = json.loads(body)
