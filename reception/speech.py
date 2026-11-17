@@ -10,6 +10,7 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 
 from django.conf import settings
 from speech_controller.traffic import TrafficBusy, TrafficGate, TrafficUnavailable
+from speech_controller.routing import RoutedTrafficGate, load_targets
 
 
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
@@ -38,15 +39,29 @@ class _NoRedirect(HTTPRedirectHandler):
         return None
 
 
-def _read_response(opener, request, *, timeout, limit, slot):
+def _read_response(opener, *, data, timeout, limit, slot):
     """Track outbound work across processes when private traffic gating is enabled."""
     try:
         path = settings.HOTEL_SPEECH_TRAFFIC_DB
-        claim = TrafficGate(path).claim(slot) if path else nullcontext(None)
+        routed = bool(settings.HOTEL_SPEECH_ROUTE_TARGETS)
+        if routed:
+            if not path:
+                raise ValueError("Routing requires a shared traffic store.")
+            claim = RoutedTrafficGate(path, load_targets(settings.HOTEL_SPEECH_ROUTE_TARGETS)).claim(slot)
+        else:
+            claim = TrafficGate(path).claim(slot) if path else nullcontext(None)
     except (ValueError, TrafficUnavailable) as error:
         raise SpeechUnavailable("The speech traffic gate is unavailable.") from error
     try:
         with claim as ticket:
+            language, task = slot
+            base_url = ticket.target.base_url if routed else (
+                settings.HOTEL_PIPER_URL if task == "tts" else settings.HOTEL_ASR_URL)
+            endpoint = "/synthesize" if task == "tts" else "/transcribe?language=" + language
+            request = Request(base_url.rstrip("/") + endpoint, data=data, method="POST", headers={
+                "Content-Type": "application/json" if task == "tts" else "application/octet-stream",
+                "Accept": "audio/wav" if task == "tts" else "application/json",
+            })
             try:
                 with opener.open(request, timeout=timeout) as response:
                     body = response.read(limit + 1)
@@ -80,14 +95,10 @@ def synthesize(reply, language):
         generation_slot.release()
         raise SpeechBusy("The speech service is busy.")
     try:
-        request = Request(
-            f"{settings.HOTEL_PIPER_URL}/synthesize",
-            data=json.dumps({"text": reply, "language": language}, ensure_ascii=False).encode("utf-8"),
-            method="POST",
-            headers={"Content-Type": "application/json", "Accept": "audio/wav"},
-        )
         opener = build_opener(ProxyHandler({}), _NoRedirect())
-        audio = _read_response(opener, request, timeout=settings.HOTEL_PIPER_TIMEOUT,
+        audio = _read_response(opener,
+                               data=json.dumps({"text": reply, "language": language}, ensure_ascii=False).encode("utf-8"),
+                               timeout=settings.HOTEL_PIPER_TIMEOUT,
                                limit=MAX_AUDIO_BYTES, slot=(language, "tts"))
     except HTTPError as error:
         if error.code == 429:
@@ -114,8 +125,17 @@ def synthesize(reply, language):
     return audio
 
 
-@lru_cache(maxsize=1)
 def synthesize_welcome(parts):
+    # Route changes must never replay audio cached from an earlier provider.
+    return _welcome_audio(parts) if settings.HOTEL_SPEECH_ROUTE_TARGETS else _cached_welcome(parts)
+
+
+@lru_cache(maxsize=1)
+def _cached_welcome(parts):
+    return _welcome_audio(parts)
+
+
+def _welcome_audio(parts):
     pcm = bytearray()
     sample_rate = None
     for language, text in parts:
@@ -147,14 +167,8 @@ def transcribe(pcm, language):
         transcription_slot.release()
         raise SpeechBusy("The speech service is busy.")
     try:
-        request = Request(
-            f"{settings.HOTEL_ASR_URL}/transcribe?language={language}",
-            data=pcm,
-            method="POST",
-            headers={"Content-Type": "application/octet-stream", "Accept": "application/json"},
-        )
         opener = build_opener(ProxyHandler({}), _NoRedirect())
-        body = _read_response(opener, request, timeout=12,
+        body = _read_response(opener, data=pcm, timeout=12,
                               limit=MAX_TRANSCRIPT_BYTES, slot=(language, "stt"))
         if len(body) > MAX_TRANSCRIPT_BYTES:
             raise ValueError("transcript response too large")

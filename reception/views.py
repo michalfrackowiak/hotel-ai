@@ -54,8 +54,8 @@ def index(request):
     request.session.setdefault("reception", True)
     return render(request, "reception/index.html", {
         "language": language,
-        "piper_enabled": bool(settings.HOTEL_PIPER_URL),
-        "asr_enabled": bool(settings.HOTEL_ASR_URL),
+        "piper_enabled": bool(settings.HOTEL_PIPER_URL or settings.HOTEL_SPEECH_ROUTE_TARGETS),
+        "asr_enabled": bool(settings.HOTEL_ASR_URL or settings.HOTEL_SPEECH_ROUTE_TARGETS),
         "parser_training_enabled": settings.HOTEL_PARSER_TRAINING_ENABLED,
     })
 
@@ -294,7 +294,7 @@ def message(request):
 @never_cache
 @require_POST
 def audio(request):
-    if not settings.HOTEL_PIPER_URL:
+    if not (settings.HOTEL_PIPER_URL or settings.HOTEL_SPEECH_ROUTE_TARGETS):
         return HttpResponse(status=503)
     if request.content_type != "application/json":
         return _invalid(415)
@@ -357,7 +357,7 @@ def audio(request):
 @never_cache
 @require_POST
 def transcript(request):
-    if not settings.HOTEL_ASR_URL:
+    if not (settings.HOTEL_ASR_URL or settings.HOTEL_SPEECH_ROUTE_TARGETS):
         return HttpResponse(status=503)
     if request.content_type != "application/octet-stream":
         return _invalid(415)

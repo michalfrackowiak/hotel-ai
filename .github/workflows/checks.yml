@@ -84,8 +84,18 @@ jobs:
           DJANGO_SECRET_KEY: django-insecure-ci-server-fixture
           HOTEL_PORT: "8082"
           HOTEL_SPEECH_TRAFFIC_DB: /app/data/speech-traffic.sqlite3
+          HOTEL_SPEECH_ROUTE_TARGETS: >-
+            [{"name":"piper","task":"tts","base_url":"http://piper:5000","languages":["en","pl"]},
+             {"name":"asr","task":"stt","base_url":"http://asr:5001","languages":["en","pl"]}]
         run: |
-          docker compose run --rm --no-deps web python -m speech_controller.traffic init /app/data/speech-traffic.sqlite3
+          docker compose run -T --rm --no-deps web python - <<'PY'
+          import os
+          from speech_controller.routing import initialize_routing, load_targets
+          targets = load_targets(os.environ["HOTEL_SPEECH_ROUTE_TARGETS"])
+          routes = {(language, task): "piper" if task == "tts" else "asr"
+                    for language in ("en", "pl") for task in ("stt", "tts")}
+          initialize_routing(os.environ["HOTEL_SPEECH_TRAFFIC_DB"], targets, routes)
+          PY
           docker compose -f compose.yaml -f compose.server.yaml -f compose.piper.yaml -f compose.asr.yaml up --build --wait --wait-timeout 90 web piper asr
           curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8082/static/admin/css/base.css
           python scripts/smoke_piper.py http://127.0.0.1:8082 --asr

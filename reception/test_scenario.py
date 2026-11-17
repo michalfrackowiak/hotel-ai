@@ -89,7 +89,8 @@ class ScenarioInputTests(TestCase):
 
     @patch("reception.speech.synthesize")
     def test_welcome_audio_keeps_the_language_and_order_of_each_sentence(self, synthesize):
-        self.addCleanup(synthesize_welcome.cache_clear)
+        from .speech import _cached_welcome
+        self.addCleanup(_cached_welcome.cache_clear)
 
         def segment(sample):
             output = io.BytesIO()
