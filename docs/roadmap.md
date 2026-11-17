@@ -14,6 +14,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 ## Alpha
 
+- [x] 0.5 controller resource gate: immutable policy and approved container limits checked against fresh host capacity, with all approved running workers included and revalidation after draining. See [admission boundary](speech-controller-admission.md). Guest draining/routing and production activation remain pending.
+
 - [x] 0.5 readiness deadline: isolated one-shot probe workers enforce a total elapsed budget and are terminated/reaped on timeout, including trickling responses. See [deadline boundary](speech-readiness-probes.md#total-probe-deadline). Production admission, draining and routing remain pending.
 
 - [x] 0.5 speech readiness callback: real bilingual Piper synthesis and Vosk silence probes through approved local endpoints, with bounded responses and strict format checks. See [probe scope](speech-readiness-probes.md). Guest gating/routing and production activation remain pending.

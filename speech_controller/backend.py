@@ -6,6 +6,7 @@ defaults or guest-routing implementation are provided by this module.
 from types import MappingProxyType
 
 from .lifecycle import Deployment, LifecycleExecutor
+from .admission import ControllerAdmission
 
 
 class BackendUnavailable(Exception):
@@ -18,6 +19,7 @@ class DockerLifecycleBackend:
         if (not deployments or any(not isinstance(item, Deployment) for item in deployments)
                 or len({item.name for item in deployments}) != len(deployments)
                 or frozenset(item.name for item in deployments) != controls.approved_names
+                or isinstance(admission, ControllerAdmission) and admission.controls is not controls
                 or not all(callable(callback) for callback in (
                     admission, readiness, reconciliation,
                     getattr(traffic, "drain", None), getattr(traffic, "resume", None)))):
@@ -41,7 +43,7 @@ class DockerLifecycleBackend:
     def revalidate(self, current, destination):
         current_routes, next_routes = self._routes(current), self._routes(destination)
         old, new = set(current_routes.values()), set(next_routes.values())
-        observed = self._observe(old | new)
+        observed = self._observe(self._controls.approved_names)
         if any(observed[name] != "running" for name in old):
             return False
         if any(observed[name] not in ("created", "exited") for name in new - old):
