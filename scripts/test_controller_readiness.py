@@ -12,7 +12,7 @@ from unittest.mock import patch
 import wave
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from speech_controller.readiness import PHRASES, ProbeTarget, ReadinessProbes
+from speech_controller.readiness import PHRASES, ProbeTarget, ReadinessProbes, _probe_once
 from scripts import smoke_controller_readiness
 
 
@@ -88,7 +88,7 @@ class ReadinessTests(unittest.TestCase):
             self.assertEqual(body, b"\0" * 32000)
 
     def test_unapproved_names_and_slots_never_open_http(self):
-        with patch("speech_controller.readiness.build_opener") as opener:
+        with patch("speech_controller.readiness.subprocess.Popen") as opener:
             for name, slot in (("missing", ("en", "tts")), (None, ("en", "tts")),
                                ("piper", ("de", "tts")), ("piper", ("en", "stt")),
                                ("piper", ["en", "tts"]), ("piper", ("en",)),
@@ -153,7 +153,7 @@ class ReadinessTests(unittest.TestCase):
     def test_timeout_fails_after_one_bounded_attempt(self):
         with patch("speech_controller.readiness.build_opener") as build:
             build.return_value.open.side_effect = TimeoutError
-            self.assertFalse(self.probes("asr", ("en", "stt")))
+            self.assertFalse(_probe_once(ProbeTarget("asr", "stt", self.url, ("en", "pl")), "en"))
             build.return_value.open.assert_called_once()
             self.assertEqual(build.return_value.open.call_args.kwargs, {"timeout": 8})
         self.assertEqual(self.server.calls, [])
