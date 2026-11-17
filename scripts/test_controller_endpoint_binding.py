@@ -28,7 +28,53 @@ def endpoint_record(**changes):
                   networks=[dict(id=NETWORK, address=ADDRESS)]) | changes
 
 
+def stopped_record(state="created", *, network_mode="private-fixture", network_id="", **changes):
+    return record(
+        state, network_mode=network_mode, port_bindings={}, publish_all_ports=False,
+        networks=[dict(name="private-fixture", id=network_id, address=ADDRESS)],
+    ) | changes
+
+
 class EndpointControlTests(unittest.TestCase):
+    def test_stopped_worker_uses_its_configured_attachment_and_static_ip(self):
+        network = NETWORK_RECORD | {"name": "private-fixture", "internal": True}
+        for observed in (stopped_record(), stopped_record("exited", network_mode=NETWORK, network_id=NETWORK)):
+            with (
+                self.subTest(observed=observed),
+                controls() as control,
+                patch("speech_controller.docker_control.subprocess.run", side_effect=[
+                    output(INFO), output(observed), output(network)]) as run,
+            ):
+                self.assertIs(control.verify_stopped_endpoint("fixture", NETWORK, ADDRESS), True)
+                self.assertEqual([call.args[0][3] for call in run.call_args_list], ["info", "inspect", "network"])
+                self.assertEqual(run.call_args.args[0][-1], observed["network_mode"])
+
+    def test_stopped_worker_rejects_address_and_network_drift_or_publication(self):
+        network = NETWORK_RECORD | {"name": "private-fixture", "internal": True}
+        changed_attachment = [
+            {"name": "private-fixture", "id": "", "address": "172.20.0.3"},
+        ]
+        extra_attachment = stopped_record()["networks"] + [dict(name="foreign", id="d" * 64, address=None)]
+        cases = (
+            (stopped_record("running"), network),
+            (stopped_record(publish_all_ports=True), network),
+            (stopped_record(port_bindings={"5000/tcp": [{"HostIp": "", "HostPort": "5000"}]}), network),
+            (stopped_record(networks=changed_attachment), network),
+            (stopped_record(networks=extra_attachment), network),
+            (stopped_record(network_id="d" * 64), network),
+            (stopped_record(), network | {"id": "d" * 64}),
+            (stopped_record(), network | {"internal": False}),
+        )
+        for observed, bridge in cases:
+            with (
+                self.subTest(observed=observed, bridge=bridge),
+                controls() as control,
+                patch("speech_controller.docker_control.subprocess.run", side_effect=[
+                    output(INFO), output(observed), output(bridge)]),
+            ):
+                with self.assertRaises(ControlUnavailable):
+                    control.verify_stopped_endpoint("fixture", NETWORK, ADDRESS)
+
     def test_network_inspection_shares_deadline_and_cannot_start_after_expiry(self):
         with controls() as control, patch("speech_controller.docker_control.monotonic", side_effect=[100, 101, 104, 108]), \
                 patch("speech_controller.docker_control.subprocess.run", side_effect=[

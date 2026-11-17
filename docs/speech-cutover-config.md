@@ -34,7 +34,7 @@ docker compose --project-name hotel-ai -f compose.yaml -f compose.server.yaml \
   routed-piper-primary routed-vosk-primary routed-piper-standby routed-vosk-standby
 ```
 
-Inspect the resulting worker specs and record their full container and network IDs for the controller approvals. Explicit service names limit creation to the workers. Keep the existing fixed workers available for rollback. At the staffed cutover, quiesce traffic and stop the old fixed workers before starting the two primaries.
+Inspect the resulting worker specs and record their full container and network IDs for the controller approvals. Explicit service names limit creation to the workers. Prepare the private route store and journal while all four workers are stopped. Keep the existing fixed workers available for rollback. At the staffed cutover, quiesce traffic and stop the old fixed workers before starting the two primaries. [Offline initialization procedure](speech-pilot-initialization.md)
 
 ```sh
 docker compose --project-name hotel-ai -f compose.yaml -f compose.server.yaml \
@@ -55,4 +55,4 @@ The read-only host preflight found Compose 5.6.1, healthy production web, and UI
 
 Run `python3 scripts/check_speech_routed_compose.py` for the config checks with fictional values. It renders the overlay without creating Docker resources. It checks the effective listener, mounts, action flags, optional worker profiles, pinned image inputs, and bridge settings. Hosted CI runs the same checks.
 
-The configuration passed on Windows with Docker Compose 5.7.0 and on the ARM64 server with Compose 5.6.1. The server verified the fixture archive checksum, rendered with fictional values, confirmed production web health, and removed the temporary copy. Final production worker approvals, store initialization, and both language probes belong to the staffed pilot.
+The configuration passed on Windows with Docker Compose 5.7.0 and on the ARM64 server with Compose 5.6.1. The server verified the fixture archive checksum, rendered with fictional values, confirmed production web health, and removed the temporary copy.

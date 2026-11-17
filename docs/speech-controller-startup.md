@@ -21,7 +21,7 @@ The policy has `storage_path`, `topology_confirmed`, `cpu_budget_nanos`, `memory
 
 ## Existing state and ownership
 
-Prepare the route store and durable routed journal offline using their explicit initialization APIs before starting the service. Both stores must retain their supported SQLite DELETE journal mode; startup rejects WAL rather than converting it. This command does not initialize, replace or clear missing, empty or incompatible databases. Preserve both files together and retain their physical identities and immutable catalogs. Startup leaves pending operations and disagreement between journal and observed routes available for explicit recovery rather than resetting them.
+Prepare the route store and durable routed journal with the offline pilot initializer before starting the service. Both stores use SQLite DELETE journal mode. Startup requires existing initialized files. Preserve the pair together with their physical identities and immutable catalogs. Startup leaves pending operations and disagreements between journal and observed routes available for explicit recovery. [Offline initialization](speech-pilot-initialization.md)
 
 A persistent sidecar at `<traffic_path>.controller.lock` supplies a lifetime exclusive lock. A second runtime targeting the same canonical route store is rejected even if it names another journal. The existing journal operation lock remains separate. Never delete a live lock file or run older manually constructed controllers alongside the runtime. The directory and its files must remain under trusted local control throughout execution.
 
