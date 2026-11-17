@@ -24,6 +24,7 @@ from uuid import uuid4
 from arm64_stage import (
     FixtureError, ProductionHealth, arm64_source, cleanup_on_disconnect, docker_path, production_snapshot, require,
 )
+from verify_recovery import database_checks, digest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from speech_controller.admission import ControllerAdmission, ResourcePolicy
@@ -134,7 +135,7 @@ class DockerFixture:
 
     def create(self, role, *args, env=None):
         self.check_health()
-        cpu = self.web_cpu if role == "django" else str(self.worker_cpu / 1_000_000_000)
+        cpu = self.web_cpu if role in ("django", "rollback") else str(self.worker_cpu / 1_000_000_000)
         identity = full_id(self.run("create", "--pull", "never", "--name", self.owner + "-" + role,
             "--label", self.label, "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
             "--init", "--cpus", cpu, *args, env=env))
@@ -318,6 +319,7 @@ def stage(docker, socket_path, directory, *, production=None):
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
     token = secrets.token_hex(32)
+    django_secret = secrets.token_hex(32)
     manifest = directory / "runtime.json"
     policy_json = asdict(policy)
     del policy_json["daemon_id"]
@@ -340,7 +342,7 @@ def stage(docker, socket_path, directory, *, production=None):
         duplicate = subprocess.run([*command, "--check"], timeout=10, env=env,
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         require(duplicate.returncode == 1, "Controller startup permitted a competing owner.")
-        launch_admin(docker, images["web"], fixture_dir, targets, names, port, token)
+        launch_admin(docker, images["web"], fixture_dir, targets, names, port, token, django_secret)
         final = ready(endpoint, token=token, process=process, check_health=docker.check_health)
         routes = dict(((language, task), name) for (language, task), name in final["state"]["routes"])
         require(final["blocked"] is False and not final["pending_requests"] and not final["pending_recoveries"]
@@ -354,11 +356,15 @@ def stage(docker, socket_path, directory, *, production=None):
         row = db.execute("SELECT outcome FROM operations WHERE request_id=?", (PENDING_REQUEST,)).fetchone()
         require(row is not None and json.loads(row[0])["status"] == "reconciled",
                 "Expected a durable reconciliation result for the staged interruption.")
+    if production is None:
+        require(process.returncode == 0, "The staged controller did not shut down normally.")
+        rehearse_rollback(docker, images["web"], directory, fixture_dir, traffic_path, journal_path,
+                          controls, names, {binding.name: binding for binding in bindings}, django_secret)
 
 
-def launch_admin(docker, image, fixture_dir, targets, names, port, token):
+def launch_admin(docker, image, fixture_dir, targets, names, port, token, django_secret):
     settings = {
-        "DJANGO_SECRET_KEY": secrets.token_hex(32), "DJANGO_ALLOWED_HOSTS": "testserver",
+        "DJANGO_SECRET_KEY": django_secret, "DJANGO_ALLOWED_HOSTS": "testserver",
         "DJANGO_DB_PATH": "/fixture/bookings.sqlite3", "HOTEL_SPEECH_TRAFFIC_DB": "/fixture/traffic.sqlite3",
         "HOTEL_SPEECH_ROUTE_TARGETS": json.dumps([asdict(target) for target in targets]),
         "HOTEL_SPEECH_CONTROL_URL": f"http://127.0.0.1:{port}", "HOTEL_SPEECH_CONTROL_TOKEN": token,
@@ -383,6 +389,73 @@ def launch_admin(docker, image, fixture_dir, targets, names, port, token):
         "--mount", f"type=bind,src={fixture_dir},dst=/fixture", *options, image,
         "python", "scripts/check_staged_speech_admin.py", env=env)
     docker.attach_admin(web)
+
+
+def snapshot_sqlite(source, destination):
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(destination, flags, 0o600)
+    os.close(descriptor)
+    with (closing(sqlite3.connect(source.as_uri() + "?mode=ro", uri=True, timeout=1)) as original,
+          closing(sqlite3.connect(destination, timeout=1)) as copy):
+        original.backup(copy)
+
+
+def rehearse_rollback(docker, image, directory, fixture_dir, traffic_path, journal_path,
+                     controls, names, bindings, django_secret):
+    # The stage has no remaining Django caller or controller. Preserve the
+    # original routed stores and archive their bytes for offline inspection.
+    with closing(sqlite3.connect(traffic_path.as_uri() + "?mode=ro", uri=True, timeout=1)) as traffic:
+        require(traffic.execute("SELECT 1 FROM claims LIMIT 1").fetchone() is None,
+                "Refusing worker rollback while staged speech claims remain.")
+    archive = directory / "backup"
+    archive.mkdir(mode=0o700)
+    booking_path = fixture_dir / "bookings.sqlite3"
+    originals = {path: digest(path) for path in (booking_path, traffic_path, journal_path)}
+    archives = {}
+    for source in (traffic_path, journal_path):
+        target = archive / source.name
+        descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, "wb") as copy:
+            copy.write(source.read_bytes())
+        require(digest(target) == originals[source], "Controller store archive differs from its source.")
+        archives[target] = originals[source]
+    backup = archive / booking_path.name
+    restore_dir = directory / "rollback"
+    restore_dir.mkdir(mode=0o700)
+    restored = restore_dir / "restored.sqlite3"
+    snapshot_sqlite(booking_path, backup)
+    snapshot_sqlite(backup, restored)
+    integrity, foreign_keys, counts = database_checks(booking_path)
+    require(integrity and foreign_keys and counts and all(
+        database_checks(path) == (True, True, counts) for path in (backup, restored)),
+        "Booking snapshot or restored fixture failed SQLite verification.")
+    backup_digest = digest(backup)
+    print("Fixture SQLite backup and restore passed integrity, foreign-key and row-count checks.", flush=True)
+
+    for task in MEMORY:
+        controls.stop(names[task + "-new"])
+        require(controls.inspect(names[task + "-new"]) == "exited", "Replacement worker did not stop for rollback.")
+    settings = {
+        "GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted", "DJANGO_ALLOWED_HOSTS": "testserver",
+        "DJANGO_SECRET_KEY": django_secret, "DJANGO_DB_PATH": "/fixture/restored.sqlite3",
+    }
+    for task, setting, port in (("tts", "HOTEL_PIPER_URL", 5000), ("stt", "HOTEL_ASR_URL", 5001)):
+        name = names[task + "-old"]
+        binding = bindings[name]
+        controls.start(name)
+        ready((binding.address, port))
+        require(controls.verify_endpoint(name, binding.network_id, binding.address) is True,
+                "Original worker endpoint binding differs after rollback.")
+        settings[setting] = f"http://{binding.address}:{port}"
+    options = [item for key in settings for item in ("--env", key)]
+    rollback = docker.create("rollback", "--network", "host", "--user", f"{os.getuid()}:{os.getgid()}",
+        "--memory", str(WEB_MEMORY), "--memory-swap", str(WEB_MEMORY), "--tmpfs", "/tmp:rw,nosuid,nodev,size=32m",
+        "--mount", f"type=bind,src={restore_dir},dst=/fixture", *options, image,
+        "python", "scripts/check_staged_speech_rollback.py", env=docker.env | settings)
+    docker.run("start", "--attach", rollback, timeout=45, stream=True)
+    require(all(digest(path) == value for path, value in (originals | archives | {backup: backup_digest}).items()),
+            "Rollback changed a source store or the booking backup.")
+    print("Fixed speech rollback preserved the original booking, route and journal stores.", flush=True)
 
 
 def stage_server(docker, socket_path, directory):
@@ -429,7 +502,10 @@ def main(argv=None):
                     stage(docker, socket_path, directory)
                 finally:
                     docker.cleanup()
-        print("Real runtime staging passed. Old workers stopped, replacements routed, and fixture removed.")
+        if source is None:
+            print("Real runtime staging and fixed speech rollback passed. Fixture removed.")
+        else:
+            print("Real runtime staging passed. Old workers stopped, replacements routed, and fixture removed.")
     except FixtureError as error:
         raise SystemExit(str(error)) from None
     except (OSError, ValueError, KeyError, TypeError, sqlite3.Error, HTTPException, subprocess.SubprocessError,
