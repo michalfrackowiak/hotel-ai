@@ -99,6 +99,8 @@ class LifecycleExecutor:
         return SwitchResult(status, reason, self._state)
 
     def execute(self, request):
+        if getattr(self._backend, "requires_routed_execution", False) is True:
+            raise ValueError("Routed traffic requires durable routed execution.")
         if not isinstance(request, SwitchRequest):
             raise ValueError("A validated switch request is required.")
         if not self._lock.acquire(blocking=False):

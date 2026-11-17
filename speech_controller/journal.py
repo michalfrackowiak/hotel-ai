@@ -24,7 +24,11 @@ def encode(value):
 
 
 class DurableLifecycleExecutor:
+    _routed_execution = False
+
     def __init__(self, backend, deployments, routes, path, *, revision=0, journal_limit=128):
+        if getattr(backend, "requires_routed_execution", False) is True and not self._routed_execution:
+            raise ValueError("Routed traffic requires durable routed execution.")
         self._backend = backend
         self._deployments = tuple(deployments)
         initial = LifecycleExecutor(backend, self._deployments, routes,
@@ -35,7 +39,7 @@ class DurableLifecycleExecutor:
         self._path = self._path.resolve()
         self._limit = journal_limit
         catalog = sorted((item.name, item.task, sorted(item.languages)) for item in self._deployments)
-        self._fingerprint = hashlib.sha256(encode(catalog).encode()).hexdigest()
+        self._fingerprint = hashlib.sha256(encode(self._journal_identity(catalog)).encode()).hexdigest()
         with self._transaction() as db:
             tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if not tables:
@@ -47,6 +51,9 @@ class DurableLifecycleExecutor:
                 raise ValueError("Unrecognized journal.")
             self._load(db)
             db.execute("CREATE TABLE IF NOT EXISTS reconciliations (recovery_id TEXT PRIMARY KEY, request TEXT NOT NULL, outcome TEXT NOT NULL, recorded_at TEXT NOT NULL, prior_state TEXT NOT NULL, pending_requests TEXT NOT NULL)")
+
+    def _journal_identity(self, catalog):
+        return catalog
 
     @contextmanager
     def _exclusive(self):
@@ -143,6 +150,9 @@ class DurableLifecycleExecutor:
             db.execute("INSERT INTO operations VALUES (?,?,NULL)", (request.request_id, payload))
         # The pending record is committed before any backend call, without holding
         # a SQLite transaction over potentially slow effects. Other instances stop.
+        return self._run_pending(request, payload, state)
+
+    def _run_pending(self, request, payload, state):
         executor = LifecycleExecutor(self._backend, self._deployments, dict(state.routes), revision=state.revision)
         result = executor.execute(request)
         self._finish(request, payload, state, result)
