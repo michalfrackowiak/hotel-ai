@@ -18,13 +18,13 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 - [x] 0.5 hosted runtime staging: real Piper/Vosk deployments, native private controller startup, admin recovery and all four switch slots, and bilingual Django speech checks. See [staging scope](speech-runtime-staging.md).
 
-- [x] 0.5 admin provider switches: review and confirm per-slot planned assignments against live routes, with durable requests, same-ID retries and explicit outcomes. See [switching workflow](admin-speech-switch.md). Complete runtime staging remains pending.
+- [x] 0.5 admin provider switches: review and confirm per-slot planned assignments against live routes, with durable requests, same-ID retries and explicit outcomes. See [switching workflow](admin-speech-switch.md).
 
 - [x] 0.5 admin recovery: permission-gated review/save/confirm flow, durable immutable request payloads and explicit same-ID retries after uncertain responses. See [recovery workflow and limits](admin-speech-recovery.md).
 
 - [x] 0.5 live admin status: private controller observations for all four language/task routes, journal disagreements and pending recovery, with bounded authenticated transport and staff permissions. See [status view](admin-speech-status.md).
 
-- [x] 0.5 controller startup: strict private manifest, explicit Linux startup/check command, existing state preservation, lifetime route-store ownership and concrete recovery capacity checks. See [configuration and rollout](speech-controller-startup.md). Admin integration and complete runtime staging remain pending.
+- [x] 0.5 controller startup: strict private manifest, explicit Linux startup/check command, existing state preservation, lifetime route-store ownership and concrete recovery capacity checks. See [configuration and rollout](speech-controller-startup.md).
 
 - [x] 0.5 endpoint binding: verify approved container identity and private bridge network/address before and after speech readiness; reject mismatched backend catalogs. See [supported topology and limits](speech-endpoint-binding.md). Validated production startup and admin integration remain pending.
 
