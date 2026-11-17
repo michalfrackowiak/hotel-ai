@@ -87,34 +87,53 @@ class ControllerAdmission:
                     or any(fresh[name] not in ("created", "exited") for name in new - old)):
                 return False
             overlap = old | new | {name for name, state in fresh.items() if state == "running"}
-            approved = [item for item in self._controls.approvals if item.name in overlap]
-            cpu = sum(item.nano_cpus for item in approved)
-            memory = sum(item.memory_bytes for item in approved)
-            artifacts = dict(self._policy.artifact_bytes)
-            disk = self._policy.disk_reserve_bytes + sum(artifacts[image] for image in {item.image_id for item in approved})
-            resources = host_resources(self._policy.storage_path)
-            if (not isinstance(resources, dict) or resources.get("scope") != "controller_host"
-                    or resources.get("platform") != "linux"):
-                return False
-            count = resources.get("cpu_count")
-            if not positive_integer(count):
-                return False
-            values = {}
-            for key in ("memory_total_mib", "memory_available_mib", "disk_total_mib", "disk_free_mib"):
-                value = resources.get(key)
-                if type(value) not in (int, float):
-                    return False
-                value = Decimal(str(value))
-                if not value.is_finite() or not 0 <= value <= MAX_VALUE:
-                    return False
-                values[key] = value * MIB
-            if (not 0 < values["memory_total_mib"] or not 0 < values["disk_total_mib"]
-                    or values["memory_available_mib"] > values["memory_total_mib"]
-                    or values["disk_free_mib"] > values["disk_total_mib"]):
-                return False
-            return (cpu <= self._policy.cpu_budget_nanos and cpu <= count * 1000000000
-                    and memory <= self._policy.memory_budget_bytes
-                    and memory + self._policy.memory_reserve_bytes <= values["memory_available_mib"]
-                    and disk <= values["disk_free_mib"])
+            return self._capacity(overlap)
         except (OSError, ValueError, TypeError, KeyError, ControlUnavailable):
             return False
+
+    def verify_reconciliation(self, current, proposed, pending, observations):
+        """Fresh capacity and worker checks after the backend's bound probes."""
+        try:
+            self._routes(current)
+            selected = self._routes(proposed)
+            if set(observations) != self._controls.approved_names:
+                return False
+            fresh = {name: self._controls.inspect(name) for name in sorted(self._controls.approved_names)}
+            if (dict(observations) != fresh
+                    or any(fresh[name] != "running" for name in selected)
+                    or any(fresh[name] not in ("created", "exited") for name in fresh.keys() - selected)):
+                return False
+            return self._capacity(selected)
+        except (OSError, ValueError, TypeError, KeyError, ControlUnavailable):
+            return False
+
+    def _capacity(self, names):
+        approved = [item for item in self._controls.approvals if item.name in names]
+        cpu = sum(item.nano_cpus for item in approved)
+        memory = sum(item.memory_bytes for item in approved)
+        artifacts = dict(self._policy.artifact_bytes)
+        disk = self._policy.disk_reserve_bytes + sum(artifacts[image] for image in {item.image_id for item in approved})
+        resources = host_resources(self._policy.storage_path)
+        if (not isinstance(resources, dict) or resources.get("scope") != "controller_host"
+                or resources.get("platform") != "linux"):
+            return False
+        count = resources.get("cpu_count")
+        if not positive_integer(count):
+            return False
+        values = {}
+        for key in ("memory_total_mib", "memory_available_mib", "disk_total_mib", "disk_free_mib"):
+            value = resources.get(key)
+            if type(value) not in (int, float):
+                return False
+            value = Decimal(str(value))
+            if not value.is_finite() or not 0 <= value <= MAX_VALUE:
+                return False
+            values[key] = value * MIB
+        if (not 0 < values["memory_total_mib"] or not 0 < values["disk_total_mib"]
+                or values["memory_available_mib"] > values["memory_total_mib"]
+                or values["disk_free_mib"] > values["disk_total_mib"]):
+            return False
+        return (cpu <= self._policy.cpu_budget_nanos and cpu <= count * 1000000000
+                and memory <= self._policy.memory_budget_bytes
+                and memory + self._policy.memory_reserve_bytes <= values["memory_available_mib"]
+                and disk <= values["disk_free_mib"])

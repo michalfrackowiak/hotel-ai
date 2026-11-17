@@ -46,6 +46,20 @@ class AdmissionTests(unittest.TestCase):
     def admitted(self):
         return self.gate(self.current, self.destination, self.states.copy())
 
+    def test_recovery_rechecks_capacity_and_requires_exact_selected_workers(self):
+        self.assertTrue(self.gate.verify_reconciliation(self.current, self.current, ("pending",), self.states.copy()))
+        self.resources["memory_available_mib"] = 95
+        self.assertFalse(self.gate.verify_reconciliation(self.current, self.current, (), self.states.copy()))
+        self.resources["memory_available_mib"] = 128
+        self.states["spare"] = "running"
+        self.assertFalse(self.gate.verify_reconciliation(self.current, self.current, (), self.states.copy()))
+        self.states["spare"] = "exited"
+        self.assertFalse(self.gate.verify_reconciliation(self.current, self.current, (), self.states | {"old": "exited"}))
+        self.states["old"] = "exited"
+        self.assertFalse(self.gate.verify_reconciliation(self.current, self.current, (), self.states.copy()))
+        self.controls.start.assert_not_called()
+        self.controls.stop.assert_not_called()
+
     def backend(self, gate=None):
         self.traffic = SimpleNamespace(drain=Mock(return_value=True), resume=Mock(return_value=True))
         return DockerLifecycleBackend(self.controls, DEPLOYMENTS, admission=gate or self.gate,

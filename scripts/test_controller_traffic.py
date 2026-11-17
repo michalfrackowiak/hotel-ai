@@ -47,6 +47,8 @@ class TrafficTests(unittest.TestCase):
                 TrafficGate(self.path, timeout=value)
 
     def test_claim_releases_on_success_and_known_local_exception(self):
+        # This checks successful release, not a subsecond disk-flush deadline.
+        self.gate = TrafficGate(self.path)
         with self.gate.claim(EN):
             self.assertEqual(self.count(), 1)
         self.assertEqual(self.count(), 0)
