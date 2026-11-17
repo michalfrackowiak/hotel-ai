@@ -14,7 +14,9 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 ## Alpha
 
-- [x] 0.5 admin recovery: permission-gated review/save/confirm flow, durable immutable request payloads and explicit same-ID retries after uncertain responses. See [recovery workflow and limits](admin-speech-recovery.md). Provider switching and complete runtime staging remain pending.
+- [x] 0.5 admin provider switches: review and confirm per-slot planned assignments against live routes, with durable requests, same-ID retries and explicit outcomes. See [switching workflow](admin-speech-switch.md). Complete runtime staging remains pending.
+
+- [x] 0.5 admin recovery: permission-gated review/save/confirm flow, durable immutable request payloads and explicit same-ID retries after uncertain responses. See [recovery workflow and limits](admin-speech-recovery.md).
 
 - [x] 0.5 live admin status: private controller observations for all four language/task routes, journal disagreements and pending recovery, with bounded authenticated transport and staff permissions. See [status view](admin-speech-status.md).
 

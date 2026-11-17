@@ -65,7 +65,7 @@ class RecoveryClientTests(SimpleTestCase):
     def test_single_authenticated_post_preserves_payload_and_hides_token_from_argv(self):
         run = subprocess.run
         with recovery_server() as calls, patch.dict(os.environ, {"HTTP_PROXY": "http://127.0.0.1:1", "NO_PROXY": ""}), \
-                patch("model_providers.recovery_client.subprocess.run", wraps=run) as process:
+                patch("model_providers.control_operation.subprocess.run", wraps=run) as process:
             self.assertEqual(submit_recovery(deepcopy(PAYLOAD)), RESULT)
         self.assertEqual(calls, [("/v1/recover", "Bearer " + TOKEN, PAYLOAD)])
         args, kwargs = process.call_args
@@ -120,7 +120,7 @@ class RecoveryClientTests(SimpleTestCase):
     def test_invalid_payload_makes_no_request(self):
         for payload in (PAYLOAD | {"actor": "spoof"}, PAYLOAD | {"expected_revision": True},
                         PAYLOAD | {"reason": ""}, PAYLOAD | {"observed": {}}):
-            with self.subTest(payload=payload), patch("model_providers.recovery_client.subprocess.run") as run:
+            with self.subTest(payload=payload), patch("model_providers.control_operation.subprocess.run") as run:
                 with self.assertRaises(RecoveryTransportError):
                     submit_recovery(payload)
                 run.assert_not_called()

@@ -1,4 +1,4 @@
-"""One-shot recovery transport; credentials and immutable payload arrive on stdin."""
+"""One-shot control POST with credentials and payload supplied through stdin."""
 import json
 import sys
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener

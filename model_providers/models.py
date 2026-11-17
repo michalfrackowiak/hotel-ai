@@ -193,3 +193,23 @@ class SpeechRecoveryRequest(models.Model):
         permissions = [("recover_speech_controller", "Recover the live speech controller")]
         constraints = [models.UniqueConstraint(fields=("controller_url",),
             condition=models.Q(completed=False), name="speech_one_pending_recovery")]
+
+
+class SpeechSwitchRequest(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    controller_url = models.CharField(max_length=100, editable=False)
+    planned_host = models.SlugField(editable=False)
+    previous_target = models.CharField(max_length=128, editable=False)
+    payload = models.JSONField(editable=False)
+    attempted_at = models.DateTimeField(null=True, editable=False)
+    outcome = models.JSONField(null=True, editable=False)
+    closed = models.BooleanField(default=False, editable=False)
+
+    class Meta:
+        ordering = ("-created_at",)
+        default_permissions = ()
+        permissions = [("switch_speech_controller", "Switch the live speech controller provider")]
+        constraints = [models.UniqueConstraint(fields=("controller_url",),
+            condition=models.Q(closed=False), name="speech_one_pending_switch")]

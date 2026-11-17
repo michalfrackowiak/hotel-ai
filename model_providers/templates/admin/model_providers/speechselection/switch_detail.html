@@ -1,0 +1,40 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p><a href="{% url 'admin:model_providers_speechselection_switch_prepare' %}">Back to switch requests</a> · <a href="{% url 'admin:model_providers_speechselection_controller_status' %}">Live controller status and recovery</a></p>
+<dl>
+<dt>Request ID</dt><dd>{{ saved.payload.request_id }}</dd>
+<dt>Planned host and slot</dt><dd>{{ saved.planned_host }} · {{ language }} {{ task }}</dd>
+<dt>Reviewed deployment</dt><dd>{{ saved.previous_target }}</dd>
+<dt>Requested deployment</dt><dd>{{ saved.payload.target }}</dd>
+<dt>Expected revision</dt><dd>{{ saved.payload.expected_revision }}</dd>
+<dt>Prepared by</dt><dd>{{ saved.created_by }} · {{ saved.created_at }}</dd>
+{% if saved.attempted_at %}<dt>Last attempt</dt><dd>{{ saved.attempted_at }}</dd>{% endif %}
+</dl>
+{% if switch_error %}<p class="errornote" role="alert">{{ switch_error }}</p>{% endif %}
+{% if saved.outcome.status == "cancelled" %}
+<p>The switch was cancelled before sending.</p>
+{% elif saved.outcome %}
+<h2>Last controller result</h2>
+{% if saved.outcome.status == "succeeded" %}<p>The controller reported a successful switch.</p>
+{% elif saved.outcome.status == "reconciled" %}<p>Controller recovery resolved this switch request. Check live status to see the selected deployment.</p>
+{% elif saved.outcome.status == "unchanged" %}<p>The requested deployment was already selected.</p>
+{% elif saved.outcome.status == "rolled_back" %}<p>The controller rolled back the switch.</p>
+{% elif saved.outcome.status == "recovery_required" or saved.outcome.status == "cleanup_required" %}<p>Review live controller status and recovery before proceeding.</p>
+{% elif saved.outcome.status == "rejected" %}<p>The controller rejected the attempt.</p>{% endif %}
+<p>{{ saved.outcome.status }} · {{ saved.outcome.reason }} · Revision {{ saved.outcome.state.revision }}. This result describes the recorded attempt.</p>
+{% elif saved.attempted_at %}
+<p>The last attempt has an unconfirmed outcome. Check live controller status before retrying.</p>
+{% else %}
+<p>This switch is saved and ready for confirmation.</p>
+{% endif %}
+{% if not saved.closed %}
+<form method="post">
+{% csrf_token %}
+<input type="hidden" name="action" value="send">
+{{ form.as_p }}
+{% if saved.attempted_at %}<p>A retry uses the original request ID, slot, target and revision.</p>{% endif %}
+<button type="submit">{% if saved.attempted_at %}Retry saved switch{% else %}Confirm and send switch{% endif %}</button>
+</form>
+{% if not saved.attempted_at %}<form method="post">{% csrf_token %}<button type="submit" name="action" value="cancel">Cancel saved switch</button></form>{% endif %}
+{% endif %}
+{% endblock %}

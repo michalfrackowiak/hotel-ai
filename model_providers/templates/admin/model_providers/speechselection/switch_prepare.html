@@ -1,0 +1,31 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p><a href="{% url 'admin:model_providers_speechselection_controller_status' %}">Live controller status</a></p>
+{% if switch_error %}
+<p class="errornote">{{ switch_error }}</p>
+<p><a href="{% url 'admin:model_providers_speechselection_switch_prepare' %}">Refresh switch review</a></p>
+{% endif %}
+{% if pending %}
+<p>Resolve the <a href="{% url 'admin:model_providers_speechselection_switch_detail' pending.pk %}">saved switch {{ pending.payload.request_id }}</a> before preparing another switch for this controller.</p>
+{% endif %}
+{% if rows %}
+<p>Review the assignment for {{ host }} at controller revision {{ revision }}. Save a switch to confirm it on the next page. The review expires after five minutes.</p>
+<table>
+<thead><tr><th scope="col">Language</th><th scope="col">Service</th><th scope="col">Current deployment</th><th scope="col">Planned deployment</th><th scope="col">Action</th></tr></thead>
+<tbody>
+{% for row in rows %}
+<tr>
+<td>{{ row.language }}</td><td>{{ row.task }}</td><td>{{ row.current }}</td><td>{{ row.target|default:"No compatible assignment on this host" }}</td>
+<td>{% if row.preview %}<form method="post">{% csrf_token %}<input type="hidden" name="preview" value="{{ row.preview }}"><button type="submit" aria-label="Save switch for {{ row.language }} {{ row.task }}">Save switch</button></form>{% elif row.target %}Already selected{% else %}Unavailable{% endif %}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% endif %}
+<h2>Recent switch requests</h2>
+<ul>
+{% for entry in history %}
+<li><a href="{% url 'admin:model_providers_speechselection_switch_detail' entry.pk %}">{{ entry.payload.request_id }}</a> · {{ entry.planned_host }} · {{ entry.created_at }} · {{ entry.outcome.status|default:"Awaiting result" }}</li>
+{% empty %}<li>No switch requests saved.</li>{% endfor %}
+</ul>
+{% endblock %}

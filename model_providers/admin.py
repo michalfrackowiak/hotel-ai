@@ -11,7 +11,7 @@ from .preflight import check_speech_plan
 from .controller_client import inventory_report
 from .control_status import control_status_report
 from .transition_budget import transition_budget_report
-from . import recovery_admin
+from . import recovery_admin, switch_admin
 
 
 @admin.register(AgentConfiguration)
@@ -114,7 +114,11 @@ class SpeechSelectionAdmin(admin.ModelAdmin):
         return super().changelist_view(request, {**(extra_context or {}), "can_preflight": self.can_preflight(request)})
 
     def get_urls(self):
-        return [path("recovery/", self.admin_site.admin_view(require_http_methods(["GET", "POST"])(self.recovery_prepare_view)),
+        return [path("switch/", self.admin_site.admin_view(require_http_methods(["GET", "POST"])(self.switch_prepare_view)),
+                     name="model_providers_speechselection_switch_prepare"),
+                path("switch/<uuid:switch_id>/", self.admin_site.admin_view(require_http_methods(["GET", "POST"])(self.switch_detail_view)),
+                     name="model_providers_speechselection_switch_detail"),
+                path("recovery/", self.admin_site.admin_view(require_http_methods(["GET", "POST"])(self.recovery_prepare_view)),
                      name="model_providers_speechselection_recovery_prepare"),
                 path("recovery/<uuid:recovery_id>/", self.admin_site.admin_view(require_http_methods(["GET", "POST"])(self.recovery_detail_view)),
                      name="model_providers_speechselection_recovery_detail"),
@@ -133,8 +137,15 @@ class SpeechSelectionAdmin(admin.ModelAdmin):
         return TemplateResponse(request, "admin/model_providers/speechselection/controller_status.html", {
             **self.admin_site.each_context(request), "opts": self.model._meta,
             "title": "Live speech controller status", "can_recover": recovery_admin.can_recover(self, request),
+            "can_switch": switch_admin.can_switch(self, request),
             **control_status_report(),
         })
+
+    def switch_prepare_view(self, request):
+        return switch_admin.prepare_view(self, request)
+
+    def switch_detail_view(self, request, switch_id):
+        return switch_admin.detail_view(self, request, switch_id)
 
     def recovery_prepare_view(self, request):
         return recovery_admin.prepare_view(self, request)
