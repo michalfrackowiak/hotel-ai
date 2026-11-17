@@ -102,6 +102,14 @@ jobs:
           curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8082/static/admin/css/base.css
           python scripts/smoke_piper.py http://127.0.0.1:8082 --asr
           docker compose exec -T web python scripts/smoke_controller_readiness.py --tts-url http://piper:5000 --stt-url http://asr:5001
+      - name: Stage the private controller and Django speech-switch flow
+        env:
+          DJANGO_SECRET_KEY: django-insecure-ci-staging-stop-fixture
+          HOTEL_TELEPHONY_PUBLIC_BASE_URL: https://phone.example.test
+          HOTEL_TWILIO_AUTH_TOKEN: twilio-ci-fixture
+        run: |
+          docker compose -f compose.yaml -f compose.piper.yaml -f compose.asr.yaml -f compose.telephony.yaml stop phone web piper asr
+          python scripts/smoke_speech_runtime.py
       - name: Print Compose logs after a failure
         if: failure()
         run: docker compose -f compose.yaml -f compose.piper.yaml -f compose.asr.yaml logs --no-color

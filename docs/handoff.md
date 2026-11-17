@@ -2,6 +2,10 @@
 
 ## Latest milestone
 
+Speech runtime staging (`develop/speech-runtime-staging`) joins the native Linux controller, pinned Piper/Vosk workers, and Django admin and guest flows in a disposable CI stack. Separate owners implement the fixture and the Django drill. The parent integrates the workflow and records verification with independent review. [Staging scope and limits](speech-runtime-staging.md)
+
+The local controller suite passed with 148 collected and two Linux-only checks skipped on Windows. All 18 focused readiness tests passed after independent review reproduced the cold-listener regression by disabling connection retries. The staging scripts compile and refuse execution outside hosted Linux CI. The hosted workflow runs the actual disposable drill, including recovery, cold worker starts, all four switches, guest speech and cleanup. Next action is ARM64 staging against a private server fixture, including capacity and the intended admin connection.
+
 Admin provider switching (`develop/admin-speech-switch`) applies one EN/PL STT/TTS planned assignment through the private control API. The implementation agent owns admin views, audit records and forms. The parent owns bounded transport, documentation and release verification, with independent review. [Switching workflow and configuration](admin-speech-switch.md)
 
 All 240 Django tests passed, including 16 new switch tests. System, migration drift and whitespace checks passed. Independent review approved after a deliberate in-memory change confirmed that the overlap regression catches a discarded controller result. The clean switch and recovery suites passed all 34 focused tests. Requests use signed plan previews, a recorded attempt before dispatch and the same ID on retry. Unsent requests can be cancelled while retaining their audit records. CI verifies the controller, Docker and bilingual speech stack. The feature defaults to disabled. Next milestone is full runtime staging with real workers and private admin connectivity.

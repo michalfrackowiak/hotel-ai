@@ -4,7 +4,7 @@ The controller readiness callback performs one real inference request against an
 
 Piper receives a short fixed fictional sentence in the requested language. The probe requires a successful bounded WAV response with complete mono 16-bit, 22050 Hz audio and a positive duration within its limit. Vosk receives one second of silent 16 kHz mono PCM and must return exactly an empty transcription. Requests contain no guest audio or personal data, and response content is not logged.
 
-Unknown targets, incompatible slots, unsupported languages, busy services, network errors and malformed responses return not-ready. There is one attempt, no automatic retry. Redirects and environment proxies are disabled and response sizes are bounded.
+Unknown targets, incompatible slots, unsupported languages, busy services, ambiguous network errors and malformed responses return not-ready. A cold private HTTP listener can refuse connections while models load. The probe retries those connection attempts within its existing elapsed budget, before sending any inference bytes. It sends at most one inference POST. Redirects and environment proxies are disabled and response sizes are bounded.
 
 ## Total probe deadline
 
