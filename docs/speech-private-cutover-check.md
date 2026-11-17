@@ -10,4 +10,12 @@ The current speech limits remain one CPU each, with 1 GiB for Piper and 1.5 GiB 
 
 ## Evidence
 
-Verification pending.
+The 18 November 2026 rehearsal used candidate commit `5b5457c1f81c2eac25a991bf0cbf1e2c0825fec9`. The source archive matched SHA-256 `9f66a50545da3cfbc039d25a598a5ede07276db95029df18e6e94e9e05ba7384` after transfer.
+
+- The server observed only `127.0.0.1:28089` for the fixture listener. The workstation authenticated through the SSH forward, including the CSRF check, and reached Django admin.
+- The workstation could not open a direct TCP connection to the fixture port. Public HTTPS `/admin/` returned 404.
+- The server passed repeated production and fixture health checks for the rehearsal window. Production container IDs, images, start times and health matched before and after. A follow-up check confirmed the temporary listener, container and source archive directory were removed.
+
+Two pre-start attempts exposed Windows newline conversion in the archived shell script and in the SSH credential pipe. The successful run used a file-specific Git LF rule and ASCII bytes with a single LF on stdin. Both earlier attempts stopped before container creation and passed cleanup checks.
+
+The controller connection and proposed limits were exercised separately in ARM64 staging. Production activation still needs the final owner of the shared traffic directory, approved worker IDs and a cutover window. [ARM64 staging results](speech-runtime-arm64-staging.md)

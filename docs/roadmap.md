@@ -14,6 +14,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 ## Alpha
 
+- [x] 0.5 private admin cutover rehearsal: verify loopback Gunicorn, SSH-forwarded login and CSRF, public admin rejection and cleanup on the ARM64 server. Record the tested worker overlap budget. See [rehearsal evidence](speech-private-cutover-check.md).
+
 - [x] 0.5 rollout rehearsal: document private admin connectivity and the cutover sequence, and exercise a verified booking backup and fixed-endpoint rollback on hosted Linux. See [production rollout guide](speech-production-rollout.md). Production activation remains pending.
 
 - [x] 0.5 ARM64 runtime staging: recovered and switched all four speech slots on the two-core server with cached Piper/Vosk images, preserved both booking drafts and passed 115 production health samples. See [server staging results](speech-runtime-arm64-staging.md). Production activation remains pending.
