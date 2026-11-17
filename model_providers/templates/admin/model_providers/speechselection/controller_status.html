@@ -1,0 +1,24 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<p><a href="{% url 'admin:model_providers_speechselection_changelist' %}">Back to planned assignments</a></p>
+<p><a href="{% url 'admin:model_providers_speechselection_controller_status' %}">Refresh status</a></p>
+{% if status_error %}
+<p class="errornote">{{ status_error }}</p>
+{% else %}
+<p>Fetched at {{ fetched_at }}. The journal and route store are read separately; this observation may already be stale.</p>
+{% if needs_attention %}
+<p class="errornote">Attention required. {% if controller_blocked %}The controller reports switching blocked.{% endif %} {% if route_mismatch %}The journal and observed routes disagree.{% endif %}</p>
+{% else %}<p>The journal and observed routes agree. The controller reports no pending recovery.</p>{% endif %}
+<p>Journal revision: {{ journal_revision }}. Observed route revision: {{ observed_revision }}.</p>
+<table>
+<thead><tr><th>Language</th><th>Service</th><th>Journal deployment</th><th>Observed deployment</th><th>Targets agree</th></tr></thead>
+<tbody>{% for row in status_rows %}<tr><td>{{ row.language }}</td><td>{{ row.task }}</td><td>{{ row.journal }}</td><td>{{ row.observed }}</td><td>{{ row.matches|yesno:"Yes,No" }}</td></tr>{% endfor %}</tbody>
+</table>
+<h2>Unfinished switch requests</h2>
+<ul>{% for request_id in pending_requests %}<li>{{ request_id }}</li>{% empty %}<li>None reported.</li>{% endfor %}</ul>
+<h2>Unfinished recovery requests</h2>
+<ul>{% for recovery_id in pending_recoveries %}<li>{{ recovery_id }}</li>{% empty %}<li>None reported.</li>{% endfor %}</ul>
+{% if needs_attention %}<p>Inspect the existing request and recovery state before retrying. Preserve the original operation ID and payload.</p>{% endif %}
+{% endif %}
+<p>This page observes the configured controller only. It does not change planned assignments or live routes, and it does not test speech quality, worker readiness or available capacity.</p>
+{% endblock %}

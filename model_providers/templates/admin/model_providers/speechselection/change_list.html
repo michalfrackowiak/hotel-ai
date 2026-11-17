@@ -1,5 +1,6 @@
 {% extends "admin/change_list.html" %}
 {% block object-tools-items %}
+  {% if can_preflight %}<li><a href="{% url 'admin:model_providers_speechselection_controller_status' %}">Live controller status</a></li>{% endif %}
   {% if can_preflight %}<li><a href="{% url 'admin:model_providers_speechselection_preflight' %}">Check complete speech plan</a></li>{% endif %}
   {% if can_preflight %}<li><a href="{% url 'admin:model_providers_speechselection_inventory' %}">Observe speech containers</a></li>{% endif %}
   {{ block.super }}
