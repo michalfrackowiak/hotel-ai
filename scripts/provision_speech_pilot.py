@@ -105,15 +105,18 @@ def absent_account(lookup, value):
     raise FixtureError("The proposed controller account or numeric identity already exists.")
 
 
-def verify_no_conflicts(docker, subnet):
-    require(not os.path.lexists(BASE), "Pilot state already exists.")
+def verify_no_conflicts(docker, subnet, *, resume_identity):
     for path in BASE.parents:
         info = path.lstat()
         require(stat.S_ISDIR(info.st_mode) and info.st_uid == 0 and not info.st_mode & 0o022,
                 "Pilot state requires a trusted root-owned parent path.")
-    for lookup, value in ((pwd.getpwnam, ACCOUNT), (pwd.getpwuid, OWNER_ID),
-                          (grp.getgrnam, ACCOUNT), (grp.getgrgid, OWNER_ID)):
-        absent_account(lookup, value)
+    if resume_identity:
+        verify_resume_identity()
+    else:
+        require(not os.path.lexists(BASE), "Pilot state already exists.")
+        for lookup, value in ((pwd.getpwnam, ACCOUNT), (pwd.getpwuid, OWNER_ID),
+                              (grp.getgrnam, ACCOUNT), (grp.getgrgid, OWNER_ID)):
+            absent_account(lookup, value)
     docker_group = grp.getgrnam("docker")
     sock = SOCKET.lstat()
     require(stat.S_ISSOCK(sock.st_mode) and sock.st_uid == 0 and sock.st_gid == docker_group.gr_gid
@@ -187,22 +190,44 @@ def host_capacity(docker, before):
     return info, images, sizes
 
 
-def reserve_paths():
-    BASE.mkdir(mode=0o755)
-    BASE.chmod(0o755)
-    operator = BASE / "operator"
-    operator.mkdir(mode=0o700)
-    command("Controller group creation", "groupadd", "--gid", str(OWNER_ID), ACCOUNT)
-    command("Controller account creation", "useradd", "--uid", str(OWNER_ID), "--gid", ACCOUNT,
-            "--home-dir", str(BASE / "state"), "--no-create-home", "--no-log-init",
-            "--key", "CREATE_MAIL_SPOOL=no", "--shell", "/usr/sbin/nologin", ACCOUNT)
+def verify_identity():
     account = pwd.getpwnam(ACCOUNT)
+    group = grp.getgrnam(ACCOUNT)
     password = command("Controller account lock validation", "passwd", "--status", ACCOUNT).split()
     require(account.pw_uid == OWNER_ID and account.pw_gid == OWNER_ID and account.pw_shell == "/usr/sbin/nologin"
+            and account.pw_dir == str(BASE / "state") and group.gr_gid == OWNER_ID and not group.gr_mem
+            and pwd.getpwuid(OWNER_ID).pw_name == grp.getgrgid(OWNER_ID).gr_name == ACCOUNT
             and password[:2] == [ACCOUNT, "L"] and os.getgrouplist(ACCOUNT, OWNER_ID) == [OWNER_ID],
-            "The controller account is not locked or has extra group membership.")
+            "The controller identity differs from the locked pilot account.")
+
+
+def verify_resume_identity():
+    operator = BASE / "operator"
+    for path, mode in ((BASE, 0o755), (operator, 0o700)):
+        info = path.lstat()
+        require(stat.S_ISDIR(info.st_mode) and stat.S_IMODE(info.st_mode) == mode
+                and info.st_uid == info.st_gid == 0, "The partial pilot directory permissions differ.")
+    require(set(BASE.iterdir()) == {operator} and not any(operator.iterdir()),
+            "The partial pilot contains initialized or unexpected state.")
+    verify_identity()
+
+
+def reserve_paths(*, resume_identity):
+    operator = BASE / "operator"
+    if resume_identity:
+        verify_resume_identity()
+    else:
+        BASE.mkdir(mode=0o755)
+        BASE.chmod(0o755)
+        operator.mkdir(mode=0o700)
+        command("Controller group creation", "groupadd", "--gid", str(OWNER_ID), ACCOUNT)
+        command("Controller account creation", "useradd", "--uid", str(OWNER_ID), "--gid", ACCOUNT,
+                "--home-dir", str(BASE / "state"), "--no-create-home", "--no-log-init",
+                "--shell", "/usr/sbin/nologin", ACCOUNT)
+        verify_identity()
     for name in ("traffic", "state"):
         path = BASE / name
+        # Exclusive traffic-directory creation also serializes explicit identity resumption.
         path.mkdir(mode=0o700)
         os.chown(path, OWNER_ID, OWNER_ID)
     return operator
@@ -297,10 +322,10 @@ def manifest(docker, info, images, sizes, targets):
     }
 
 
-def prepare(subnet):
+def prepare(subnet, *, resume_identity=False):
     verify_release()
     docker = LocalDocker()
-    verify_no_conflicts(docker, subnet)
+    verify_no_conflicts(docker, subnet, resume_identity=resume_identity)
     before = rollback_snapshot(docker)
     info, images, sizes = host_capacity(docker, before)
     token = secrets.token_hex(32)
@@ -313,7 +338,7 @@ def prepare(subnet):
     with health.monitor():
         try:
             health.check()
-            operator = reserve_paths()
+            operator = reserve_paths(resume_identity=resume_identity)
             write_private(operator / "rollback.json", json.dumps(before, indent=2) + "\n")
             env_file = operator / "routed.env"
             write_private(env_file, "".join(f"{key}='{value}'\n" for key, value in routed_env.items()))
@@ -346,9 +371,11 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--prepare-stopped", action="store_true", required=True)
     parser.add_argument("--subnet", type=private_subnet, required=True)
+    parser.add_argument("--resume-identity", action="store_true",
+                        help="Resume only an existing locked identity with empty private operator state.")
     args = parser.parse_args(argv)
     try:
-        prepare(args.subnet)
+        prepare(args.subnet, resume_identity=args.resume_identity)
     except FixtureError as error:
         raise SystemExit(f"{error} Inspect any existing pilot artifacts before repeating provisioning.") from None
     except (OSError, ValueError, KeyError, TypeError):
