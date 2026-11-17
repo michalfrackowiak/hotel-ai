@@ -75,9 +75,9 @@ def main():
                "-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=3", "-o", "LogLevel=ERROR", "-L",
                f"127.0.0.1:{local}:127.0.0.1:{args.port}", f"ubuntu@{args.address}",
                f"sh {args.source}/scripts/check_private_admin_listener.sh {args.port} {args.source}"]
-    with subprocess.Popen(command, stdin=subprocess.PIPE, text=True) as process:
+    with subprocess.Popen(command, stdin=subprocess.PIPE) as process:
         try:
-            process.stdin.write(password + "\n")
+            process.stdin.write((password + "\n").encode("ascii"))
             process.stdin.close()
             check_admin(f"http://127.0.0.1:{local}", password, process)
             check_public(str(args.address), args.port)
