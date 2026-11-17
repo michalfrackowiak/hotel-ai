@@ -88,6 +88,14 @@ class DockerControls:
     def approved_names(self):
         return frozenset(self._approved)
 
+    @property
+    def approvals(self):
+        return tuple(self._approved.values())
+
+    @property
+    def daemon_id(self):
+        return self._daemon_id
+
     def inspect(self, name):
         """Validate daemon/container approval and return state without mutation."""
         return self._change(name, "inspect")

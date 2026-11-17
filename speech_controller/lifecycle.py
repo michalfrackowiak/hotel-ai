@@ -138,6 +138,8 @@ class LifecycleExecutor:
         start_attempted = False
         try:
             self._backend.drain(request.slot)
+            if self._backend.revalidate(self._state, next_state) is not True:
+                raise RuntimeError("Admission changed while draining.")
             if new_target:
                 start_attempted = True  # Start may partially succeed before raising.
                 self._backend.start(request.target)

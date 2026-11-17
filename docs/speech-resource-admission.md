@@ -25,3 +25,5 @@ Artifact estimates must include images, models, extraction/staging space and oth
 ## Not execution authorization
 
 A successful result is a point-in-time preview only. The controller must revalidate actual topology and resources immediately before execution, serialize switches, protect shared workers, drain requests, verify artifacts/readiness and roll back failures. No capacity is reserved and no containers, routes or database observations are changed by viewing this page.
+
+The separate [controller resource gate](speech-controller-admission.md) uses immutable local policy, approved Docker limits and fresh observations during lifecycle execution. It does not consume or trust the admin preview result.

@@ -1,4 +1,4 @@
-"""Linux CI: real Docker lifecycle, with fictional admission/traffic/model probes.
+"""Linux CI: real Docker lifecycle and resource admission, fictional traffic/models.
 
 This proves orchestration and rollback, not actual speech readiness or guest drain.
 """
@@ -10,6 +10,7 @@ from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from speech_controller.backend import DockerLifecycleBackend
+from speech_controller.admission import ControllerAdmission, ResourcePolicy
 from speech_controller.docker_control import ApprovedContainer, DockerControls
 from speech_controller.journal import DurableLifecycleExecutor
 from speech_controller.lifecycle import Deployment, SwitchRequest
@@ -65,8 +66,9 @@ def main():
                   for language in ("en", "pl") for task in ("stt", "tts")}
         traffic, failures = FixtureTraffic(), set()
 
-        def admission(current, destination, observations):
-            return set(observations) <= set(names.values()) and destination.revision == current.revision + 1
+        policy = ResourcePolicy(daemon, "/", True, 1000000000, 128 * 1048576,
+                                32 * 1048576, 32 * 1048576, ((approvals[0].image_id, 1048576),))
+        admission = ControllerAdmission(controls, policy)
 
         def readiness(name, slot):
             return name not in failures and slot in routes and controls.inspect(name) == "running"
@@ -74,6 +76,16 @@ def main():
         backend = DockerLifecycleBackend(controls, deployments, admission=admission, traffic=traffic,
             readiness=readiness, reconciliation=lambda current, proposed, pending, observations: False)
         with TemporaryDirectory() as directory:
+            # A valid but impossible CPU budget must reject before draining/starting.
+            denied_policy = ResourcePolicy(daemon, "/", True, 1, 128 * 1048576,
+                                           32 * 1048576, 32 * 1048576, policy.artifact_bytes)
+            denied_backend = DockerLifecycleBackend(controls, deployments,
+                admission=ControllerAdmission(controls, denied_policy), traffic=traffic,
+                readiness=readiness, reconciliation=lambda *args: False)
+            denied = DurableLifecycleExecutor(denied_backend, deployments, routes,
+                Path(directory) / "denied.sqlite3").execute(SwitchRequest("denied", 0, ("en", "stt"), names["new"]))
+            require(denied.reason == "admission_denied" and not traffic.drained)
+            require(controls.inspect(names["new"]) == "created" and controls.inspect(names["old"]) == "running")
             path = Path(directory) / "controller.sqlite3"
             executor = DurableLifecycleExecutor(backend, deployments, routes, path)
             first = executor.execute(SwitchRequest("en", 0, ("en", "stt"), names["new"]))
@@ -88,7 +100,7 @@ def main():
             require(failed.status == "rolled_back" and failed.state == second.state)
             require(controls.inspect(names["old"]) == "exited" and controls.inspect(names["new"]) == "running")
             require(not traffic.drained and not executor.recovery_status()["blocked"])
-        print("Real lifecycle sharing, durable replay and readiness-failure rollback passed; fictional speech probes only.")
+        print("Real resource admission, lifecycle sharing, replay and rollback passed; fictional speech/traffic probes only.")
     finally:
         errors = []
         for container_id in reversed(ids):

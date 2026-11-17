@@ -65,7 +65,7 @@ class LifecycleTests(unittest.TestCase):
         first = self.executor.execute(self.request())
         self.assertEqual(first.status, "succeeded")
         self.assertEqual(self.backend.calls, [
-            ("revalidate", 1), ("drain", ("en", "stt")), ("start", "new-stt"),
+            ("revalidate", 1), ("drain", ("en", "stt")), ("revalidate", 1), ("start", "new-stt"),
             ("ready", ("new-stt", ("en", "stt"))), ("resume", ("en", "stt")),
         ])
         self.assertEqual(len(set(dict(first.state.routes).values())), 3)
@@ -74,7 +74,7 @@ class LifecycleTests(unittest.TestCase):
         self.assertEqual(second.status, "succeeded")
         self.assertEqual(second.state.revision, 2)
         self.assertEqual(self.backend.calls, [
-            ("revalidate", 2), ("drain", ("pl", "stt")), ("ready", ("new-stt", ("pl", "stt"))),
+            ("revalidate", 2), ("drain", ("pl", "stt")), ("revalidate", 2), ("ready", ("new-stt", ("pl", "stt"))),
             ("stop", "shared-stt"), ("resume", ("pl", "stt")),
         ])
         self.assertEqual(len(set(dict(second.state.routes).values())), 2)
