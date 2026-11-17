@@ -14,6 +14,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 ## Alpha
 
+- [x] 0.5 hosted runtime staging: real Piper/Vosk deployments, native private controller startup, admin recovery and all four switch slots, and bilingual Django speech checks. See [staging scope](speech-runtime-staging.md). ARM64 server staging and production activation remain pending.
+
 - [x] 0.5 admin provider switches: review and confirm per-slot planned assignments against live routes, with durable requests, same-ID retries and explicit outcomes. See [switching workflow](admin-speech-switch.md). Complete runtime staging remains pending.
 
 - [x] 0.5 admin recovery: permission-gated review/save/confirm flow, durable immutable request payloads and explicit same-ID retries after uncertain responses. See [recovery workflow and limits](admin-speech-recovery.md).

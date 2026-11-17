@@ -1,6 +1,6 @@
 """Bounded synthetic Piper/Vosk probes, not accuracy or endpoint identity proof."""
 from dataclasses import asdict, dataclass
-from http.client import HTTPException
+from http.client import HTTPConnection, HTTPException
 import io
 import json
 import os
@@ -8,10 +8,10 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from time import monotonic
+from time import monotonic, sleep
 from types import MappingProxyType
 from urllib.parse import urlsplit
-from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
+from urllib.request import HTTPHandler, HTTPRedirectHandler, ProxyHandler, Request, build_opener
 import wave
 
 
@@ -48,6 +48,27 @@ class NoRedirects(HTTPRedirectHandler):
         return None
 
 
+class StartupHTTPConnection(HTTPConnection):
+    """Wait for a cold HTTP listener before any inference bytes can be sent."""
+
+    def connect(self):
+        deadline = monotonic() + self.timeout
+        while True:
+            try:
+                super().connect()
+                return
+            except ConnectionRefusedError:
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    raise
+                sleep(min(0.2, remaining))
+
+
+class StartupHTTPHandler(HTTPHandler):
+    def http_open(self, request):
+        return self.do_open(StartupHTTPConnection, request)
+
+
 def unique_keys(pairs):
     result = {}
     for key, value in pairs:
@@ -66,7 +87,7 @@ def valid_wav(data):
 
 
 class ReadinessProbes:
-    """Local trusted URLs only; one attempt in a worker with a total deadline.
+    """Local trusted URLs only, with one inference request under a total deadline.
 
     No redirects or environment proxies. The caller must bind endpoints to the
     approved containers; a successful response does not prove endpoint identity.
@@ -124,7 +145,7 @@ def _probe_once(target, language):
     request = Request(target.base_url.rstrip("/") + path, data=body,
                       headers={"Content-Type": content_type, "Accept": expected_type})
     try:
-        with build_opener(ProxyHandler({}), NoRedirects()).open(request, timeout=8) as response:
+        with build_opener(ProxyHandler({}), NoRedirects(), StartupHTTPHandler()).open(request, timeout=8) as response:
             if response.status != 200 or response.headers.get_content_type() != expected_type:
                 return False
             data = response.read(limit + 1)

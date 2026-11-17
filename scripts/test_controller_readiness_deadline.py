@@ -1,5 +1,6 @@
 """Real child-process cancellation for peers that never become socket-idle."""
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.client import HTTPConnection
 import os
 from pathlib import Path
 import subprocess
@@ -10,7 +11,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from speech_controller.readiness import ProbeTarget, ReadinessProbes
+from speech_controller.readiness import ProbeTarget, ReadinessProbes, _probe_once
 
 
 class TrickleHandler(BaseHTTPRequestHandler):
@@ -40,6 +41,32 @@ class TrickleHandler(BaseHTTPRequestHandler):
 
 
 class DeadlineTests(unittest.TestCase):
+    def test_cold_listener_can_start_within_the_budget_and_receives_one_post(self):
+        server = ThreadingHTTPServer(("127.0.0.1", 0), TrickleHandler)
+        server.mode = "healthy"
+        server.requests = []
+        target = ProbeTarget("asr", "stt", f"http://127.0.0.1:{server.server_port}", ("en",))
+        original_connect = HTTPConnection.connect
+        attempts = []
+
+        def connect(connection):
+            attempts.append(connection.host)
+            if len(attempts) == 1:
+                raise ConnectionRefusedError
+            original_connect(connection)
+
+        thread = Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
+        thread.start()
+        try:
+            with patch.object(HTTPConnection, "connect", connect):
+                self.assertTrue(_probe_once(target, "en"))
+            self.assertEqual(len(attempts), 2)
+            self.assertEqual(server.requests, ["healthy"])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
     def test_trickling_headers_and_body_are_killed_reaped_and_can_recover(self):
         server = ThreadingHTTPServer(("127.0.0.1", 0), TrickleHandler)
         server.stop = Event()
