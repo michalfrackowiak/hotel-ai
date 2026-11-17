@@ -147,11 +147,11 @@ def inventory(config):
 class InventoryServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, config, *, port=None):
+    def __init__(self, config, *, port=None, handler=None):
         self.config = config
         self.inventory_lock = threading.Lock()
         self.workers = threading.BoundedSemaphore(8)
-        super().__init__(("127.0.0.1", config.port if port is None else port), InventoryHandler)
+        super().__init__(("127.0.0.1", config.port if port is None else port), handler or InventoryHandler)
 
     def get_request(self):
         request, address = super().get_request()

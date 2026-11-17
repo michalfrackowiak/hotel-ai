@@ -33,6 +33,11 @@ class RoutedLifecycleExecutor(DurableLifecycleExecutor):
     def recovery_status(self):
         return recovery_status(self)
 
+    @property
+    def observed_state(self):
+        """Current route observation; recovery revalidates it under its lock."""
+        return self._traffic.state
+
     def _checkpoint(self, request, payload, prior, destination):
         """Record the route decision while retaining an unfinished operation."""
         with self._transaction() as db:
