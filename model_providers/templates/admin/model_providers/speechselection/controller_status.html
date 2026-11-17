@@ -2,6 +2,7 @@
 {% block content %}
 <p><a href="{% url 'admin:model_providers_speechselection_changelist' %}">Back to planned assignments</a></p>
 <p><a href="{% url 'admin:model_providers_speechselection_controller_status' %}">Refresh status</a></p>
+{% if can_switch %}<p><a href="{% url 'admin:model_providers_speechselection_switch_prepare' %}">Review planned provider switches</a></p>{% endif %}
 {% if can_recover %}<p><a href="{% url 'admin:model_providers_speechselection_recovery_prepare' %}">Review controller recovery</a></p>{% endif %}
 {% if status_error %}
 <p class="errornote">{{ status_error }}</p>

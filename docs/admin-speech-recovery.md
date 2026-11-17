@@ -25,7 +25,7 @@ The configured controller URL must still match the saved URL before a retry. Res
 
 Rejected or recovery-required results remain unresolved and visible. A stale revision or conflicting observation may require offline operator investigation; repeatedly submitting the same stale payload will not fix it. This slice has no discard, reset or payload-edit action, including for a prepared but unsent request. Such a record blocks new recovery preparations for that endpoint until reconciled or resolved through a separately reviewed offline procedure. Do not delete records or issue fresh IDs to bypass uncertain controller work.
 
-An existing controller recovery that has no matching Django record also requires operator investigation. Admin does not invent replacement arguments for that recovery. Provider switching remains a separate future action.
+An existing controller recovery that has no matching Django record also requires operator investigation. Use the separate [provider switching workflow](admin-speech-switch.md) to apply planned assignments after the controller is healthy.
 
 ## Migration and rollout
 
