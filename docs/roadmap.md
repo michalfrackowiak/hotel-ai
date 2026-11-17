@@ -18,7 +18,7 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 - [x] 0.5 offline pilot initialization: verify the approved stopped workers and their private endpoints, create the private revision-zero route and journal pair, and validate it through the controller startup path. See [initialization procedure](speech-pilot-initialization.md) and [PR #72](https://github.com/michalfrackowiak/hotel-ai/pull/72).
 
-- [x] 0.5 production pilot preparation: provision the locked controller account, four stopped routed workers, pinned approvals, private revision-zero stores, and rollback inventory on ARM64. See [preparation evidence](speech-pilot-provisioning.md).
+- [x] 0.5 production pilot preparation: provision the locked controller account, four stopped routed workers, pinned approvals, private revision-zero stores, and rollback inventory on ARM64. See [preparation evidence](speech-pilot-provisioning.md) and [PR #73](https://github.com/michalfrackowiak/hotel-ai/pull/73).
 
 - [ ] 0.5 production pilot activation: prepare a pinned routed Django image and activate during a staffed cutover with a verified booking backup. Check bilingual speech, booking continuity, and SSH-only admin status before considering staff actions.
 
