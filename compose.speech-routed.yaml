@@ -1,0 +1,101 @@
+# Use with compose.yaml and compose.server.yaml for the routed speech pilot.
+x-routed-worker: &routed-worker
+  cpus: 0.4
+  init: true
+  read_only: true
+  user: "10001:10001"
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges
+  pull_policy: never
+  restart: "no"
+  labels:
+    hotel-ai.controller-owner: hotel-ai-routed
+
+x-routed-piper: &routed-piper
+  <<: *routed-worker
+  image: "${HOTEL_ROUTED_PIPER_IMAGE:?Set an approved local Piper image ID or digest}"
+  mem_limit: 1g
+  memswap_limit: 1g
+
+x-routed-vosk: &routed-vosk
+  <<: *routed-worker
+  image: "${HOTEL_ROUTED_VOSK_IMAGE:?Set an approved local Vosk image ID or digest}"
+  mem_limit: 1536m
+  memswap_limit: 1536m
+
+services:
+  web:
+    network_mode: host
+    ports: !reset []
+    user: "10001:10001"
+    cpus: 0.25
+    mem_limit: 512m
+    memswap_limit: 512m
+    command:
+      - sh
+      - -ec
+      - >-
+        python manage.py migrate --noinput &&
+        exec gunicorn config.wsgi:application --bind 127.0.0.1:8080 --workers 1 --threads 4
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz/', timeout=2).close()
+    environment:
+      HOTEL_SPEECH_TRAFFIC_DB: /run/hotel-ai-traffic/traffic.sqlite3
+      HOTEL_SPEECH_ROUTE_TARGETS: "${HOTEL_SPEECH_ROUTE_TARGETS:?Set the approved routed speech targets}"
+      HOTEL_SPEECH_CONTROL_URL: http://127.0.0.1:8093
+      HOTEL_SPEECH_CONTROL_TOKEN: "${HOTEL_SPEECH_CONTROL_TOKEN:?Set the private speech control token}"
+      HOTEL_SPEECH_CONTROL_HOST: "${HOTEL_SPEECH_CONTROL_HOST:?Set the matching speech control host}"
+      HOTEL_SPEECH_CONTROL_SWITCH_ENABLED: "0"
+      HOTEL_SPEECH_CONTROL_RECOVERY_ENABLED: "0"
+    volumes:
+      - type: bind
+        source: "${HOTEL_ROUTED_TRAFFIC_DIR:?Set the existing private traffic directory}"
+        target: /run/hotel-ai-traffic
+        bind:
+          create_host_path: false
+
+  routed-piper-primary:
+    <<: *routed-piper
+    container_name: hotel-ai-routed-piper-primary
+    profiles: [routed-primary]
+    networks:
+      routed-speech:
+        ipv4_address: "${HOTEL_ROUTED_PIPER_PRIMARY_IP:?Set the primary Piper endpoint address}"
+
+  routed-piper-standby:
+    <<: *routed-piper
+    container_name: hotel-ai-routed-piper-standby
+    profiles: [routed-standby]
+    networks:
+      routed-speech:
+        ipv4_address: "${HOTEL_ROUTED_PIPER_STANDBY_IP:?Set the standby Piper endpoint address}"
+
+  routed-vosk-primary:
+    <<: *routed-vosk
+    container_name: hotel-ai-routed-vosk-primary
+    profiles: [routed-primary]
+    networks:
+      routed-speech:
+        ipv4_address: "${HOTEL_ROUTED_VOSK_PRIMARY_IP:?Set the primary Vosk endpoint address}"
+
+  routed-vosk-standby:
+    <<: *routed-vosk
+    container_name: hotel-ai-routed-vosk-standby
+    profiles: [routed-standby]
+    networks:
+      routed-speech:
+        ipv4_address: "${HOTEL_ROUTED_VOSK_STANDBY_IP:?Set the standby Vosk endpoint address}"
+
+networks:
+  routed-speech:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: "${HOTEL_ROUTED_SPEECH_SUBNET:?Set the dedicated private speech subnet}"
