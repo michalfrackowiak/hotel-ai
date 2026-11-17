@@ -2,6 +2,10 @@
 
 ## Latest milestone
 
+Speech rollout rehearsal (`develop/speech-rollout-rehearsal`) defines the loopback staff and controller topology and exercises the fixed-endpoint fallback with an isolated booking database backup. The fixture owner implements the rehearsal. The parent records the rollout procedure and verifies it with an independent reviewer. [Production rollout guide](speech-production-rollout.md)
+
+The focused SQLite backup test passed. Independent review approved the fixture and reproduced a failure after removing exclusive snapshot creation. The server read-only check found a healthy loopback web listener and confirmed the existing one-CPU caps on both speech workers. Hosted CI runs the full restore and fixed speech fallback on fictional state. The next cutover gate is an isolated check of the final Gunicorn listener, private staff access, and approved production worker limits.
+
 ARM64 runtime staging (`develop/arm64-speech-runtime-staging`) reuses the full runtime drill on the native hotel server with capped disposable workers and production health monitoring. The implementation agent owns server-mode isolation and the parent owns controlled execution and release verification, with independent review. [Server staging method](speech-runtime-arm64-staging.md)
 
 The hash-verified ARM64 run passed in 84 seconds. It recovered the staged pending request at revision 0, switched all four slots through revision 4, preserved both booking drafts across real bilingual speech requests and removed its fixture. All 115 production loopback health samples passed with p95 4.28 ms and maximum 42.25 ms. Production container/image identity, start times and health matched before and after. Two local safety tests passed, and independent review verified that bypassing preflight fails the guard test. Next action is the production rollout plan, including private admin connectivity, approved worker topology, backup and rollback rehearsal. Production switching remains disabled.
