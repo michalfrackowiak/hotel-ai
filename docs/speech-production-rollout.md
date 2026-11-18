@@ -18,7 +18,7 @@ Start with the two bilingual Piper and Vosk images already used by the hotel. Re
 
 ## Before cutover
 
-1. Save the known-good Django image and effective Compose settings, the current fixed speech addresses, and the method to bring those workers online. Record the current listener and container identities. Keep the previous release available on the host.
+1. Verify the cached candidate and rollback Django images against their recorded full IDs. Preserve the original fixed speech Compose settings and the method to bring the fixed workers online. Record the current listener and container identities. [Pinned Django images](speech-pilot-web-images.md)
 2. Rehearse the exact Gunicorn bind and SSH admin path on a disposable loopback port. Verify external requests to the Django and controller ports cannot connect, public `/admin/` remains outside the Nginx allowlist, and Django has no Docker socket.
 3. Prepare the dedicated account, stopped workers, route store and journal before the cutover window. Use one controller owner and one shared route-store file. [Production pilot preparation](speech-pilot-provisioning.md)
 4. Pause writes for the cutover window. Take a private SQLite backup with the backup API, checksum it, and verify integrity, foreign keys and Django migration compatibility on a disposable restore. Rehearse candidate migrations on the restore when the candidate introduces new tables. Preserve signing configuration securely so active sessions can resume. [Database recovery drill](offhost-recovery.md)
