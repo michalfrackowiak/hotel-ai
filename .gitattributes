@@ -1,1 +1,2 @@
 /scripts/check_private_admin_listener.sh text eol=lf
+/scripts/activate_speech_pilot.sh text eol=lf

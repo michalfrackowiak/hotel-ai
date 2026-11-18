@@ -37,3 +37,5 @@ Back up route and journal files after all their writers exit, and keep the backu
 ## Rehearsal
 
 The hosted fixture exercises a booking backup and a new Django process configured for fixed speech after the controller stops. The [ARM64 listener rehearsal](speech-private-cutover-check.md) separately checks a real SSH-forwarded Django login and the proposed web process UID. The remaining production checks apply to the final listener, private controller account, shared traffic directory and approved worker identities during cutover.
+
+The staffed production pilot has been activated. The live evidence records the backup, health and speech checks and the controller restart boundary. [Live cutover evidence](speech-pilot-live.md)
