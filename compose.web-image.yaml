@@ -1,0 +1,6 @@
+# Apply last to select a cached Django image for cutover or rollback.
+services:
+  web:
+    image: "${HOTEL_WEB_IMAGE:?Set HOTEL_WEB_IMAGE to the verified local web image ID}"
+    build: !reset null
+    pull_policy: never

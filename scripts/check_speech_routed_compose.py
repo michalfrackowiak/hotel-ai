@@ -1,4 +1,4 @@
-"""Validate the routed Compose overlay offline with fictional settings."""
+"""Validate routed speech and pinned web images offline with fictional settings."""
 
 import ipaddress
 import json
@@ -11,6 +11,11 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT = "hotel-routed-fixture"
+BASE_FILES = ("compose.yaml", "compose.server.yaml")
+ROUTED_FILES = (*BASE_FILES, "compose.speech-routed.yaml")
+FIXED_FILES = (*BASE_FILES, "compose.piper.yaml", "compose.asr.yaml")
+IMAGE_FILE = "compose.web-image.yaml"
+WEB_IMAGE_ID = "sha256:" + "c" * 64
 OWNER = "hotel-ai-routed"
 TRAFFIC_DIRECTORY = "/var/lib/hotel-routing-fixture"
 TRAFFIC_MOUNT = "/run/hotel-ai-traffic"
@@ -33,6 +38,7 @@ TARGETS = [
 ]
 ENVIRONMENT = {
     "DJANGO_SECRET_KEY": "django-routed-compose-fixture",
+    "HOTEL_WEB_IMAGE": WEB_IMAGE_ID,
     "HOTEL_ROUTED_TRAFFIC_DIR": TRAFFIC_DIRECTORY,
     "HOTEL_ROUTED_SPEECH_SUBNET": SUBNET,
     "HOTEL_SPEECH_ROUTE_TARGETS": json.dumps(TARGETS),
@@ -45,7 +51,7 @@ ENVIRONMENT = {
 }
 
 
-def compose_config(*profiles, omit=None):
+def compose_config(*profiles, files=ROUTED_FILES, omit=None):
     env = {key: value for key, value in os.environ.items()
            if not key.startswith(("DJANGO_", "HOTEL_", "BOOKING_", "COMPOSE_", "DOCKER_"))}
     env.update(ENVIRONMENT)
@@ -54,10 +60,9 @@ def compose_config(*profiles, omit=None):
     with tempfile.TemporaryDirectory() as temporary:
         env_file = Path(temporary) / "fixture.env"
         env_file.touch()
-        command = [
-            "docker", "compose", "--project-name", PROJECT, "--env-file", str(env_file),
-            "-f", "compose.yaml", "-f", "compose.server.yaml", "-f", "compose.speech-routed.yaml",
-        ]
+        command = ["docker", "compose", "--project-name", PROJECT, "--env-file", str(env_file)]
+        for file in files:
+            command += ["-f", file]
         for profile in profiles:
             command += ["--profile", profile]
         return subprocess.run(
@@ -67,8 +72,8 @@ def compose_config(*profiles, omit=None):
 
 
 class RoutedComposeTests(unittest.TestCase):
-    def render(self, *profiles):
-        result = compose_config(*profiles)
+    def render(self, *profiles, files=ROUTED_FILES):
+        result = compose_config(*profiles, files=files)
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
 
@@ -156,6 +161,22 @@ class RoutedComposeTests(unittest.TestCase):
         result = compose_config(omit="HOTEL_ROUTED_TRAFFIC_DIR")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("HOTEL_ROUTED_TRAFFIC_DIR", result.stderr)
+
+    def test_pinned_web_image_only_changes_web_image_selection(self):
+        for files, profiles in ((ROUTED_FILES, ("*",)), (FIXED_FILES, ())):
+            with self.subTest(files=files):
+                original = self.render(*profiles, files=files)
+                pinned = self.render(*profiles, files=(*files, IMAGE_FILE))
+                original_web = original["services"]["web"]
+                self.assertIn("build", original_web)
+                del original_web["build"]
+                original_web.update(image=WEB_IMAGE_ID, pull_policy="never")
+                self.assertEqual(pinned, original)
+
+    def test_pinned_web_image_requires_explicit_input(self):
+        result = compose_config(files=(*FIXED_FILES, IMAGE_FILE), omit="HOTEL_WEB_IMAGE")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("HOTEL_WEB_IMAGE", result.stderr)
 
 
 if __name__ == "__main__":
