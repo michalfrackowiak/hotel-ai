@@ -95,13 +95,25 @@ class ControllerAdmission:
         """Fresh capacity and worker checks after the backend's bound probes."""
         try:
             self._routes(current)
-            selected = self._routes(proposed)
+        except (ValueError, TypeError):
+            return False
+        return self._verify_selected(proposed, observations, allow_stopped_selected=False)
+
+    def verify_boot(self, state, observations):
+        """Require capacity for the full selected set, including stopped workers."""
+        return self._verify_selected(state, observations, allow_stopped_selected=True)
+
+    def _verify_selected(self, state, observations, *, allow_stopped_selected):
+        try:
+            selected = self._routes(state)
             if set(observations) != self._controls.approved_names:
                 return False
             fresh = {name: self._controls.inspect(name) for name in sorted(self._controls.approved_names)}
+            stopped = ("created", "exited")
+            selected_states = ("running", *stopped) if allow_stopped_selected else ("running",)
             if (dict(observations) != fresh
-                    or any(fresh[name] != "running" for name in selected)
-                    or any(fresh[name] not in ("created", "exited") for name in fresh.keys() - selected)):
+                    or any(fresh[name] not in selected_states for name in selected)
+                    or any(fresh[name] not in stopped for name in fresh.keys() - selected)):
                 return False
             return self._capacity(selected)
         except (OSError, ValueError, TypeError, KeyError, ControlUnavailable):

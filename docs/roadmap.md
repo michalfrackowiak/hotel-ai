@@ -26,6 +26,10 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 - [x] 0.5 stopped-process restart rehearsal: preserve controller state and booking drafts, restart only the workers referenced by the stored routes, and check both languages on ARM64. See [restart evidence](speech-pilot-restart.md).
 
+- [x] 0.5 worker boot gate: refuse uncertain state before worker startup and start only the workers selected by the saved routes. Verify the opt-in command with disposable models. See [boot gate and service design](speech-pilot-boot-gate.md).
+
+- [ ] 0.5 persistent startup: order Django after authenticated controller readiness and rehearse a full reboot in a disposable systemd host before production installation.
+
 - [x] 0.5 private admin cutover rehearsal: verify loopback Gunicorn, SSH-forwarded login and CSRF, public admin rejection and cleanup on the ARM64 server. Record the tested worker overlap budget. See [rehearsal evidence](speech-private-cutover-check.md).
 
 - [x] 0.5 rollout rehearsal: document private admin connectivity and the cutover sequence, and exercise a verified booking backup and fixed-endpoint rollback on hosted Linux. See [production rollout guide](speech-production-rollout.md). Production activation remains pending.

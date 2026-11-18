@@ -22,13 +22,58 @@ class RuntimeServer(ControlServer):
     daemon_threads = False
 
 
-@contextmanager
-def open_runtime(config):
-    if not isinstance(config, RuntimeConfiguration) or platform.system() != "Linux":
-        raise ValueError("Native Linux controller configuration is required.")
+def _validate_stores(config):
     observed = tuple(private_file(path)[1] for path in (config.traffic_path, config.journal_path))
     if observed != config.identities or len(set(observed)) != 2:
         raise ValueError("Controller state files changed.")
+
+
+def _boot_workers(config, executor, traffic, state, controls, admission, readiness):
+    """Restore only the selected workers while the runtime owns the existing stores."""
+    def check_state():
+        _validate_stores(config)
+        status = executor.recovery_status()
+        if status["blocked"] or status["state"] != state or not traffic.ready_for_boot(state):
+            raise ValueError("The boot route state needs operator review.")
+
+    def check_stopped(binding):
+        if controls.verify_stopped_endpoint(binding.name, binding.network_id, binding.address) is not True:
+            raise ValueError("A stopped worker binding could not be verified.")
+
+    check_state()
+    selected = {name for _, name in state.routes}
+    by_name = {binding.name: binding for binding in config.bindings}
+    observations = {name: controls.inspect(name) for name in sorted(controls.approved_names)}
+    if not admission.verify_boot(state, observations):
+        raise ValueError("The boot worker state or capacity could not be verified.")
+    for name, observed in observations.items():
+        if observed != "running":
+            check_stopped(by_name[name])
+    for slot, name in state.routes:
+        if observations[name] == "running" and not readiness(name, slot):
+            raise ValueError("An already running worker is not ready for boot.")
+    for name in sorted(selected):
+        if observations[name] != "running":
+            check_stopped(by_name[name])
+            if not admission.verify_boot(state, observations):
+                raise ValueError("The boot worker state or capacity changed before startup.")
+            check_state()
+            if controls.start(name) != "running":
+                raise ValueError("A selected worker could not start.")
+            observations[name] = "running"
+    for slot, name in state.routes:
+        if not readiness(name, slot):
+            raise ValueError("A selected worker did not pass boot readiness.")
+    if not admission.verify_reconciliation(state, state, (), observations):
+        raise ValueError("The boot worker state or capacity changed after startup.")
+    check_state()
+
+
+@contextmanager
+def open_runtime(config, *, boot_workers=False):
+    if not isinstance(config, RuntimeConfiguration) or platform.system() != "Linux":
+        raise ValueError("Native Linux controller configuration is required.")
+    _validate_stores(config)
     lock_path = config.traffic_path + ".controller.lock"
     if Path(lock_path).exists() or Path(lock_path).is_symlink():
         private_file(lock_path)
@@ -56,19 +101,24 @@ def open_runtime(config):
         state = traffic.state
         executor = RoutedLifecycleExecutor(backend, traffic.deployments, dict(state.routes),
             config.journal_path, revision=state.revision, journal_limit=limits[0][0])
-        for approval in config.approvals:
-            controls.inspect(approval.name)
+        if boot_workers:
+            _boot_workers(config, executor, traffic, state, controls, admission, readiness)
+        else:
+            for approval in config.approvals:
+                controls.inspect(approval.name)
         yield executor
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Start the private native Linux speech controller.")
     parser.add_argument("--config", required=True)
-    parser.add_argument("--check", action="store_true", help="Validate without listening or changing workers/routes.")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true", help="Validate without listening or changing workers/routes.")
+    mode.add_argument("--boot-workers", action="store_true", help="Start only the durable route workers before listening. Keep web writers offline until ready.")
     args = parser.parse_args(argv)
     try:
         config = RuntimeConfiguration.load(args.config, os.environ.get("HOTEL_SPEECH_CONTROL_TOKEN", ""))
-        with open_runtime(config) as executor:
+        with open_runtime(config, boot_workers=args.boot_workers) as executor:
             if args.check:
                 print("Controller configuration and existing state validated; no listener started.")
             else:

@@ -121,6 +121,13 @@ class RoutedTrafficGate(TrafficGate):
         with self._transaction() as db:
             return self._read_state(db)
 
+    def ready_for_boot(self, expected):
+        """Read the exact route state, open admission slots, and absence of claims together."""
+        with self._transaction() as db:
+            return (self._read_state(db) == expected
+                    and not db.execute("SELECT 1 FROM slots WHERE closed=1 LIMIT 1").fetchone()
+                    and not db.execute("SELECT 1 FROM claims LIMIT 1").fetchone())
+
     def _quiescent(self, db, expected):
         return (self._read_state(db) == expected
                 and not db.execute("SELECT 1 FROM slots WHERE closed=0 LIMIT 1").fetchone()

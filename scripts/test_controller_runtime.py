@@ -1,7 +1,8 @@
 """Existing real SQLite stores with fictional Docker observations, no real daemon."""
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, redirect_stderr
 from dataclasses import asdict, replace
 from http.client import HTTPConnection
+import io
 import json
 import os
 from pathlib import Path
@@ -12,17 +13,19 @@ import sys
 from tempfile import TemporaryDirectory
 from threading import Event, Thread
 import unittest
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from speech_controller.admission import ControllerAdmission, ResourcePolicy
 from speech_controller.backend import DockerLifecycleBackend
 from speech_controller.dispatch import ControlConfiguration
-from speech_controller.docker_control import ApprovedContainer, DockerControls
+from speech_controller.docker_control import ApprovedContainer, ControlUnavailable, DockerControls
 from speech_controller.endpoint_binding import BoundReadiness, EndpointBinding
+from speech_controller.journal import encode
 from speech_controller.lifecycle import SwitchRequest
 from speech_controller.readiness import ProbeTarget
 from speech_controller.routed_executor import RoutedLifecycleExecutor
+from speech_controller.routed_recovery import PENDING_REASON
 from speech_controller.routing import RoutedTrafficGate, initialize_routing
 from speech_controller.runtime import RuntimeServer, main, open_runtime
 from speech_controller.runtime_config import RuntimeConfiguration, private_file
@@ -42,9 +45,10 @@ class RuntimeTests(unittest.TestCase):
         self.root = Path(directory.name).resolve()
         self.root.chmod(0o700)
         self.approvals = tuple(ApprovedContainer(name, char * 64, "sha256:" + "f" * 64,
-            250000000, 33554432, "test-owner") for name, char in (("tts", "a"), ("stt", "b")))
-        self.targets = tuple(ProbeTarget(name, name, f"http://10.20.0.{i}:5000", ("en", "pl"))
-                             for i, name in enumerate(("tts", "stt"), 2))
+            250000000, 33554432, "test-owner")
+            for name, char in (("tts", "a"), ("stt", "b"), ("spare", "d")))
+        self.targets = tuple(ProbeTarget(name, task, f"http://10.20.0.{i}:5000", ("en", "pl"))
+                             for i, (name, task) in enumerate((("tts", "tts"), ("stt", "stt"), ("spare", "tts")), 2))
         self.bindings = tuple(EndpointBinding(target.name, "c" * 64, f"10.20.0.{i}")
                               for i, target in enumerate(self.targets, 2))
         self.routes = {(language, task): task for language in ("en", "pl") for task in ("tts", "stt")}
@@ -67,7 +71,7 @@ class RuntimeTests(unittest.TestCase):
             str(self.root / "docker.sock"), "test-daemon", identities)
 
     @contextmanager
-    def runtime(self, config=None):
+    def runtime(self, config=None, *, boot_workers=False, observations=None):
         # Windows cannot enforce POSIX ownership/modes. Linux CI uses real checks.
         def windows_file(value):
             path = Path(value)
@@ -77,10 +81,169 @@ class RuntimeTests(unittest.TestCase):
             return path, (info.st_dev, info.st_ino)
         with patch("speech_controller.runtime.platform.system", return_value="Linux"), \
                 patch.object(DockerControls, "_check_socket"), \
-                patch.object(DockerControls, "inspect", return_value="running"), \
+                patch.object(DockerControls, "inspect", side_effect=observations.__getitem__ if observations else None,
+                             return_value="running"), \
                 patch("speech_controller.runtime.private_file", side_effect=private_file if os.name != "nt" else windows_file):
-            with open_runtime(config or self.config) as executor:
+            with open_runtime(config or self.config, boot_workers=boot_workers) as executor:
                 yield executor
+
+    @contextmanager
+    def boot_observations(self, states):
+        def start(name):
+            states[name] = "running"
+            return "running"
+        resources = dict(scope="controller_host", platform="linux", cpu_count=2,
+                         memory_total_mib=1024, memory_available_mib=512,
+                         disk_total_mib=1024, disk_free_mib=512)
+        with patch.object(DockerControls, "start", side_effect=start) as starts, \
+                patch.object(DockerControls, "stop") as stops, \
+                patch.object(DockerControls, "verify_stopped_endpoint", return_value=True) as stopped, \
+                patch.object(BoundReadiness, "__call__", return_value=True) as ready, \
+                patch("speech_controller.admission.host_resources", return_value=resources):
+            yield starts, stops, stopped, ready, resources
+
+    def test_boot_starts_only_persisted_workers_under_runtime_owner_lock(self):
+        states = {"stt": "exited", "tts": "exited", "spare": "created"}
+        before = (self.traffic_path.read_bytes(), self.journal_path.read_bytes())
+        with self.boot_observations(states) as (starts, stops, stopped, ready, _):
+            perform_start = starts.side_effect
+
+            def start_under_lock(name):
+                with self.assertRaisesRegex(ValueError, "already owns"):
+                    with self.runtime():
+                        self.fail("Competing controller admitted during boot.")
+                return perform_start(name)
+
+            starts.side_effect = start_under_lock
+            with self.runtime(boot_workers=True, observations=states) as executor:
+                self.assertEqual(executor.state, self.executor.state)
+            self.assertEqual(starts.call_args_list, [call("stt"), call("tts")])
+            stops.assert_not_called()
+            stopped.assert_any_call("spare", "c" * 64, "10.20.0.4")
+            self.assertEqual(ready.call_args_list, [call(name, slot) for slot, name in self.executor.state.routes])
+        self.assertEqual(before, (self.traffic_path.read_bytes(), self.journal_path.read_bytes()))
+
+    def test_boot_refuses_unsafe_existing_store_without_worker_changes(self):
+        pending_recovery = encode(dict(status="recovery_required", reason=PENDING_REASON,
+                                       state=asdict(self.executor.state)))
+        cases = (
+            (self.traffic_path, "INSERT INTO claims VALUES (?,?,?)", ("a" * 32, "en", "stt"),
+             "DELETE FROM claims"),
+            (self.traffic_path, "UPDATE slots SET closed=1", (), "UPDATE slots SET closed=0"),
+            (self.traffic_path, "UPDATE metadata SET revision=1", (), "UPDATE metadata SET revision=0"),
+            (self.journal_path, "INSERT INTO operations VALUES ('pending','{}',NULL)", (), "DELETE FROM operations"),
+            (self.journal_path, "INSERT INTO reconciliations VALUES ('pending','{}',?,'','{}','[]')",
+             (pending_recovery,), "DELETE FROM reconciliations"),
+            (self.journal_path, "UPDATE metadata SET blocked=1", (), "UPDATE metadata SET blocked=0"),
+        )
+        states = {"stt": "exited", "tts": "exited", "spare": "created"}
+        for path, corrupt, parameters, clear in cases:
+            with self.subTest(corrupt=corrupt), closing(sqlite3.connect(path)) as db:
+                db.execute(corrupt, parameters)
+                db.commit()
+                before = (self.traffic_path.read_bytes(), self.journal_path.read_bytes())
+                with self.boot_observations(states) as (starts, stops, stopped, ready, _):
+                    with self.assertRaisesRegex(ValueError, "boot route state"):
+                        with self.runtime(boot_workers=True, observations=states):
+                            self.fail("Unsafe boot state was accepted.")
+                    for function in starts, stops, stopped, ready:
+                        function.assert_not_called()
+                self.assertEqual(before, (self.traffic_path.read_bytes(), self.journal_path.read_bytes()))
+                db.execute(clear)
+                db.commit()
+
+    def test_boot_denies_running_standby_bad_binding_low_capacity_and_unready_live_worker(self):
+        baseline = {"stt": "exited", "tts": "exited", "spare": "created"}
+        for case in ("spare-running", "bad-binding", "low-capacity", "live-unready"):
+            with self.subTest(case=case):
+                states = baseline.copy()
+                with self.boot_observations(states) as (starts, stops, stopped, ready, resources):
+                    if case == "spare-running":
+                        states["spare"] = "running"
+                    elif case == "bad-binding":
+                        stopped.return_value = False
+                    elif case == "low-capacity":
+                        resources["memory_available_mib"] = 95
+                    else:
+                        states["stt"], ready.return_value = "running", False
+                    with self.assertRaises(ValueError):
+                        with self.runtime(boot_workers=True, observations=states):
+                            self.fail("Boot accepted an unsafe worker or capacity.")
+                    starts.assert_not_called()
+                    stops.assert_not_called()
+
+    def test_boot_rechecks_state_after_probes_and_before_listener(self):
+        states = {"stt": "running", "tts": "exited", "spare": "created"}
+        for run_tts in (False, True):
+            with self.subTest(run_tts=run_tts), self.boot_observations(states) as (starts, stops, _, ready, _):
+                states["tts"] = "running" if run_tts else "exited"
+                with closing(sqlite3.connect(self.traffic_path)) as db:
+                    def retain_claim(name, slot):
+                        if slot == ("en", "stt"):
+                            db.execute("INSERT OR IGNORE INTO claims VALUES (?,?,?)", ("a" * 32, *slot))
+                            db.commit()
+                        return True
+                    ready.side_effect = retain_claim
+                    with self.assertRaisesRegex(ValueError, "boot route state"):
+                        with self.runtime(boot_workers=True, observations=states):
+                            self.fail("Boot accepted traffic drift during readiness.")
+                    starts.assert_not_called()
+                    stops.assert_not_called()
+                    self.assertEqual(db.execute("SELECT COUNT(*) FROM claims").fetchone(), (1,))
+                    db.execute("DELETE FROM claims")
+                    db.commit()
+
+    def test_boot_rejects_replaced_journal_after_readiness(self):
+        states = {"stt": "running", "tts": "running", "spare": "created"}
+        replacement = self.root / "replacement.sqlite3"
+        replacement.write_bytes(self.journal_path.read_bytes())
+        replacement.chmod(0o600)
+        with self.boot_observations(states) as (starts, stops, _, ready, _):
+            def replace_journal(_name, _slot):
+                if replacement.exists():
+                    replacement.replace(self.journal_path)
+                return True
+
+            ready.side_effect = replace_journal
+            with self.assertRaisesRegex(ValueError, "Controller state files changed"):
+                with self.runtime(boot_workers=True, observations=states):
+                    self.fail("Boot accepted the replacement journal.")
+            starts.assert_not_called()
+            stops.assert_not_called()
+
+    def test_partial_boot_failure_leaves_selected_running_and_retry_revalidates_it(self):
+        states = {"stt": "exited", "tts": "exited", "spare": "created"}
+        with self.boot_observations(states) as (starts, stops, _, ready, _):
+            perform_start = starts.side_effect
+
+            def fail_second_start(name):
+                if name == "tts":
+                    raise ControlUnavailable(TOKEN)
+                return perform_start(name)
+
+            starts.side_effect = fail_second_start
+            with patch("speech_controller.runtime.RuntimeConfiguration.load", return_value=self.config), \
+                    patch("speech_controller.runtime.open_runtime", side_effect=lambda config, **flags:
+                          self.runtime(config, observations=states, **flags)), \
+                    patch("speech_controller.runtime.RuntimeServer") as server:
+                with self.assertRaises(SystemExit) as error:
+                    main(["--config", "unused", "--boot-workers"])
+                self.assertNotIn(TOKEN, str(error.exception))
+                server.assert_not_called()
+            self.assertEqual(states, {"stt": "running", "tts": "exited", "spare": "created"})
+            starts.reset_mock()
+            starts.side_effect = perform_start
+            with self.runtime(boot_workers=True, observations=states):
+                starts.assert_called_once_with("tts")
+                self.assertEqual(ready.call_args_list[:2], [call("stt", ("en", "stt")), call("stt", ("pl", "stt"))])
+            stops.assert_not_called()
+
+    def test_check_and_boot_modes_are_mutually_exclusive(self):
+        with patch("speech_controller.runtime.RuntimeConfiguration.load") as load, redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as error:
+                main(["--config", "unused", "--check", "--boot-workers"])
+            self.assertEqual(error.exception.code, 2)
+            load.assert_not_called()
 
     def test_reopen_preserves_stores_and_does_not_probe_or_change_workers(self):
         before = (self.traffic_path.read_bytes(), self.journal_path.read_bytes())
@@ -193,7 +356,7 @@ class RuntimeTests(unittest.TestCase):
                 self.fail("old journal migrated")
         with closing(sqlite3.connect(self.journal_path)) as db:
             self.assertNotIn("reconciliations", {row[0] for row in db.execute("SELECT name FROM sqlite_master")})
-        changed = replace(self.config, targets=(replace(self.targets[0], base_url="http://10.20.0.9:5000"), self.targets[1]))
+        changed = replace(self.config, targets=(replace(self.targets[0], base_url="http://10.20.0.9:5000"), *self.targets[1:]))
         with self.assertRaises(Exception):
             with self.runtime(changed):
                 self.fail("catalog drift accepted")

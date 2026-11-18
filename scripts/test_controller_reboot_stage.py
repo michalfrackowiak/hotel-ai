@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from arm64_stage import FixtureError
-from smoke_speech_runtime import restart_workers, stopped_restart_state
+from smoke_speech_runtime import stop_workers_for_restart, stopped_restart_state
 from speech_controller.routed_recovery import PENDING_REASON
 
 
@@ -59,6 +59,6 @@ class RestartStageTests(unittest.TestCase):
                     before = (traffic.read_bytes(), journal.read_bytes())
                     controls = Mock()
                     with self.assertRaisesRegex(FixtureError, problem):
-                        restart_workers(Mock(), controls, (), (), {"state": STATE}, traffic, journal)
+                        stop_workers_for_restart(Mock(), controls, (), {"state": STATE}, traffic, journal)
                     self.assertEqual(controls.mock_calls, [])
                     self.assertEqual((traffic.read_bytes(), journal.read_bytes()), before)
