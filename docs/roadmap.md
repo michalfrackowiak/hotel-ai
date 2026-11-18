@@ -22,7 +22,7 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 - [x] 0.5 production pilot images: prepare and verify cached routed and rollback Django images and an opt-in Compose image selection. See [image verification](speech-pilot-web-images.md).
 
-- [x] 0.5 production pilot activation: activate during a staffed cutover with a verified booking backup. Check bilingual speech, booking continuity, and SSH-only admin access. See [live cutover evidence](speech-pilot-live.md).
+- [x] 0.5 production pilot activation: activate during a staffed cutover with a verified booking backup. Check bilingual speech, booking continuity, and SSH-only admin access. See [live cutover evidence](speech-pilot-live.md) and [PR #75](https://github.com/michalfrackowiak/hotel-ai/pull/75).
 
 - [x] 0.5 private admin cutover rehearsal: verify loopback Gunicorn, SSH-forwarded login and CSRF, public admin rejection and cleanup on the ARM64 server. Record the tested worker overlap budget. See [rehearsal evidence](speech-private-cutover-check.md).
 
