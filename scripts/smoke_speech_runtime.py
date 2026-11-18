@@ -23,19 +23,21 @@ from uuid import uuid4
 
 from arm64_stage import (
     FixtureError, ProductionHealth, arm64_source, cleanup_on_disconnect, docker_path, production_snapshot, require,
+    routed_production_snapshot,
 )
 from verify_recovery import database_checks, digest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from speech_controller.admission import ResourcePolicy
 from speech_controller.docker_control import ApprovedContainer, ControlUnavailable, DockerControls, private_ipv4
-from speech_controller.endpoint_binding import EndpointBinding
+from speech_controller.endpoint_binding import BoundReadiness, EndpointBinding
 from speech_controller.lifecycle import SwitchRequest
 from speech_controller.journal import JournalUnavailable
 from speech_controller.readiness import ProbeTarget
 from speech_controller.resources import host_resources
+from speech_controller.routed_recovery import PENDING_REASON
 from speech_controller.runtime import open_runtime
-from speech_controller.runtime_config import RuntimeConfiguration
+from speech_controller.runtime_config import RuntimeConfiguration, private_file
 from speech_controller.traffic import TrafficUnavailable
 
 
@@ -134,7 +136,7 @@ class DockerFixture:
 
     def create(self, role, *args, env=None):
         self.check_health()
-        cpu = self.web_cpu if role in ("django", "rollback") else str(self.worker_cpu / 1_000_000_000)
+        cpu = self.web_cpu if role in ("django", "rollback", "restart-web") else str(self.worker_cpu / 1_000_000_000)
         identity = full_id(self.run("create", "--pull", "never", "--name", self.owner + "-" + role,
             "--label", self.label, "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
             "--init", "--cpus", cpu, *args, env=env))
@@ -253,6 +255,57 @@ def runtime(command, env):
                 raise FixtureError("Native controller did not shut down cleanly.") from None
 
 
+def stopped_restart_state(traffic_path, journal_path, expected):
+    """Read original fixture stores without initializing, reconciling or clearing claims."""
+    identities = tuple(private_file(str(path))[1] for path in (traffic_path, journal_path))
+    routes = {(language, task): name for (language, task), name in expected["routes"]}
+    with closing(sqlite3.connect(traffic_path.as_uri() + "?mode=ro", uri=True, timeout=1)) as db:
+        require(db.execute("SELECT version,revision FROM metadata").fetchall() == [(2, expected["revision"])]
+                and db.execute("SELECT 1 FROM claims LIMIT 1").fetchone() is None
+                and {tuple(row) for row in db.execute("SELECT language,task,closed FROM slots")}
+                == {(language, task, 0) for language, task in routes}
+                and {(language, task): name for language, task, name in
+                     db.execute("SELECT language,task,target FROM routes")} == routes,
+                "Refusing restart with pending claims, closed slots or changed routes.")
+    with closing(sqlite3.connect(journal_path.as_uri() + "?mode=ro", uri=True, timeout=1)) as db:
+        metadata = db.execute("SELECT state,blocked FROM metadata").fetchall()
+        require(len(metadata) == 1 and metadata[0][1] == 0 and json.loads(metadata[0][0]) == expected
+                and db.execute("SELECT 1 FROM operations WHERE outcome IS NULL LIMIT 1").fetchone() is None
+                and all(json.loads(row[0])["reason"] != PENDING_REASON
+                        for row in db.execute("SELECT outcome FROM reconciliations")),
+                "Refusing restart with pending operations, blocked state or journal disagreement.")
+    return identities, digest(journal_path)
+
+
+def restart_workers(docker, controls, targets, bindings, final, traffic_path, journal_path):
+    snapshot = stopped_restart_state(traffic_path, journal_path, final["state"])
+    routes = {(language, task): name for (language, task), name in final["state"]["routes"]}
+    selected = set(routes.values())
+    for name in sorted(selected):
+        docker.check_health()
+        require(controls.stop(name) == "exited", "Could not stop a selected staged worker.")
+    for binding in bindings:
+        docker.check_health()
+        require(controls.verify_stopped_endpoint(binding.name, binding.network_id, binding.address) is True,
+                "A staged worker was running or had changed its private endpoint during simulated downtime.")
+    require(stopped_restart_state(traffic_path, journal_path, final["state"]) == snapshot,
+            "The staged stores changed during worker shutdown.")
+    print("Simulated host downtime left all four staged workers stopped and both original stores intact.", flush=True)
+
+    for name in sorted(selected):
+        docker.check_health()
+        require(controls.start(name) == "running", "Could not restart a worker selected by persisted routes.")
+    readiness = BoundReadiness(controls, targets, bindings)
+    for slot, name in sorted(routes.items()):
+        docker.check_health()
+        require(readiness(name, slot), "A selected staged speech endpoint failed bound inference after restart.")
+    for name in sorted(controls.approved_names - selected):
+        require(controls.inspect(name) == "exited", "Restart unexpectedly started an unselected worker.")
+    require(stopped_restart_state(traffic_path, journal_path, final["state"]) == snapshot,
+            "The staged stores changed while restarting workers.")
+    return snapshot
+
+
 def stage(docker, socket_path, directory, *, production=None):
     images = docker.images() if production is None else {name: value["image"] for name, value in production.items()}
     info = json.loads(docker.run("info", "--format", '{"id":{{json .ID}},"os":{{json .OSType}},'
@@ -350,13 +403,24 @@ def stage(docker, socket_path, directory, *, production=None):
         row = db.execute("SELECT outcome FROM operations WHERE request_id=?", (PENDING_REQUEST,)).fetchone()
         require(row is not None and json.loads(row[0])["status"] == "reconciled",
                 "Expected a durable reconciliation result for the staged interruption.")
+    require(process.returncode == 0, "The staged controller did not shut down normally.")
+    snapshot = restart_workers(docker, controls, targets, bindings, final, traffic_path, journal_path)
+    with runtime(command, env) as restarted:
+        reopened = ready(endpoint, token=token, process=restarted, check_health=docker.check_health)
+        require(reopened == final, "Controller restart changed the revision, routes or pending operations.")
+        launch_admin(docker, images["web"], fixture_dir, targets, names, port, token, django_secret, restarting=True)
+        require(ready(endpoint, token=token, process=restarted, check_health=docker.check_health) == final,
+                "Controller changed after routed speech resumed.")
+    require(restarted.returncode == 0
+            and stopped_restart_state(traffic_path, journal_path, final["state"]) == snapshot,
+            "The staged stores or controller shutdown changed after the restart drill.")
+    print("Staged restart kept revision 4, original store identities and completed journal history.", flush=True)
     if production is None:
-        require(process.returncode == 0, "The staged controller did not shut down normally.")
         rehearse_rollback(docker, images["web"], directory, fixture_dir, traffic_path, journal_path,
                           controls, names, {binding.name: binding for binding in bindings}, django_secret)
 
 
-def launch_admin(docker, image, fixture_dir, targets, names, port, token, django_secret):
+def launch_admin(docker, image, fixture_dir, targets, names, port, token, django_secret, *, restarting=False):
     settings = {
         "DJANGO_SECRET_KEY": django_secret, "DJANGO_ALLOWED_HOSTS": "testserver",
         "DJANGO_DB_PATH": "/fixture/bookings.sqlite3", "HOTEL_SPEECH_TRAFFIC_DB": "/fixture/traffic.sqlite3",
@@ -365,9 +429,11 @@ def launch_admin(docker, image, fixture_dir, targets, names, port, token, django
         "HOTEL_SPEECH_CONTROL_HOST": "runtime-ci", "HOTEL_SPEECH_CONTROL_SWITCH_ENABLED": "1",
         "HOTEL_SPEECH_CONTROL_RECOVERY_ENABLED": "1", "HOTEL_STAGE_WORKERS": json.dumps(names),
     }
+    if restarting:
+        settings["HOTEL_STAGE_RESTART"] = "1"
     if docker.source:
         settings["HOTEL_STAGE_MODE"] = "arm64-server"
-        env_file = fixture_dir.parent / "admin.env"
+        env_file = fixture_dir.parent / ("admin-restart.env" if restarting else "admin.env")
         descriptor = os.open(env_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         with os.fdopen(descriptor, "w", encoding="ascii") as stream:
             stream.writelines(f"{key}={value}\n" for key, value in settings.items())
@@ -378,7 +444,7 @@ def launch_admin(docker, image, fixture_dir, targets, names, port, token, django
         settings.update(GITHUB_ACTIONS="true", RUNNER_ENVIRONMENT="github-hosted")
         options = [item for key in settings for item in ("--env", key)]
         env = docker.env | settings
-    web = docker.create("django", "--network", "host", "--user", f"{os.getuid()}:{os.getgid()}",
+    web = docker.create("restart-web" if restarting else "django", "--network", "host", "--user", f"{os.getuid()}:{os.getgid()}",
         "--memory", str(WEB_MEMORY), "--memory-swap", str(WEB_MEMORY), "--tmpfs", "/tmp:rw,nosuid,nodev,size=32m",
         "--mount", f"type=bind,src={fixture_dir},dst=/fixture", *options, image,
         "python", "scripts/check_staged_speech_admin.py", env=env)
@@ -452,11 +518,16 @@ def rehearse_rollback(docker, image, directory, fixture_dir, traffic_path, journ
     print("Fixed speech rollback preserved the original booking, route and journal stores.", flush=True)
 
 
-def stage_server(docker, socket_path, directory):
+def stage_server(docker, socket_path, directory, *, routed_live=False):
     identity = docker.run("info", "--format", "{{.ID}}")
     require(bool(re.fullmatch(r"[a-zA-Z0-9:_-]{1,128}", identity)), "Expected a native Docker daemon identity.")
     docker.daemon_id = identity
-    before = production_snapshot(docker)
+    take_snapshot = routed_production_snapshot if routed_live else production_snapshot
+    before = take_snapshot(docker)
+    if routed_live:
+        # Keep the 0.95-CPU fixture overlap within the 0.95 CPU left by the pilot.
+        docker.worker_cpu = 250_000_000
+        docker.web_cpu = "0.2"
     try:
         with docker.health.monitor():
             try:
@@ -466,7 +537,7 @@ def stage_server(docker, socket_path, directory):
                     docker.cleanup()
                 finally:
                     require(docker.run("info", "--format", "{{.ID}}") == identity
-                            and production_snapshot(docker) == before,
+                            and take_snapshot(docker) == before,
                             "Production daemon or service identity, start time, or health changed.")
                     require(docker.health.sample(), "Production health failed after staging cleanup.")
     finally:
@@ -478,10 +549,12 @@ def stage_server(docker, socket_path, directory):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--arm64-server", action="store_true")
+    parser.add_argument("--routed-live", action="store_true", help="Validate the routed production topology on ARM64.")
     parser.add_argument("--source")
     args = parser.parse_args(argv)
     try:
         require(args.arm64_server == (args.source is not None), "ARM64 server mode requires --source.")
+        require(not args.routed_live or args.arm64_server, "Routed live checks require ARM64 server mode.")
         source = arm64_source(args.source, Path(__file__).resolve().parents[1]) if args.arm64_server else None
         socket_path = native_socket(os.environ, server=source is not None)
         with TemporaryDirectory(prefix="hotel-ai-runtime-", dir="/tmp" if source else None) as directory:
@@ -489,7 +562,8 @@ def main(argv=None):
             if source is not None:
                 path = docker_path(directory)
                 with cleanup_on_disconnect(), patch.dict(os.environ, {"PATH": path}):
-                    stage_server(DockerFixture(socket_path, source=source, path=path), socket_path, directory)
+                    stage_server(DockerFixture(socket_path, source=source, path=path), socket_path, directory,
+                                 routed_live=args.routed_live)
             else:
                 docker = DockerFixture(socket_path)
                 try:
