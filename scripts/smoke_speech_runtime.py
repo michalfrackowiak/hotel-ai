@@ -30,7 +30,7 @@ from verify_recovery import database_checks, digest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from speech_controller.admission import ResourcePolicy
 from speech_controller.docker_control import ApprovedContainer, ControlUnavailable, DockerControls, private_ipv4
-from speech_controller.endpoint_binding import BoundReadiness, EndpointBinding
+from speech_controller.endpoint_binding import EndpointBinding
 from speech_controller.lifecycle import SwitchRequest
 from speech_controller.journal import JournalUnavailable
 from speech_controller.readiness import ProbeTarget
@@ -236,9 +236,11 @@ def seed_interrupted_request(manifest, token, names):
 
 
 @contextmanager
-def runtime(command, env):
+def runtime(command, env, *, boot_workers=False):
     try:
         subprocess.run([*command, "--check"], check=True, timeout=30, env=env)
+        if boot_workers:
+            command = [*command, "--boot-workers"]
         process = subprocess.Popen(command, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except (OSError, subprocess.SubprocessError):
         raise FixtureError("Native controller preflight failed.") from None
@@ -277,7 +279,7 @@ def stopped_restart_state(traffic_path, journal_path, expected):
     return identities, digest(journal_path)
 
 
-def restart_workers(docker, controls, targets, bindings, final, traffic_path, journal_path):
+def stop_workers_for_restart(docker, controls, bindings, final, traffic_path, journal_path):
     snapshot = stopped_restart_state(traffic_path, journal_path, final["state"])
     routes = {(language, task): name for (language, task), name in final["state"]["routes"]}
     selected = set(routes.values())
@@ -292,17 +294,6 @@ def restart_workers(docker, controls, targets, bindings, final, traffic_path, jo
             "The staged stores changed during worker shutdown.")
     print("Simulated host downtime left all four staged workers stopped and both original stores intact.", flush=True)
 
-    for name in sorted(selected):
-        docker.check_health()
-        require(controls.start(name) == "running", "Could not restart a worker selected by persisted routes.")
-    readiness = BoundReadiness(controls, targets, bindings)
-    for slot, name in sorted(routes.items()):
-        docker.check_health()
-        require(readiness(name, slot), "A selected staged speech endpoint failed bound inference after restart.")
-    for name in sorted(controls.approved_names - selected):
-        require(controls.inspect(name) == "exited", "Restart unexpectedly started an unselected worker.")
-    require(stopped_restart_state(traffic_path, journal_path, final["state"]) == snapshot,
-            "The staged stores changed while restarting workers.")
     return snapshot
 
 
@@ -379,6 +370,15 @@ def stage(docker, socket_path, directory, *, production=None):
     seed_interrupted_request(manifest, token, names)
     endpoint = ("127.0.0.1", port)
     docker.check_health()
+    pending_digests = tuple(digest(path) for path in (traffic_path, journal_path))
+    denied = subprocess.run([*command, "--boot-workers"], timeout=45, env=env,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    require(denied.returncode == 1, "Boot did not refuse an interrupted journal operation.")
+    require(all(controls.inspect(names[role]) == ("running" if role.endswith("-old") else "created")
+                for role in roles), "Refused boot changed a staged speech worker.")
+    require(tuple(digest(path) for path in (traffic_path, journal_path)) == pending_digests,
+            "Refused boot changed the staged traffic store or journal.")
+    print("Worker boot refused the interrupted operation without changing workers.", flush=True)
     with runtime(command, env) as process:
         initial = ready(endpoint, token=token, process=process, check_health=docker.check_health)
         require(initial["blocked"] is True and initial["state"]["revision"] == 0
@@ -404,10 +404,13 @@ def stage(docker, socket_path, directory, *, production=None):
         require(row is not None and json.loads(row[0])["status"] == "reconciled",
                 "Expected a durable reconciliation result for the staged interruption.")
     require(process.returncode == 0, "The staged controller did not shut down normally.")
-    snapshot = restart_workers(docker, controls, targets, bindings, final, traffic_path, journal_path)
-    with runtime(command, env) as restarted:
-        reopened = ready(endpoint, token=token, process=restarted, check_health=docker.check_health)
+    snapshot = stop_workers_for_restart(docker, controls, bindings, final, traffic_path, journal_path)
+    with runtime(command, env, boot_workers=True) as restarted:
+        reopened = ready(endpoint, token=token, timeout=90, process=restarted, check_health=docker.check_health)
         require(reopened == final, "Controller restart changed the revision, routes or pending operations.")
+        for role in roles:
+            expected = "exited" if role.endswith("-old") else "running"
+            require(controls.inspect(names[role]) == expected, "Boot started a worker outside the saved routes.")
         launch_admin(docker, images["web"], fixture_dir, targets, names, port, token, django_secret, restarting=True)
         require(ready(endpoint, token=token, process=restarted, check_health=docker.check_health) == final,
                 "Controller changed after routed speech resumed.")

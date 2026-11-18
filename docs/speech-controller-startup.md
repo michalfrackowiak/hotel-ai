@@ -27,7 +27,9 @@ A persistent sidecar at `<traffic_path>.controller.lock` supplies a lifetime exc
 
 Shutdown waits for active HTTP handlers before releasing ownership. Use the canonical Docker socket path, such as `/run/docker.sock` where `/var/run` is a symlink; aliased socket paths are rejected too.
 
-Startup composes the same pinned controls, resource admission, bound readiness, traffic gate and durable executor used by switching. It does not start/stop workers, reopen traffic, invoke speech inference or reconcile pending operations. The listener remains restricted to `127.0.0.1`; the inventory service remains a separate read-only command.
+Startup composes the same pinned controls, resource admission, bound readiness, traffic gate and durable executor used by switching. Ordinary startup inspects the existing state and approved workers. The listener stays on `127.0.0.1`, and the inventory service remains a separate read-only command.
+
+The optional `--boot-workers` mode checks the saved state and starts missing workers selected by the existing routes. Keep all web writers offline until that mode has completed its probes and the authenticated listener is ready. [Boot gate and service design](speech-pilot-boot-gate.md)
 
 ## Recovery capacity
 
