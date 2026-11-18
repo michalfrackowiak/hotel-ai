@@ -20,6 +20,9 @@ PRODUCTION_INSPECT = (
     '"project":{{json (index .Config.Labels "com.docker.compose.project")}},'
     '"service":{{json (index .Config.Labels "com.docker.compose.service")}}}'
 )
+ROUTED_INSPECT = PRODUCTION_INSPECT.replace("if .State.Health", 'if index .State "Health"')[:-1] + (
+    ',"status":{{json .State.Status}},"cpu":{{json .HostConfig.NanoCpus}}}'
+)
 
 
 class FixtureError(Exception):
@@ -87,6 +90,35 @@ def production_snapshot(docker):
                 and result["running"] is True and result["health"] == "healthy" and result["started"],
                 "All three expected production services must be running and healthy.")
         existing[service] = result
+    return existing
+
+
+def routed_production_snapshot(docker):
+    roles = (
+        ("web", "web", "running", 250_000_000),
+        ("piper", "routed-piper-primary", "running", 400_000_000),
+        ("asr", "routed-vosk-primary", "running", 400_000_000),
+        ("piper_standby", "routed-piper-standby", "created", 400_000_000),
+        ("vosk_standby", "routed-vosk-standby", "created", 400_000_000),
+        ("fixed_piper", "piper", "exited", 1_000_000_000),
+        ("fixed_asr", "asr", "exited", 1_000_000_000),
+    )
+    existing = {}
+    for key, service, status, cpu in roles:
+        name = f"hotel-ai-{service}" if service.startswith("routed-") else f"hotel-ai-{service}-1"
+        result = json.loads(docker.run("inspect", "--type", "container", "--format", ROUTED_INSPECT, name))
+        require(re.fullmatch(r"[a-f0-9]{64}", result["id"])
+                and re.fullmatch(r"sha256:[a-f0-9]{64}", result["image"])
+                and result["project"] == "hotel-ai" and result["service"] == service
+                and result["status"] == status and result["running"] is (status == "running")
+                and result["started"] and result["cpu"] == cpu
+                and (key != "web" or result["health"] == "healthy"),
+                "Expected the production routed pilot and its verified worker limits.")
+        existing[key] = result
+    running_ids = docker.run("ps", "--quiet", "--no-trunc", "--filter",
+                             "label=com.docker.compose.project=hotel-ai").splitlines()
+    require(set(running_ids) == {record["id"] for record in existing.values() if record["running"]},
+            "Unexpected running services in the production project.")
     return existing
 
 

@@ -16,13 +16,14 @@ import wave
 FIXTURE = Path("/fixture")
 DATABASE = FIXTURE / "bookings.sqlite3"
 TRAFFIC = FIXTURE / "traffic.sqlite3"
+EXPECTED_DRAFTS = FIXTURE / "expected-drafts.json"
 SLOTS = (("en", "tts"), ("pl", "tts"), ("en", "stt"), ("pl", "stt"))
 ROLES = {f"{task}-{variant}" for _, task in SLOTS for variant in ("old", "new")}
 FIXTURE_ENV = {
     "DJANGO_ALLOWED_HOSTS", "DJANGO_DB_PATH", "DJANGO_DEBUG", "DJANGO_SECRET_KEY",
     "HOTEL_SPEECH_CONTROL_HOST", "HOTEL_SPEECH_CONTROL_RECOVERY_ENABLED", "HOTEL_SPEECH_CONTROL_SWITCH_ENABLED",
     "HOTEL_SPEECH_CONTROL_TOKEN", "HOTEL_SPEECH_CONTROL_URL", "HOTEL_SPEECH_ROUTE_TARGETS",
-    "HOTEL_SPEECH_TRAFFIC_DB", "HOTEL_STAGE_MODE", "HOTEL_STAGE_WORKERS",
+    "HOTEL_SPEECH_TRAFFIC_DB", "HOTEL_STAGE_MODE", "HOTEL_STAGE_WORKERS", "HOTEL_STAGE_RESTART",
 }
 
 
@@ -35,7 +36,13 @@ def require(condition, message):
         raise FixtureFailure(message)
 
 
-def fixture_configuration():
+def private_file(path):
+    info = path.lstat()
+    return (stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o600
+            and info.st_nlink == 1 and info.st_uid == os.getuid())
+
+
+def fixture_configuration(*, restarting):
     env = os.environ
     mode = env.get("HOTEL_STAGE_MODE")
     if mode == "arm64-server":
@@ -61,10 +68,9 @@ def fixture_configuration():
             "Invalid isolated Django configuration.")
     require(not Path("/var/run/docker.sock").exists() and not env.get("DOCKER_HOST"),
             "Django must have no Docker control connection.")
-    root, traffic = FIXTURE.lstat(), TRAFFIC.lstat()
+    root = FIXTURE.lstat()
     require(stat.S_ISDIR(root.st_mode) and stat.S_IMODE(root.st_mode) == 0o700 and root.st_uid == os.getuid()
-            and stat.S_ISREG(traffic.st_mode) and stat.S_IMODE(traffic.st_mode) == 0o600
-            and traffic.st_nlink == 1 and traffic.st_uid == os.getuid(), "Fixture files must be private.")
+            and private_file(TRAFFIC), "Fixture files must be private.")
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from speech_controller.docker_control import private_ipv4
@@ -89,9 +95,13 @@ def fixture_configuration():
         require(target.task == task and set(target.languages) == {"en", "pl"} and private_ipv4(address)
                 and target.base_url == f"http://{address}:{port}", "Invalid fixture model endpoint.")
 
-    # Exclusively reserve a fresh database before Django can open it.
-    descriptor = os.open(DATABASE, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-    os.close(descriptor)
+    if restarting:
+        require(private_file(DATABASE) and private_file(EXPECTED_DRAFTS),
+                "Restart requires the original private database and expected drafts.")
+    else:
+        # Exclusively reserve a fresh database before Django can open it.
+        descriptor = os.open(DATABASE, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        os.close(descriptor)
     return workers
 
 
@@ -244,8 +254,37 @@ def guest_speech(guest, draft):
     require(Conversation.objects.get(session_id=guest.session.session_key).state == draft, "The booking draft changed.")
 
 
+def check_restarted_drafts(operator, workers):
+    from django.conf import settings
+    from django.test import Client
+    from model_providers.models import SpeechRecoveryRequest, SpeechSwitchRequest
+    from reception.models import Conversation
+
+    staff = Client(enforce_csrf_checks=True)
+    staff.force_login(operator)
+    live_state(staff, 4, {slot: workers[f"{slot[1]}-new"] for slot in SLOTS})
+    expected = json.loads(EXPECTED_DRAFTS.read_text(encoding="utf-8"))
+    require(len(expected) == 2 and {draft["language"] for draft in expected.values()} == {"en", "pl"}
+            and dict(Conversation.objects.values_list("session_id", "state")) == expected,
+            "The original bilingual drafts did not survive the restart.")
+    for session_id, draft in expected.items():
+        guest = Client(enforce_csrf_checks=True)
+        guest.cookies[settings.SESSION_COOKIE_NAME] = session_id
+        require(guest.get("/", {"lang": draft["language"]}).status_code == 200,
+                "Reception could not reopen the original session.")
+        guest_speech(guest, draft)
+    recovered = list(SpeechRecoveryRequest.objects.values_list("completed", "outcome__status"))
+    switches = list(SpeechSwitchRequest.objects.values_list("closed", "outcome__status", "outcome__state__revision"))
+    require(recovered == [(True, "reconciled")] and sorted(switches) == [(True, "succeeded", r) for r in range(1, 5)],
+            "Restart changed the staged admin audit history.")
+    print("Reopened Django verified live admin status, bilingual Piper/Vosk, drafts and audit history.", flush=True)
+
+
 def main():
-    workers = fixture_configuration()
+    restart_value = os.environ.get("HOTEL_STAGE_RESTART")
+    require(restart_value in (None, "1"), "Unexpected fixture restart flag.")
+    restarting = restart_value == "1"
+    workers = fixture_configuration(restarting=restarting)
     os.environ["DJANGO_SETTINGS_MODULE"] = "config.settings"
     import django
 
@@ -253,6 +292,8 @@ def main():
     from django.contrib.auth import get_user_model
     from django.contrib.auth.models import Permission
     from django.core.management import call_command
+    from django.db import connection
+    from django.db.migrations.executor import MigrationExecutor
     from django.test import Client
     from django.test.utils import setup_test_environment
     from bookings.models import Booking
@@ -260,8 +301,16 @@ def main():
     from model_providers.models import SpeechSelection, SpeechSwitchRequest
 
     configuration()
-    call_command("migrate", interactive=False, verbosity=0)
     setup_test_environment()
+    if restarting:
+        migrations = MigrationExecutor(connection)
+        require(not migrations.migration_plan(migrations.loader.graph.leaf_nodes()), "Restart found pending migrations.")
+        operator = get_user_model().objects.get(username="runtime-fixture-operator")
+        check_restarted_drafts(operator, workers)
+        require(not Booking.objects.exists(), "The restart created a booking.")
+        return
+
+    call_command("migrate", interactive=False, verbosity=0)
     operator = get_user_model().objects.create_user("runtime-fixture-operator", is_staff=True)
     operator.user_permissions.add(*(Permission.objects.get(content_type__app_label="model_providers", codename=name)
         for name in ("view_speechselection", "view_speechdeployment", "view_speechprovider", "view_speechmodel",
@@ -289,6 +338,9 @@ def main():
     require(SpeechSwitchRequest.objects.filter(closed=True).count() == 4
             and plan == list(SpeechSelection.objects.values_list("language", "task", "deployment_id"))
             and not Booking.objects.exists(), "Unexpected audit, planned assignment or booking change.")
+    descriptor = os.open(EXPECTED_DRAFTS, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+        json.dump({guest.session.session_key: draft for guest, draft in guests}, stream)
     print("Routed English and Polish Piper/Vosk passed during split routes and after all swaps. Booking drafts preserved.")
 
 
