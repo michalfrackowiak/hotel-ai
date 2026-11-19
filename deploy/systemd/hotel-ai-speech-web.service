@@ -1,0 +1,23 @@
+[Unit]
+Description=Hotel AI routed booking web container
+BindsTo=docker.service hotel-ai-speech-pilot.service
+After=docker.service hotel-ai-speech-pilot.service
+PartOf=hotel-ai-speech-pilot.service
+RequiresMountsFor=/opt/hotel-ai-speech/boot /var/lib/hotel-ai-speech
+
+[Service]
+Type=exec
+WorkingDirectory=/opt/hotel-ai-speech/boot
+UMask=0077
+RuntimeDirectory=hotel-ai-speech-web
+RuntimeDirectoryMode=0700
+NoNewPrivileges=yes
+ExecStart=/usr/bin/python3 -B -m speech_controller.pilot_service web-run /var/lib/hotel-ai-speech/operator/web.json
+ExecStop=/usr/bin/python3 -B -m speech_controller.pilot_service web-stop /var/lib/hotel-ai-speech/operator/web.json
+ExecStopPost=/usr/bin/python3 -B -m speech_controller.pilot_service web-stop /var/lib/hotel-ai-speech/operator/web.json
+Restart=no
+TimeoutStartSec=30
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

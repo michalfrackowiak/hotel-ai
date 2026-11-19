@@ -1,0 +1,4 @@
+# Use last for a web container that will be started and stopped by systemd.
+services:
+  web:
+    restart: "no"
