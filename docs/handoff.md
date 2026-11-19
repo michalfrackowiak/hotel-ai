@@ -270,4 +270,4 @@ Development tooling shipped in PR [#1](https://github.com/michalfrackowiak/hotel
 
 ## Next action
 
-Keep the persistent pilot under observation. In a separate staffed window, run the production reboot gate only after confirming operator availability and the current booking backup. Keep provider-switch and recovery actions disabled until they pass their own production review and rehearsal.
+Complete the remaining version 0.4 acceptance checks: physical microphone evaluation on the target MacBook, sustained mixed-load capacity, and a full replacement-host recovery drill. The production reboot evidence covers service startup ordering only. Keep provider-switch and recovery actions disabled until their own production review and rehearsal.
