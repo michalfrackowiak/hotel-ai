@@ -10,7 +10,15 @@ The controller unit runs the boot gate as the dedicated account with process-sco
 - Record the exact daemon, stopped container and image IDs and both mounts in root-only `/var/lib/hotel-ai-speech/operator/web.json`. Its fields are `daemon_id`, `container_id`, `image_id`, `booking_volume` and `traffic_dir`. Update the approval during a staffed change whenever the web container is recreated.
 - Pause guest traffic and stop the existing web writer and transient controller before starting these units. Check the expected bilingual routes, loopback health, and private admin access before reopening traffic.
 
-Both units use explicit operator restart after failure. Preserve uncertain controller state and use the existing recovery procedure before restarting web. The unit stops its approved web container and leaves speech worker state for review. The live pilot stays on the transient controller until a separate staffed installation. [Production rollout](speech-production-rollout.md)
+Both units use explicit operator restart after failure. Preserve uncertain controller state and use the existing recovery procedure before restarting web. The unit stops its approved web container and leaves speech worker state for review. The web unit is enabled at boot and starts the controller dependency; the controller boot gate starts only workers selected by the saved routes. [Production rollout](speech-production-rollout.md)
+
+## Staffed production installation
+
+The persistent units were installed on the ARM64 production host on 19 November 2026. Guest traffic was paused at Nginx while the fixed web writer stopped. A fresh, exclusive SQLite backup was taken from the existing booking volume and passed integrity, foreign-key, migration, bilingual chat, fictional booking, and idempotent replay checks. The pinned rollback image read the migrated disposable copy successfully. The checksum-verified backup is retained in the root-only operator directory `/var/lib/hotel-ai-speech/operator/systemd-install.8uaIqIlg/backup` on the server.
+
+The existing routed container was recreated from the pinned candidate image with Docker restart disabled. Its full daemon and container identities, image, original booking volume, and traffic mount were saved in the root-only web approval file. `hotel-ai-speech-web.service` is enabled; systemd started the controller, which passed its authenticated status and saved-route gate before systemd started web. The web container is healthy and the two primary routed workers are running; standby and legacy fixed workers remain stopped.
+
+Live verification passed: English and Polish Piper WAV generation, English and Polish Vosk silence requests, loopback health and admin login, public English and Polish reception pages, public health, and public `/admin/` rejection. No production host reboot was performed; actual reboot and controller-loss ordering were verified in the disposable Debian systemd rehearsal above. Provider switching and recovery actions remain disabled.
 
 ## Disposable reboot check
 

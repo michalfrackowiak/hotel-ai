@@ -2,7 +2,11 @@
 
 ## Latest milestone
 
-The persistent systemd units gate the pinned web container on authenticated route readiness, disable independent Docker web restarts, and stop the web writer on controller loss. A checksum-verified Debian 12 QEMU guest changed boot IDs, stopped web before its controller, and started it after authenticated readiness. The fault checks stopped web on controller exit and denied web startup after a blocked response. Six helper and six Compose checks passed with independent mutation review. The VM used fictional services for the systemd checks. The prior ARM64 drill verified real speech boot. Next action is a staffed production installation with a tested rollback and live verification. [Units and reboot evidence](speech-pilot-systemd.md)
+Persistent systemd startup is installed on the ARM64 production host. The web unit is enabled and the controller passed authenticated readiness before web started. A fresh booking backup and disposable rollback-image restore passed. Live English and Polish Piper/Vosk, health and reception checks passed; public `/admin/` remains 404 and loopback admin login returns 200. The new web container uses the pinned image, original booking volume and traffic mount with Docker restart disabled. The standby and legacy workers are stopped, and provider actions remain disabled. The separate Debian 12 QEMU reboot rehearsal verified boot ordering and controller-loss behavior; the production host itself was not rebooted. [Installation and verification evidence](speech-pilot-systemd.md#staffed-production-installation)
+
+The operational cutover first encountered an unsupported Docker Compose `create --no-deps` option and automatically restored the fixed stack. The fixed stack passed bilingual Piper/Vosk smoke checks before the corrected staffed cutover proceeded. Both fresh rollback checks passed, and production is currently on the persistent routed stack. The verified booking backup is retained under the server's root-only operator path recorded in the installation evidence.
+
+Next action: keep the pilot under observation and, in a separate staffed window, run the production reboot gate only after confirming operator availability and the current backup. Do not enable provider-switch or recovery actions until their own production review and rehearsal.
 
 The opt-in worker boot gate rechecks the original route and journal identities, durable agreement, open admission without claims, worker approvals and capacity before opening the controller listener. The checksum-verified ARM64 fixture confirmed refusal on an interrupted operation with unchanged workers and stores, then restored revision 4, selected workers, bilingual drafts and audit history. All 206 production health samples passed and production identities matched. Independent review verified retained-claim and journal-replacement regressions. Next action is implementing the persistent systemd controller and web ordering and proving it with an actual reboot of a disposable host. [Boot gate, verification and service design](speech-pilot-boot-gate.md)
 
@@ -266,8 +270,4 @@ Development tooling shipped in PR [#1](https://github.com/michalfrackowiak/hotel
 
 ## Next action
 
-Set up the live confirmation providers, assign reception staff access to the handover inbox, and set the phone transfer destination. Verify email, SMS, and attended handovers with controlled test recipients.
-
-Open the [public reception](https://92.5.19.10/) in Chrome on the MacBook and make a voice booking in each language with its microphone and speakers. Use the [SSH tunnel](server-deployment.md#connect-from-the-macbook) for Django admin.
-
-Route a test number through Twilio and verify live calls in both languages when a number or SIP domain, a public HTTPS origin, and the carrier route are available. Add the Twilio Auth Token through the ignored `.env` file. The manual checks in [alpha verification](alpha-verification.md) remain pending the target microphone, hosted provider credentials, or shared calendar. Booking-platform integration depends on which platform the hotel uses.
+Keep the persistent pilot under observation. In a separate staffed window, run the production reboot gate only after confirming operator availability and the current booking backup. Keep provider-switch and recovery actions disabled until they pass their own production review and rehearsal.

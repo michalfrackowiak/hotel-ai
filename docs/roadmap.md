@@ -30,13 +30,13 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 - [x] 0.5 persistent startup rehearsal: order Django after authenticated controller readiness and verify reboot and failure ordering in a disposable systemd host. See [systemd rehearsal](speech-pilot-systemd.md).
 
-- [ ] 0.5 persistent startup installation: install the verified units and transfer ownership of the pinned web container during a staffed production window. Verify live bilingual speech and private admin status.
+- [x] 0.5 persistent startup installation: install the verified units and transfer ownership of the pinned web container during a staffed production window. Verify live bilingual speech and private admin status. The 19 November 2026 installation retained and verified a fresh SQLite backup, passed authenticated controller readiness, English/Polish Piper and Vosk checks, and kept `/admin/` private. See [production installation evidence](speech-pilot-systemd.md#staffed-production-installation).
 
 - [x] 0.5 private admin cutover rehearsal: verify loopback Gunicorn, SSH-forwarded login and CSRF, public admin rejection and cleanup on the ARM64 server. Record the tested worker overlap budget. See [rehearsal evidence](speech-private-cutover-check.md).
 
-- [x] 0.5 rollout rehearsal: document private admin connectivity and the cutover sequence, and exercise a verified booking backup and fixed-endpoint rollback on hosted Linux. See [production rollout guide](speech-production-rollout.md). Production activation remains pending.
+- [x] 0.5 rollout rehearsal: document private admin connectivity and the cutover sequence, and exercise a verified booking backup and fixed-endpoint rollback on hosted Linux. See [production rollout guide](speech-production-rollout.md). The production activation and persistent startup installation are complete.
 
-- [x] 0.5 ARM64 runtime staging: recovered and switched all four speech slots on the two-core server with cached Piper/Vosk images, preserved both booking drafts and passed 115 production health samples. See [server staging results](speech-runtime-arm64-staging.md). Production activation remains pending.
+- [x] 0.5 ARM64 runtime staging: recovered and switched all four speech slots on the two-core server with cached Piper/Vosk images, preserved both booking drafts and passed 115 production health samples. See [server staging results](speech-runtime-arm64-staging.md). Production activation is now complete; see [installation evidence](speech-pilot-systemd.md#staffed-production-installation).
 
 - [x] 0.5 hosted runtime staging: real Piper/Vosk deployments, native private controller startup, admin recovery and all four switch slots, and bilingual Django speech checks. See [staging scope](speech-runtime-staging.md).
 
