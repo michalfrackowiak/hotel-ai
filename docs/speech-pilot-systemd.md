@@ -18,9 +18,17 @@ The persistent units were installed on the ARM64 production host on 19 November 
 
 The existing routed container was recreated from the pinned candidate image with Docker restart disabled. Its full daemon and container identities, image, original booking volume, and traffic mount were saved in the root-only web approval file. `hotel-ai-speech-web.service` is enabled; systemd started the controller, which passed its authenticated status and saved-route gate before systemd started web. The web container is healthy and the two primary routed workers are running; standby and legacy fixed workers remain stopped.
 
-Live verification passed: English and Polish Piper WAV generation, English and Polish Vosk silence requests, loopback health and admin login, public English and Polish reception pages, public health, and public `/admin/` rejection. No production host reboot was performed; actual reboot and controller-loss ordering were verified in the disposable Debian systemd rehearsal above. Provider switching and recovery actions remain disabled.
+Live verification passed: English and Polish Piper WAV generation, English and Polish Vosk silence requests, loopback health and admin login, public English and Polish reception pages, public health, and public `/admin/` rejection. Provider switching and recovery actions remain disabled.
 
 Public HTTPS admin access was enabled after this installation. The current Nginx route is documented in the [server deployment guide](server-deployment.md); the earlier 404 above records the successful install's pre-change exposure boundary.
+
+## Production reboot check
+
+The ARM64 production host completed its first reboot with persistent startup on 19 November 2026. The kernel boot ID changed from `51b89ac7-9c11-4a1e-9fc5-60babf1541cf` to `bdab942b-23d1-403c-a100-420ec65b9aef`. A fresh online SQLite backup at `/var/lib/hotel-ai-speech/operator/pre-reboot.Bvb2nexw/backup` passed integrity, foreign-key, migration, bilingual chat, fictional booking and idempotent replay checks; its checksum matched after restore validation by both pinned web images.
+
+The system journal shows the controller started first and passed `Authenticated controller readiness verified.` before the web unit started. Django found no migrations to apply, bound to loopback, and became healthy. The routed Piper/Vosk primaries started; both standby containers and both legacy fixed workers remained stopped. The public site briefly returned 502 while Django initialized, then health, reception, admin login and stylesheet recovered. Post-boot bilingual Piper synthesis and Vosk silence smokes passed; the booking API still returned 404. Nginx syntax validation passed. The public HTTPS admin route was already enabled and remained reachable after reboot.
+
+This verifies one real production boot path. It does not establish recovery from disk loss or a replacement host. Provider switching and recovery actions remain disabled pending their own review.
 
 ## Disposable reboot check
 
