@@ -7,7 +7,7 @@ import secrets
 import socket
 import subprocess
 from time import monotonic, sleep
-from urllib.error import HTTPError, URLError
+from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPCookieProcessor, ProxyHandler, Request, build_opener
 
@@ -46,14 +46,13 @@ def check_public(address, port):
     except (ConnectionRefusedError, TimeoutError):
         pass
     client = build_opener(ProxyHandler({}))
-    try:
-        with client.open(f"https://{address}/admin/", timeout=5):
-            raise RuntimeError("The public HTTPS endpoint exposed admin.")
-    except HTTPError as error:
-        with error:
-            if error.code != 404 or error.url != f"https://{address}/admin/":
-                raise RuntimeError("The public HTTPS admin route did not return 404.") from None
-    print("Direct staging port was unreachable and public HTTPS admin returned 404.", flush=True)
+    with client.open(f"https://{address}/admin/login/", timeout=5) as response:
+        if response.status != 200 or b"name=\"username\"" not in response.read(65537):
+            raise RuntimeError("The public HTTPS admin login is not available.")
+    with client.open(f"https://{address}/static/admin/css/base.css", timeout=5) as response:
+        if response.status != 200:
+            raise RuntimeError("The public HTTPS admin stylesheet is not available.")
+    print("Direct staging port was unreachable and public HTTPS admin login is available.", flush=True)
 
 
 def main():

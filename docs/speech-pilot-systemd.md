@@ -20,6 +20,8 @@ The existing routed container was recreated from the pinned candidate image with
 
 Live verification passed: English and Polish Piper WAV generation, English and Polish Vosk silence requests, loopback health and admin login, public English and Polish reception pages, public health, and public `/admin/` rejection. No production host reboot was performed; actual reboot and controller-loss ordering were verified in the disposable Debian systemd rehearsal above. Provider switching and recovery actions remain disabled.
 
+Public HTTPS admin access was enabled after this installation. The current Nginx route is documented in the [server deployment guide](server-deployment.md); the earlier 404 above records the successful install's pre-change exposure boundary.
+
 ## Disposable reboot check
 
 Create a fresh Debian systemd VM with QEMU DMI product name `hotel-ai-systemd-rehearsal`. Add a root-owned mode-0600 file `/etc/hotel-ai-systemd-rehearsal` containing that same name. Copy the reviewed source to a guest directory that persists across reboots. The check installs the real units and service helpers and uses fictional Docker and controller processes. Run it only inside the disposable guest.
