@@ -95,7 +95,9 @@ PY
 test "$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/app/data"}}{{.Name}}{{end}}{{end}}' "$old_web")" = "$volume"
 test "$(docker ps -q --filter "volume=$volume" --no-trunc)" = "$old_web"
 production_health
-test "$(public_status /admin/)" = 404
+test "$(public_status /admin/login/)" = 200
+test "$(public_status /static/admin/css/base.css)" = 200
+test "$(public_status /api/availability/)" = 404
 cp -p -- "$snippet" "$work/reception.inc"
 printf 'location / { return 503; }\n' > "$work/maintenance.inc"
 cat > "$work/no-migrations.yaml" <<'YAML'
@@ -165,7 +167,9 @@ rollback_cutover() {
         production_health || exit 2
         python3 "$release/scripts/smoke_piper.py" http://127.0.0.1:8080 --asr || exit 2
         swap_snippet "$work/reception.inc" || exit 2
-        if ! wait_for_public_status /healthz/ 200 || ! wait_for_public_status /admin/ 404; then
+        if ! wait_for_public_status /healthz/ 200 || ! wait_for_public_status /admin/login/ 200 \
+            || ! wait_for_public_status /static/admin/css/base.css 200 \
+            || ! wait_for_public_status /api/availability/ 404; then
             swap_snippet "$work/maintenance.inc" || true
             exit 2
         fi
@@ -289,7 +293,9 @@ python3 "$release/scripts/smoke_piper.py" http://127.0.0.1:8080 --asr
 test "$(curl --noproxy '*' -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/admin/login/)" = 200
 swap_snippet "$work/reception.inc"
 wait_for_public_status /healthz/ 200
-wait_for_public_status /admin/ 404
+wait_for_public_status /admin/login/ 200
+wait_for_public_status /static/admin/css/base.css 200
+wait_for_public_status /api/availability/ 404
 wait_for_public_status '/?lang=en' 200
 wait_for_public_status '/?lang=pl' 200
 trap - EXIT HUP INT TERM

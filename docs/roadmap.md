@@ -30,7 +30,7 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 - [x] 0.5 persistent startup rehearsal: order Django after authenticated controller readiness and verify reboot and failure ordering in a disposable systemd host. See [systemd rehearsal](speech-pilot-systemd.md).
 
-- [x] 0.5 persistent startup installation: install the verified units and transfer ownership of the pinned web container during a staffed production window. Verify live bilingual speech and private admin status. The 19 November 2026 installation retained and verified a fresh SQLite backup, passed authenticated controller readiness, English/Polish Piper and Vosk checks, and kept `/admin/` private. See [production installation evidence](speech-pilot-systemd.md#staffed-production-installation).
+- [x] 0.5 persistent startup installation: install the verified units and transfer ownership of the pinned web container during a staffed production window. Verify live bilingual speech and authenticated admin access. The 19 November 2026 installation retained and verified a fresh SQLite backup, passed authenticated controller readiness, and checked English/Polish Piper and Vosk. Public HTTPS admin routing was enabled afterward. See [production installation evidence](speech-pilot-systemd.md#staffed-production-installation).
 
 - [x] 0.5 private admin cutover rehearsal: verify loopback Gunicorn, SSH-forwarded login and CSRF, public admin rejection and cleanup on the ARM64 server. Record the tested worker overlap budget. See [rehearsal evidence](speech-private-cutover-check.md).
 

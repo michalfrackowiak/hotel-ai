@@ -39,11 +39,11 @@ ssh -i ~/.ssh/your-server-key -o ExitOnForwardFailure=yes -N \
   -L 127.0.0.1:8080:127.0.0.1:8080 ubuntu@your-server
 ```
 
-Leave the terminal open and visit [reception](http://127.0.0.1:8080/) or [Django admin](http://127.0.0.1:8080/admin/). If port 8080 is busy on the Mac, change the first port in `-L` to `18080` and open `http://127.0.0.1:18080/`. If the server uses a different `HOTEL_PORT`, use it in server smoke checks and for the last port in `-L`. Django listens only on loopback, and Piper listens only on its internal Docker network.
+Leave the terminal open and visit [reception](http://127.0.0.1:8080/) or [Django admin](http://127.0.0.1:8080/admin/). If port 8080 is busy on the Mac, change the first port in `-L` to `18080` and open `http://127.0.0.1:18080/`. If the server uses a different `HOTEL_PORT`, use it in server smoke checks and for the last port in `-L`. Django listens only on loopback, and Piper listens only on its internal Docker network. The production HTTPS site also exposes the Django login at `/admin/login/`.
 
 ## Publish the reception
 
-The Nginx configuration exposes the guest page and its chat and audio routes. Django admin, the booking API, and phone callbacks are available only through their private or separately configured listeners. Browsers require a secure context for microphone access. Use the SSH tunnel for voice booking while the HTTP setup is in progress, and use fictional guest details in the HTTP demo. [Browser secure contexts](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Secure_Contexts)
+The Nginx configuration exposes the guest page, chat and audio routes, and the authentication-protected Django admin over HTTPS. It limits login requests to five per minute per client address (with a burst allowance) and serves admin stylesheets only through the HTTPS configuration. The booking API and phone callbacks remain behind their private or separately configured listeners. The bootstrap HTTP configuration does not expose the admin login. Browsers require a secure context for microphone access. Use the SSH tunnel for voice booking while the HTTPS setup is in progress, and use fictional guest details in the HTTP demo. [Browser secure contexts](https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Secure_Contexts)
 
 Set `DJANGO_ALLOWED_HOSTS=92.5.19.10` in the server `.env`, preserving any existing entries. Use your public IP in the Nginx `server_name`, the HTTPS redirect, and `DJANGO_ALLOWED_HOSTS` for another deployment. Recreate the Django container to apply the environment change. The [guest route configuration](../deploy/nginx/hotel-ai-reception.inc) points to loopback port 8080. Update the upstream URLs if your stack uses a different `HOTEL_PORT`.
 
@@ -78,6 +78,7 @@ Set `DJANGO_TRUST_PROXY_PROTO=1` in the server `.env` for HTTPS and recreate the
 ```sh
 docker compose -p hotel-ai -f compose.yaml -f compose.server.yaml -f compose.piper.yaml -f compose.asr.yaml up --build -d --wait
 sudo install -m 0644 deploy/nginx/hotel-ai.conf /etc/nginx/conf.d/hotel-ai.conf
+sudo install -m 0644 deploy/nginx/hotel-ai-admin.inc /etc/nginx/snippets/hotel-ai-admin.inc
 sudo nginx -t
 sudo systemctl reload nginx
 ```
@@ -89,13 +90,14 @@ Keep Certbot's renewal timer active. Save the following deploy hook at `/etc/let
 /usr/sbin/nginx -t && /usr/bin/systemctl reload nginx
 ```
 
-Verify from a separate machine. Expect `308` for the HTTP entry point, `200` for the reception and JavaScript over HTTPS, and `404` for the admin and booking API over HTTPS. The speech smoke exercises the HTTPS session and checks that Piper returns WAV audio in both languages.
+Verify from a separate machine. Expect `308` for the HTTP entry point, `200` for the reception, JavaScript, admin login and admin stylesheet over HTTPS, and `404` for the booking API. The speech smoke exercises the HTTPS session and checks that Piper returns WAV audio in both languages.
 
 ```sh
 curl -sS -o /dev/null -w '%{http_code}\n' http://92.5.19.10/
 curl -fsS 'https://92.5.19.10/?lang=pl'
 curl -fsS -o /dev/null https://92.5.19.10/static/reception/chat.js
-curl -sS -o /dev/null -w '%{http_code}\n' https://92.5.19.10/admin/
+curl -fsS -o /dev/null https://92.5.19.10/admin/login/
+curl -fsS -o /dev/null https://92.5.19.10/static/admin/css/base.css
 curl -sS -o /dev/null -w '%{http_code}\n' https://92.5.19.10/api/availability/
 python3 scripts/smoke_piper.py https://92.5.19.10 --asr
 ```
