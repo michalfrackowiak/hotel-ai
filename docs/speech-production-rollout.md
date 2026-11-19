@@ -36,6 +36,6 @@ Back up route and journal files after all their writers exit, and keep the backu
 
 ## Rehearsal
 
-The hosted fixture exercises a booking backup and a new Django process configured for fixed speech after the controller stops. The [ARM64 listener rehearsal](speech-private-cutover-check.md) separately checks a real SSH-forwarded Django login and the proposed web process UID. The remaining production checks apply to the final listener, private controller account, shared traffic directory and approved worker identities during cutover.
+The hosted fixture exercised a booking backup and a new Django process configured for fixed speech after the controller stopped. The [ARM64 listener rehearsal](speech-private-cutover-check.md) separately checked a real SSH-forwarded Django login and the proposed web process UID. The staffed installation verified the final listener, private controller account, shared traffic directory and approved worker identities; see the [installation evidence](speech-pilot-systemd.md#staffed-production-installation).
 
-The staffed production pilot has been activated. The live evidence records the backup, health and speech checks and the controller restart boundary. [Live cutover evidence](speech-pilot-live.md)
+The staffed production pilot has been activated and persistent systemd startup is installed. The live evidence records the verified backup, bilingual health and speech checks, and the explicit restart/recovery boundary. [Live cutover evidence](speech-pilot-live.md) · [Persistent startup installation](speech-pilot-systemd.md#staffed-production-installation)
