@@ -178,6 +178,13 @@ class RoutedComposeTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("HOTEL_WEB_IMAGE", result.stderr)
 
+    def test_systemd_disables_only_web_auto_restart(self):
+        files = (*ROUTED_FILES, IMAGE_FILE)
+        original = self.render("*", files=files)
+        self.assertEqual(original["services"]["web"]["restart"], "unless-stopped")
+        original["services"]["web"]["restart"] = "no"
+        self.assertEqual(self.render("*", files=(*files, "compose.speech-systemd.yaml")), original)
+
 
 if __name__ == "__main__":
     unittest.main()

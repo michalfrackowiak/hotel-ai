@@ -13,7 +13,7 @@ The live pilot uses a transient service today. Install and verify the boot gate 
 3. Make the controller readiness check a dependency of the booking web service. Disable independent Docker auto-start of Django as part of the same change. On shutdown or controller failure, the web service must stop accepting requests before workers or controller state are changed. Keep the existing loopback listeners and SSH-only admin access.
 4. Rehearse a real reboot on a disposable host. Verify that clean persisted state starts only referenced workers and reaches guest health, and that uncertain state leaves the booking writer stopped. Preserve the stores for inspection in the blocked case.
 
-The boot command expects Django and other writers to be offline until readiness. Keep the live pilot on the existing manual restart procedure until systemd ordering and the disposable reboot pass. [Production restart boundary](speech-pilot-live.md) · [Stopped-process rehearsal](speech-pilot-restart.md)
+The boot command expects Django and other writers to be offline until readiness. The systemd units passed the disposable reboot rehearsal. Keep the live pilot on the existing manual restart procedure until the staffed installation. [Persistent systemd units and reboot evidence](speech-pilot-systemd.md) · [Production restart boundary](speech-pilot-live.md)
 
 ## Verification
 

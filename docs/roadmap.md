@@ -28,7 +28,9 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 - [x] 0.5 worker boot gate: refuse uncertain state before worker startup and start only the workers selected by the saved routes. Verify the opt-in command with disposable models. See [boot gate and service design](speech-pilot-boot-gate.md).
 
-- [ ] 0.5 persistent startup: order Django after authenticated controller readiness and rehearse a full reboot in a disposable systemd host before production installation.
+- [x] 0.5 persistent startup rehearsal: order Django after authenticated controller readiness and verify reboot and failure ordering in a disposable systemd host. See [systemd rehearsal](speech-pilot-systemd.md).
+
+- [ ] 0.5 persistent startup installation: install the verified units and transfer ownership of the pinned web container during a staffed production window. Verify live bilingual speech and private admin status.
 
 - [x] 0.5 private admin cutover rehearsal: verify loopback Gunicorn, SSH-forwarded login and CSRF, public admin rejection and cleanup on the ARM64 server. Record the tested worker overlap budget. See [rehearsal evidence](speech-private-cutover-check.md).
 
