@@ -82,7 +82,7 @@ These are candidates, not a claim that every combination meets the hardware budg
 
 The current admin edits prompt text and voice segments; conversation transitions remain in Python. Extend this into configuration over approved booking actions.
 
-- [ ] Inventory every state: language/entry, arrival, departure, guests, room, confirmation, delivery method, email, phone, delivery pending, completed, cancelled, unavailable/error/retry, timeout and receptionist handover. Include phone-only and older-draft compatibility paths.
+- [x] Inventory the booking states and outcomes across English and Polish text chat, browser voice and inbound phone, including retries, timeouts, reception handover and older drafts. See the [booking scenario flow inventory](scenario-flow-inventory.md).
 - [ ] Add `Scenario`, immutable `ScenarioVersion`, `ScenarioStep` and `ScenarioTransition` records. Provide separate EN/PL voice and chat settings, optional shared defaults, explicit inheritance indicators, draft/published versions and rollback.
 - [ ] Edit wording, validated placeholders, answer buttons, expected parser fields, retry limits, validation messages, allowed branches, timeout actions, and delivery/handover behavior. Voice additionally configures ordered segments, pause duration, whether to listen during a pause, silence windows and interruption policy. Chat configures written content and button labels independently.
 - [ ] Permit adding/reordering optional steps and routing through approved actions. Keep availability, price calculation, required consent and atomic booking creation as enforced server invariants. Forbid arbitrary Python, SQL or unvalidated external actions in the editor.
