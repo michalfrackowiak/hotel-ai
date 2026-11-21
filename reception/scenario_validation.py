@@ -1,8 +1,9 @@
-"""Validate a persisted, standalone scenario graph without sealing or running it.
+"""Validate standalone persisted graphs without publishing or executing them.
 
-Only approved booking events with known destinations are accepted. Inheritance,
-step configuration, and transitions back to earlier steps require separate
-validation contracts before they can be used in a publication candidate.
+The outcome contract covers the new web booking flow in one language and
+channel. Language selection across scopes, older drafts, and inbound phone
+continue to belong to the existing engines. These checks do not implement
+dispatch or attest that a candidate is safe to publish.
 """
 
 from collections import defaultdict
@@ -12,9 +13,15 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 
 from .models import ScenarioStep, ScenarioTransition
+from .scenario_step_settings import validate_step_configuration
 
 
 TERMINAL_STEPS = frozenset({"completed", "cancelled", "handover"})
+CONTACT_CHANGES = {
+    "change_delivery": "delivery",
+    "choose_email": "email",
+    "choose_sms": "phone",
+}
 APPROVED_TRANSITIONS = {
     "welcome": {"continue": "check_in", "timeout": "check_in", "arrival": "check_out", "stay_dates": "guests"},
     "check_in": {
@@ -25,17 +32,33 @@ APPROVED_TRANSITIONS = {
         "timeout": "handover",
     },
     "check_out": {"departure": "guests", "retry": "check_out"},
-    "guests": {"available": "room", "retry": "guests"},
+    "guests": {
+        "available": "room",
+        "retry": "guests",
+        "unavailable": "check_in",
+        "offer_changed": "check_in",
+    },
     "room": {"selected": "confirm", "retry": "room"},
     "confirm": {"approve_quote": "delivery", "decline_quote": "cancelled", "retry": "confirm"},
     "delivery": {"email": "email", "sms": "phone", "retry": "delivery"},
-    "email": {"valid_contact": "contact_confirm", "retry": "email", "reception": "handover"},
-    "phone": {"valid_contact": "contact_confirm", "retry": "phone", "reception": "handover"},
+    "email": {
+        **CONTACT_CHANGES, "valid_contact": "contact_confirm", "retry": "email", "reception": "handover",
+    },
+    "phone": {
+        **CONTACT_CHANGES, "valid_contact": "contact_confirm", "retry": "phone", "reception": "handover",
+    },
     "contact_confirm": {
+        **CONTACT_CHANGES,
         "approve_contact": "delivery_pending",
         "approve_contact_without_wait": "completed",
+        "edit_email": "email",
+        "edit_phone": "phone",
+        "invalid_email": "email",
+        "invalid_phone": "phone",
+        "replace_contact": "contact_confirm",
         "retry": "contact_confirm",
         "reception": "handover",
+        "offer_changed": "check_in",
     },
     "delivery_pending": {
         "dispatch_accepted": "completed",
@@ -51,6 +74,20 @@ CONTACT_APPROVAL = frozenset({
     ("contact_confirm", "approve_contact"), ("contact_confirm", "approve_contact_without_wait"),
 })
 
+# The existing actions return a new draft on an unavailable or changed offer.
+# Contact recovery clears the prior candidate, or requires readback of its
+# replacement. These named events may revisit a step; arbitrary back edges
+# still fail validation, and the checks below include recovery in reachability.
+RECOVERY_EVENTS = {
+    "guests": frozenset({"unavailable", "offer_changed"}),
+    "email": frozenset(CONTACT_CHANGES),
+    "phone": frozenset(CONTACT_CHANGES),
+    "contact_confirm": frozenset({
+        *CONTACT_CHANGES, "edit_email", "edit_phone", "invalid_email", "invalid_phone", "replace_contact",
+        "offer_changed",
+    }),
+}
+
 
 def _reachable(entry, outgoing, *, excluded=frozenset()):
     visited = set()
@@ -65,23 +102,33 @@ def _reachable(entry, outgoing, *, excluded=frozenset()):
 
 
 def validate_scenario_graph(version):
-    """Raise ValidationError for an unsupported or unsafe persisted candidate.
+    """Preview the structure of a saved graph, including incomplete drafts."""
+    _validate_scenario(version, require_outcomes=False)
 
-    A future publisher must call this under the lock or transaction protecting
-    the graph snapshot. A successful result does not authorize execution.
-    """
+
+def validate_scenario_outcomes(version):
+    """Require explicit routes for all supported, in-scope web booking outcomes."""
+    _validate_scenario(version, require_outcomes=True)
+
+
+def _validate_scenario(version, *, require_outcomes):
+    # A future caller using this as a publication prerequisite has to protect
+    # the entire graph snapshot against concurrent changes.
     if version._state.adding or not version._state.db:
         raise ValidationError("Save the scenario version before validating its graph.")
     stored = (
         type(version).objects.using(version._state.db)
         .filter(pk=version.pk)
-        .values("base_version_id", "scenario__language")
+        .values("base_version_id", "scenario__language", "scenario__channel")
         .first()
     )
     if stored is None:
         raise ValidationError("The scenario version no longer exists.")
     if version.base_version_id is not None or stored["base_version_id"] is not None:
         raise ValidationError("Materialize the shared defaults before validating this scenario version.")
+    language, channel = stored["scenario__language"], stored["scenario__channel"]
+    if require_outcomes and (language not in ("en", "pl") or channel not in ("chat", "voice")):
+        raise ValidationError("Outcome validation requires an English or Polish web chat or browser voice scope.")
 
     steps = list(
         ScenarioStep.objects.using(version._state.db)
@@ -92,11 +139,14 @@ def validate_scenario_graph(version):
     step_keys = {key for _, key, _ in steps}
     if len(step_keys) != len(steps) or not step_keys <= APPROVED_STEPS:
         raise ValidationError("Each step must have a unique approved booking step key.")
-    if any(configuration != {} for _, _, configuration in steps):
-        raise ValidationError("Step configuration is not yet supported by graph validation.")
-    if "welcome" in step_keys and stored["scenario__language"] != "pl":
+    for _, key, configuration in steps:
+        try:
+            validate_step_configuration(language, channel, key, configuration)
+        except ValidationError as error:
+            raise ValidationError([f"{key}: {message}" for message in error.messages]) from error
+    if "welcome" in step_keys and language != "pl":
         raise ValidationError("Only Polish scenarios may use the bilingual welcome step.")
-    entry = "welcome" if "welcome" in step_keys else "check_in"
+    entry = "welcome" if "welcome" in step_keys or (require_outcomes and language == "pl") else "check_in"
     missing = {entry, "confirm", "contact_confirm", "completed"} - step_keys
     if missing:
         raise ValidationError("Missing required scenario steps: %(steps)s.", params={"steps": ", ".join(sorted(missing))})
@@ -119,9 +169,13 @@ def validate_scenario_graph(version):
         edges.add((source, event))
         outgoing[source].append((event, target))
 
-    # Exclude the explicitly approved self-retries from the progress graph.
+    # Retry and explicitly named recovery edges are not independent progress.
     dependencies = {
-        key: [target for event, target in outgoing[key] if event != "retry"] for key in step_keys
+        key: [
+            target for event, target in outgoing[key]
+            if event != "retry" and event not in RECOVERY_EVENTS.get(key, ())
+        ]
+        for key in step_keys
     }
     try:
         TopologicalSorter(dependencies).prepare()
@@ -139,3 +193,15 @@ def validate_scenario_graph(version):
         )
     if any("completed" in _reachable(entry, outgoing, excluded=approval) for approval in (QUOTE_APPROVAL, CONTACT_APPROVAL)):
         raise ValidationError("Every path to completion must include quote and contact approval.")
+    if require_outcomes:
+        required = {
+            (source, event)
+            for source, outcomes in APPROVED_TRANSITIONS.items()
+            if source != "welcome" or language == "pl"
+            for event in outcomes
+        }
+        if missing_outcomes := required - edges:
+            raise ValidationError(
+                "Missing booking outcomes: %(outcomes)s.",
+                params={"outcomes": ", ".join(f"{source}.{event}" for source, event in sorted(missing_outcomes))},
+            )
