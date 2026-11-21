@@ -196,13 +196,13 @@ def voice_segments(state, *, overrides=None):
             for part in _voice_parts(language, key, overrides)
         ]
         if contact:
-            return _split_contact_parts(parts)
+            return split_voice_parts(parts)
         return parts
     except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         return []
 
 
-def _split_contact_parts(parts):
+def split_voice_parts(parts):
     result = []
     for part in parts:
         chunks = wrap(part["text"], width=MAX_TEXT_CHARACTERS) or [part["text"]]

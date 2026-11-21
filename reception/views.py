@@ -22,9 +22,15 @@ from .models import Conversation, StaffHandover
 from .parser_review import review_booking_input
 from .parsing import parse_stay_input
 from .receipt import DELIVERY_PENDING, refresh_receipt
-from .scenario import ENGLISH_WEB_GREETING, render_chat, scenario_overrides, set_prompt, voice_segments
-from .scenario_pinning import carry_web_scenario, pin_web_scenario, web_scenario_channel
-from .speech import MAX_PCM_BYTES, SpeechBusy, SpeechUnavailable, synthesize, synthesize_welcome, transcribe, transcribe_welcome
+from .scenario import (
+    ENGLISH_WEB_GREETING, render_chat, scenario_overrides, set_prompt, split_voice_parts, voice_segments,
+)
+from .scenario_pinned_prompts import pinned_overrides
+from .scenario_pinning import carry_web_scenario, pin_web_scenario, pinned_scenario_version_id, web_scenario_channel
+from .speech import (
+    MAX_PCM_BYTES, MAX_TEXT_CHARACTERS, SpeechBusy, SpeechUnavailable, synthesize, synthesize_welcome, transcribe,
+    transcribe_welcome,
+)
 
 
 MAX_BODY_BYTES = 4096
@@ -63,7 +69,8 @@ def index(request):
 
 def _result(state, *, stale=False, cursor=0):
     payload = {field: state[field] for field in ("language", "stage", "revision", "reply")}
-    overrides = scenario_overrides(state)
+    pinned = pinned_overrides(state)
+    overrides = scenario_overrides(state) if pinned is None else pinned
     payload["reply"] = render_chat(state, overrides=overrides)
     if state["stage"] in ("completed", DELIVERY_PENDING):
         payload["reference"] = state["reference"]
@@ -73,7 +80,11 @@ def _result(state, *, stale=False, cursor=0):
     if state["stage"] == "welcome":
         payload["welcome_parts"] = WELCOME_PARTS
     if parts := _browser_voice_parts(state, overrides=overrides):
-        if state["stage"] != "contact_confirm" and not any(row.chat_text for row in overrides.values()):
+        if (
+            pinned is None
+            and state["stage"] != "contact_confirm"
+            and not any(row.chat_text for row in overrides.values())
+        ):
             payload["reply"] = " ".join(part["text"] for part in parts)
         payload["voice_parts"] = parts
         payload["voice_key"] = _voice_key(parts)
@@ -130,6 +141,14 @@ def _browser_voice_parts(state, *, overrides=None):
             {"language": language, "text": text, "seconds": 0, "listen": False}
             for language, text in WELCOME_PARTS
         ]
+    if pinned_scenario_version_id(state) is not None:
+        bounded_parts = []
+        for part in parts:
+            if len(part["text"]) > MAX_TEXT_CHARACTERS:
+                bounded_parts.extend(split_voice_parts([part]))
+            else:
+                bounded_parts.append(part)
+        return bounded_parts
     return parts
 
 
@@ -342,7 +361,9 @@ def audio(request):
         return HttpResponse(status=404)
     if state["revision"] != revision:
         return HttpResponse(status=409)
-    parts = _browser_voice_parts(state) if part is not None else ()
+    parts = ()
+    if part is not None:
+        parts = _browser_voice_parts(state, overrides=pinned_overrides(state))
     if voice_key is not None and _voice_key(parts) != voice_key:
         return HttpResponse(status=409)
     if part is not None and part >= len(parts):
