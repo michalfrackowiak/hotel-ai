@@ -149,6 +149,10 @@ class Migration(migrations.Migration):
                         name="scenario_publication_changes_selection",
                     ),
                     models.CheckConstraint(condition=models.Q(actor_id__gte=1), name="positive_scenario_publication_actor"),
+                    models.UniqueConstraint(
+                        fields=("selected_version",), condition=models.Q(action="publish"),
+                        name="unique_scenario_version_seal_audit",
+                    ),
                 ],
             },
         ),

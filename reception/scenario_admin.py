@@ -1,13 +1,22 @@
 from django import forms
 from django.contrib import admin
-from django.core.exceptions import ValidationError
+from django.core import signing
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.http import Http404, HttpResponseRedirect
+from django.template.response import TemplateResponse
+from django.urls import path, reverse
+from django.utils.decorators import method_decorator
+from django.views.decorators.http import require_http_methods
 
-from .models import Scenario, ScenarioStep, ScenarioTransition, ScenarioVersion
+from .models import Scenario, ScenarioPublication, ScenarioStep, ScenarioTransition, ScenarioVersion
 from .scenario import default_chat_text, default_voice_parts
 from .scenario_editor import ARRIVAL_KEYS, VoicePartsField, _fields, _placeholder_help
 from .scenario_step_settings import (
     CHAT_FIELD, MAX_CHAT_TEXT, VOICE_FIELD, prompt_fields, prompt_key, validate_step_configuration,
 )
+
+SELECTION_SALT = "reception.scenario-selection.v1"
+SELECTION_MAX_AGE = 300
 
 
 class ScenarioDraftAdmin(admin.ModelAdmin):
@@ -50,6 +59,7 @@ class ScenarioAdmin(admin.ModelAdmin):
 
 @admin.register(ScenarioVersion)
 class ScenarioVersionAdmin(ScenarioDraftAdmin):
+    change_form_template = "admin/reception/scenarioversion/change_form.html"
     fields = ("scenario", "number", "base_version", "created_at", "published_at", "graph_validation", "outcome_coverage")
     readonly_fields = ("created_at", "published_at", "graph_validation", "outcome_coverage")
     list_display = ("scenario", "number", "base_version", "created_at", "published_at")
@@ -60,18 +70,160 @@ class ScenarioVersionAdmin(ScenarioDraftAdmin):
     def scenario_version(self, obj):
         return obj
 
-    def get_fields(self, request, obj=None):
-        user = request.user
-        can_inspect_graph = (
+    @staticmethod
+    def _can_inspect_graph(user):
+        return (
             (user.has_perm("reception.view_scenariostep") or user.has_perm("reception.change_scenariostep"))
             and (
                 user.has_perm("reception.view_scenariotransition")
                 or user.has_perm("reception.change_scenariotransition")
             )
         )
-        if not can_inspect_graph:
+
+    def _can_review_selection(self, request, obj=None):
+        user = request.user
+        return (
+            user.has_perm("reception.publish_scenario")
+            and self.has_view_or_change_permission(request, obj)
+            and (user.has_perm("reception.view_scenario") or user.has_perm("reception.change_scenario"))
+            and self._can_inspect_graph(user)
+        )
+
+    def get_fields(self, request, obj=None):
+        if not self._can_inspect_graph(request.user):
             return tuple(field for field in self.fields if field not in {"graph_validation", "outcome_coverage"})
         return self.fields
+
+    def get_urls(self):
+        return [
+            path(
+                "<int:object_id>/selection/<str:action>/",
+                self.admin_site.admin_view(self.selection_review),
+                name="reception_scenarioversion_selection",
+            ),
+            *super().get_urls(),
+        ]
+
+    def render_change_form(self, request, context, add=False, change=False, form_url="", obj=None):
+        if obj is not None and self._can_review_selection(request, obj):
+            action = "rollback" if obj.published_at is not None else "publish"
+            context["scenario_selection_url"] = reverse(
+                f"{self.admin_site.name}:reception_scenarioversion_selection", args=[obj.pk, action],
+            )
+            active = obj.scenario.published_version_id == obj.pk
+            context["scenario_selection_label"] = "Selection history" if active else f"Review {action}"
+        return super().render_change_form(request, context, add, change, form_url, obj)
+
+    @method_decorator(require_http_methods(["GET", "POST"]))
+    def selection_review(self, request, object_id, action):
+        from .scenario_publication import (
+            ScenarioSelectionConflict, publish_scenario_version, review_scenario_selection, rollback_scenario_version,
+        )
+
+        operations = {"publish": publish_scenario_version, "rollback": rollback_scenario_version}
+        if action not in operations:
+            raise Http404
+        if not self._can_review_selection(request):
+            raise PermissionDenied
+        version = self.get_object(request, object_id)
+        if version is None:
+            raise Http404
+        if not self._can_review_selection(request, version):
+            raise PermissionDenied
+
+        scenario = version.scenario
+        using = version._state.db
+        identity = {
+            "actor": request.user.pk,
+            "scenario": scenario.pk,
+            "version": version.pk,
+            "action": action,
+        }
+        change_url = reverse(f"{self.admin_site.name}:reception_scenarioversion_change", args=[version.pk])
+        error_messages = []
+        status = 200
+        if request.method == "POST":
+            try:
+                snapshot = signing.loads(
+                    request.POST.get("review_token", ""), salt=SELECTION_SALT, max_age=SELECTION_MAX_AGE,
+                )
+                if not isinstance(snapshot, dict) or any(snapshot.get(key) != value for key, value in identity.items()):
+                    raise signing.BadSignature
+                operations[action](
+                    scenario.pk,
+                    version.pk,
+                    expected_version_id=snapshot["current"],
+                    expected_audit_id=snapshot["audit"],
+                    expected_fingerprint=snapshot["fingerprint"],
+                    actor=request.user,
+                    using=using,
+                )
+            except (signing.BadSignature, KeyError):
+                error_messages = ["The review expired or does not match this operation. Review the current changes."]
+                status = 409
+            except ScenarioSelectionConflict as error:
+                error_messages = error.messages
+                status = 409
+            except ValidationError as error:
+                error_messages = error.messages
+                status = 400
+            else:
+                message = "Scenario version published." if action == "publish" else "Previous scenario version selected."
+                self.message_user(request, message)
+                return HttpResponseRedirect(change_url)
+
+        scenario.refresh_from_db(using=using, fields=["published_version"])
+        current_id = scenario.published_version_id
+        candidate_number = version.number
+        base_number = None
+        current_number = None
+        review_token = None
+        diff = ()
+        active = current_id == version.pk
+        if not active:
+            try:
+                review = review_scenario_selection(scenario.pk, version.pk, actor=request.user, action=action, using=using)
+            except ValidationError as error:
+                error_messages.extend(error.messages)
+            else:
+                candidate_number = review.candidate_number
+                base_number = review.base_number
+                current_number = review.current_number
+                diff = review.diff
+                review_token = signing.dumps({
+                    **identity,
+                    "current": review.expected_version_id,
+                    "audit": review.expected_audit_id,
+                    "fingerprint": review.fingerprint,
+                }, salt=SELECTION_SALT)
+
+        if review_token is None and current_id is not None:
+            current_number = ScenarioVersion.objects.using(using).filter(
+                pk=current_id, scenario_id=scenario.pk,
+            ).values_list("number", flat=True).first()
+        history = ScenarioPublication.objects.using(using).filter(scenario_id=scenario.pk).select_related(
+            "previous_version", "selected_version",
+        )[:10]
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Scenario selection history" if active else f"Review scenario {action}",
+            "opts": self.model._meta,
+            "scenario": scenario,
+            "active": active,
+            "candidate_number": candidate_number,
+            "base_number": base_number,
+            "current_number": current_number,
+            "selection_action": action,
+            "change_url": change_url,
+            "error_messages": error_messages,
+            "diff": diff,
+            "review_token": review_token,
+            "history": history,
+        }
+        request.current_app = self.admin_site.name
+        return TemplateResponse(
+            request, "admin/reception/scenarioversion/selection_review.html", context, status=status,
+        )
 
     def get_readonly_fields(self, request, obj=None):
         if obj is not None:

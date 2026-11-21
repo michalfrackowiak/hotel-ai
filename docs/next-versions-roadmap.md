@@ -87,7 +87,7 @@ The current admin edits prompt text and voice segments; conversation transitions
 - [x] Expose draft graph editing, a pinned inheritance indicator, and structural and approval-path validation in Django admin. See [draft editing](scenario-version-records.md#draft-editing-and-validation).
 - [x] Validate named outcome coverage for standalone English and Polish web chat and browser voice, including both contact methods, rebooking and dispatch paths.
 - [x] Materialize pinned shared defaults and validate the resulting graph. Seal, select, roll back, and audit versions through an internal atomic service.
-- [ ] Expose permission-gated staff publication and rollback with a reviewed diff and a stale-review guard.
+- [x] Expose permission-gated staff publication and rollback with an effective graph diff, recent selection history, and stale-review protection. See [staff review](scenario-version-records.md#review-publication-or-rollback).
 - [x] Edit primary draft prompts with validated chat placeholders and ordered voice segments, pauses and arrival listening.
 - [ ] Extend editing to per-outcome wording, answer buttons, expected parser fields, retry limits, validation messages, allowed branches, timeout actions, and delivery/handover behavior. Add voice silence windows and interruption policy, and independent chat button labels.
 - [ ] Permit adding/reordering optional steps and routing through approved actions. Keep availability, price calculation, required consent and atomic booking creation as enforced server invariants. Forbid arbitrary Python, SQL or unvalidated external actions in the editor.

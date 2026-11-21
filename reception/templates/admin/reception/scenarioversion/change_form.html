@@ -1,0 +1,7 @@
+{% extends "admin/change_form.html" %}
+{% block object-tools-items %}
+  {% if scenario_selection_url %}
+    <li><a href="{{ scenario_selection_url }}">{{ scenario_selection_label }}</a></li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
