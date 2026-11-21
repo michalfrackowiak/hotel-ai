@@ -6,7 +6,7 @@ A scenario can retain several versions, each with numbered identity, ordered ste
 
 `published_at` identifies previously sealed versions. The scenario's `published_version` points to the current selection. Rollback selects a prior sealed version while retaining both versions and their graph records. The publish and rollback services require an active staff account with `reception.publish_scenario` and compare the current selection with the caller’s expected version. Staff confirmation also compares the latest audit ID and the reviewed graph fingerprint inside the write transaction. This catches edits made after review and selection changes that returned to the same version. Publication validates the effective graph and writes the seal, selected pointer and audit record in the same SQLite write transaction. Shared templates use structural validation. Standalone and materialized chat and voice graphs must also pass outcome coverage. SQLite triggers guard sealed records against inserts and updates, and Django delete signals protect graph records and publication history on ordinary ORM deletion. Direct SQL deletion remains available for Django flush and operator recovery. Later migrations that rebuild these tables must recreate their triggers.
 
-Publication selects a version for its scenario scope and records staff history. The existing guest flows continue to use the existing prompts until guest version pinning and the runtime transition dispatcher are implemented.
+Publication selects a version for its scenario scope and records staff history. Web conversations record their version selection at entry. The booking engine and prompt renderer still follow the existing behavior while versioned runtime dispatch is pending.
 
 ## Draft editing and validation
 
@@ -23,3 +23,9 @@ The structural preview accepts incomplete drafts. The stricter outcome check req
 Open a scenario version in Django admin. Staff with publication and graph access can open a review for a saved draft or for a previously published version. Review the changes between the current graph and the proposed effective graph, including inherited settings, and confirm the action. Publication validates the draft before sealing it. Rollback selects an existing sealed version in the same scope. Both actions record the actor and the previous and new selections in publication history.
 
 The confirmation applies to the reviewed graph and selection only. If another staff action changes either, reopen the review to get a fresh comparison. The same applies after the five-minute review token expires. Restore historical records and their database guards through a SQLite backup rather than importing sealed rows through Django fixtures.
+
+## Web conversation pinning
+
+A fresh web draft records its language, initial channel, and the selected sealed version ID in server-side conversation state. An absent selection is recorded explicitly, so a later publication does not change that draft. Existing drafts without the pin keep their previous behavior. The pin is retained on same-language turns, offer retries, receipt polling, and when the combined page switches between typing and speech.
+
+The combined page starts a chat draft. A client starting a fresh voice draft can send `voice: true` with `start` or `reset` to the web message endpoint. A language change resolves a version in the new language for the original channel. An explicit reset starts a new draft and can select a different channel. Inbound phone follows its own booking flow.

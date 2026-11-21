@@ -92,7 +92,8 @@ The current admin edits prompt text and voice segments; conversation transitions
 - [ ] Extend editing to per-outcome wording, answer buttons, expected parser fields, retry limits, validation messages, allowed branches, timeout actions, and delivery/handover behavior. Add voice silence windows and interruption policy, and independent chat button labels.
 - [ ] Permit adding/reordering optional steps and routing through approved actions. Keep availability, price calculation, required consent and atomic booking creation as enforced server invariants. Forbid arbitrary Python, SQL or unvalidated external actions in the editor.
 - [ ] Provide a flow overview and simulator with example inputs, extracted values, chosen transition and rendered voice/chat output. Validate missing placeholders, unreachable states, loops, required contact/consent paths and terminal states before publishing.
-- [ ] Pin each conversation to its published scenario version. Publish atomically, retain the prior version for active sessions, and give staff a change diff and audit record.
+- [x] Record the selected scenario version and entry channel on new web conversations. Preserve the pin across same-language turns, retries, and later publication or rollback. See [web conversation pinning](scenario-version-records.md#web-conversation-pinning).
+- [ ] Use the pinned version for guest prompts and approved transition dispatch. Keep older and unpinned conversations compatible.
 
 **Acceptance:** staff can configure every scenario state in both channels/languages; new sessions use a published version while active bookings finish consistently; simulator and real conversation agree; no edited branch can bypass confirmation or create duplicate/overlapping bookings.
 
