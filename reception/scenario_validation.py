@@ -1,4 +1,4 @@
-"""Validate standalone persisted graphs without publishing or executing them.
+"""Validate persisted scenario graphs without publishing or executing them.
 
 The outcome contract covers the new web booking flow in one language and
 channel. Language selection across scopes, older drafts, and inbound phone
@@ -111,22 +111,43 @@ def validate_scenario_outcomes(version):
     _validate_scenario(version, require_outcomes=True)
 
 
-def _validate_scenario(version, *, require_outcomes):
-    # A future caller using this as a publication prerequisite has to protect
-    # the entire graph snapshot against concurrent changes.
+def validate_materialized_scenario(version):
+    """Validate the effective graph inside the publication transaction.
+
+    Inherited defaults must already be copied into the candidate. The pinned
+    base reference is retained and verified separately from its copied rows.
+    """
+    _validate_scenario(version, require_outcomes=None, materialized=True)
+
+
+def _validate_scenario(version, *, require_outcomes, materialized=False):
     if version._state.adding or not version._state.db:
         raise ValidationError("Save the scenario version before validating its graph.")
     stored = (
         type(version).objects.using(version._state.db)
         .filter(pk=version.pk)
-        .values("base_version_id", "scenario__language", "scenario__channel")
+        .values(
+            "base_version_id", "scenario__language", "scenario__channel", "base_version__published_at",
+            "base_version__scenario__language", "base_version__scenario__channel", "base_version__base_version_id",
+        )
         .first()
     )
     if stored is None:
         raise ValidationError("The scenario version no longer exists.")
-    if version.base_version_id is not None or stored["base_version_id"] is not None:
-        raise ValidationError("Materialize the shared defaults before validating this scenario version.")
     language, channel = stored["scenario__language"], stored["scenario__channel"]
+    if stored["base_version_id"] is not None:
+        if not materialized:
+            raise ValidationError("Validate inherited drafts through the materialization workflow.")
+        if (
+            channel not in ("chat", "voice")
+            or stored["base_version__published_at"] is None
+            or stored["base_version__base_version_id"] is not None
+            or stored["base_version__scenario__channel"] != "shared"
+            or stored["base_version__scenario__language"] != language
+        ):
+            raise ValidationError("The pinned base must be a sealed shared version in the same language.")
+    if materialized:
+        require_outcomes = channel != "shared"
     if require_outcomes and (language not in ("en", "pl") or channel not in ("chat", "voice")):
         raise ValidationError("Outcome validation requires an English or Polish web chat or browser voice scope.")
 

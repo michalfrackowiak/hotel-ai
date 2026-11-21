@@ -145,10 +145,11 @@ class ScenarioStepDraftForm(forms.ModelForm):
             return
         configuration = step.configuration if isinstance(step.configuration, dict) else {}
         key = prompt_key(scenario.language, step.key)
+        default_source = "the shared default or built-in prompt" if step.version.base_version_id else "the built-in prompt"
         if chat := self.fields.get(CHAT_FIELD):
             default = default_chat_text(scenario.language, key)
             self.initial[CHAT_FIELD] = configuration.get(CHAT_FIELD, "")
-            chat.help_text = "Leave blank to use default wording." + _placeholder_help(_fields([default]))
+            chat.help_text = f"Leave blank to use {default_source}." + _placeholder_help(_fields([default]))
             chat.widget.attrs["placeholder"] = default
         if voice := self.fields.get(VOICE_FIELD):
             parts = configuration.get(VOICE_FIELD)
@@ -156,7 +157,7 @@ class ScenarioStepDraftForm(forms.ModelForm):
                 self.initial[VOICE_FIELD] = parts
             voice.widget.allow_listening = key in ARRIVAL_KEYS
             defaults = default_voice_parts(scenario.language, key)
-            voice.help_text += " Leave every row blank to use the default script."
+            voice.help_text += f" Leave every row blank to use {default_source}."
             voice.help_text += _placeholder_help(_fields(part["text"] for part in defaults))
 
     def clean(self):

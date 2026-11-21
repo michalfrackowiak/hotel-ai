@@ -2,6 +2,8 @@ from datetime import timedelta
 
 from django.core.exceptions import ValidationError
 from django.db import models, router
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
 from django.utils import timezone
 
 
@@ -117,6 +119,7 @@ class Scenario(models.Model):
     )
 
     class Meta:
+        permissions = (("publish_scenario", "Can publish and roll back booking scenarios"),)
         constraints = [
             models.UniqueConstraint(fields=("language", "channel"), name="unique_scenario_scope"),
             models.CheckConstraint(condition=models.Q(language__in=("pl", "en")), name="valid_scenario_language"),
@@ -296,3 +299,50 @@ class ScenarioTransition(models.Model):
         using = using or router.db_for_write(type(self), instance=self)
         self._check_draft(using)
         return super().delete(using=using, keep_parents=keep_parents)
+
+
+class ScenarioPublication(models.Model):
+    """Retained selection history, independent of the actor account lifecycle."""
+
+    scenario = models.ForeignKey(Scenario, on_delete=models.PROTECT, related_name="publication_history")
+    previous_version = models.ForeignKey(
+        ScenarioVersion, null=True, blank=True, on_delete=models.PROTECT, related_name="+",
+    )
+    selected_version = models.ForeignKey(ScenarioVersion, on_delete=models.PROTECT, related_name="+")
+    actor_id = models.PositiveBigIntegerField()
+    action = models.CharField(max_length=8, choices=(("publish", "Publish"), ("rollback", "Rollback")))
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-pk",)
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(action__in=("publish", "rollback")), name="valid_scenario_publication_action",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(previous_version=models.F("selected_version")),
+                name="scenario_publication_changes_selection",
+            ),
+            models.CheckConstraint(condition=models.Q(actor_id__gte=1), name="positive_scenario_publication_actor"),
+        ]
+
+
+@receiver(pre_delete, sender=ScenarioVersion)
+def _guard_scenario_version_delete(sender, instance, using, **kwargs):
+    if ScenarioVersion.objects.using(using).filter(pk=instance.pk, published_at__isnull=False).exists():
+        raise ValidationError("Published scenario versions cannot be deleted.")
+
+
+@receiver(pre_delete, sender=ScenarioStep)
+def _guard_scenario_step_delete(sender, instance, using, **kwargs):
+    instance._check_draft(using)
+
+
+@receiver(pre_delete, sender=ScenarioTransition)
+def _guard_scenario_transition_delete(sender, instance, using, **kwargs):
+    instance._check_draft(using)
+
+
+@receiver(pre_delete, sender=ScenarioPublication)
+def _guard_scenario_publication_delete(sender, instance, using, **kwargs):
+    raise ValidationError("Scenario publication history cannot be deleted.")
