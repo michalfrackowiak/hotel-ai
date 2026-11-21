@@ -1,5 +1,7 @@
 from django import forms
 from django.contrib import admin
+
+from . import scenario_admin
 from .models import HandoverMessage, ParserConfiguration, ParserSample, ScenarioPrompt, StaffHandover
 from .scenario_editor import ScenarioPromptForm
 
