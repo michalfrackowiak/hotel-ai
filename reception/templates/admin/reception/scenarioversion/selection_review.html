@@ -1,0 +1,59 @@
+{% extends "admin/base_site.html" %}
+{% block extrastyle %}
+  {{ block.super }}
+  <style>.scenario-diff { white-space: pre-wrap; overflow-wrap: anywhere; }</style>
+{% endblock %}
+{% block content %}
+  <p><a href="{{ change_url }}">Back to scenario version</a></p>
+  <p>{{ scenario }} · Version {{ candidate_number }}</p>
+  {% if base_number %}
+    <p>Pinned shared template version {{ base_number }}</p>
+  {% endif %}
+  {% if current_number %}
+    <p>Selected version {{ current_number }}</p>
+  {% else %}
+    <p>This scenario has no selected version.</p>
+  {% endif %}
+
+  {% if error_messages %}
+    <ul class="errorlist">
+      {% for message in error_messages %}<li>{{ message }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+
+  {% if review_token %}
+    <h2>Effective graph changes</h2>
+    <ul>
+      {% for change in diff %}<li><pre class="scenario-diff">{{ change }}</pre></li>{% empty %}<li>The effective graph is unchanged.</li>{% endfor %}
+    </ul>
+    <p>The review expires in five minutes. Selection updates the scenario records in this admin.</p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="review_token" value="{{ review_token }}">
+      <button type="submit">
+        {% if selection_action == "publish" %}Confirm publication{% else %}Confirm rollback{% endif %}
+      </button>
+    </form>
+  {% endif %}
+
+  <h2>Recent selections</h2>
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Date</th><th scope="col">Action</th><th scope="col">Previous version</th>
+        <th scope="col">Selected version</th><th scope="col">Staff account ID</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in history %}
+        <tr>
+          <td>{{ entry.created_at }}</td><td>{{ entry.get_action_display }}</td>
+          <td>{{ entry.previous_version.number|default:"—" }}</td>
+          <td>{{ entry.selected_version.number }}</td><td>{{ entry.actor_id }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5">No selections recorded.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

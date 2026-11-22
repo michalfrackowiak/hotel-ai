@@ -82,12 +82,19 @@ These are candidates, not a claim that every combination meets the hardware budg
 
 The current admin edits prompt text and voice segments; conversation transitions remain in Python. Extend this into configuration over approved booking actions.
 
-- [ ] Inventory every state: language/entry, arrival, departure, guests, room, confirmation, delivery method, email, phone, delivery pending, completed, cancelled, unavailable/error/retry, timeout and receptionist handover. Include phone-only and older-draft compatibility paths.
-- [ ] Add `Scenario`, immutable `ScenarioVersion`, `ScenarioStep` and `ScenarioTransition` records. Provide separate EN/PL voice and chat settings, optional shared defaults, explicit inheritance indicators, draft/published versions and rollback.
-- [ ] Edit wording, validated placeholders, answer buttons, expected parser fields, retry limits, validation messages, allowed branches, timeout actions, and delivery/handover behavior. Voice additionally configures ordered segments, pause duration, whether to listen during a pause, silence windows and interruption policy. Chat configures written content and button labels independently.
+- [x] Inventory the booking states and outcomes across English and Polish text chat, browser voice and inbound phone, including retries, timeouts, reception handover and older drafts. See the [booking scenario flow inventory](scenario-flow-inventory.md).
+- [x] Define the schema for `Scenario`, `ScenarioVersion`, `ScenarioStep` and `ScenarioTransition`, including separate EN/PL voice and chat scopes and a pinned reference to optional shared defaults. See [version records](scenario-version-records.md).
+- [x] Expose draft graph editing, a pinned inheritance indicator, and structural and approval-path validation in Django admin. See [draft editing](scenario-version-records.md#draft-editing-and-validation).
+- [x] Validate named outcome coverage for standalone English and Polish web chat and browser voice, including both contact methods, rebooking and dispatch paths.
+- [x] Materialize pinned shared defaults and validate the resulting graph. Seal, select, roll back, and audit versions through an internal atomic service.
+- [x] Expose permission-gated staff publication and rollback with an effective graph diff, recent selection history, and stale-review protection. See [staff review](scenario-version-records.md#review-publication-or-rollback).
+- [x] Edit primary draft prompts with validated chat placeholders and ordered voice segments, pauses and arrival listening.
+- [ ] Extend editing to per-outcome wording, answer buttons, expected parser fields, retry limits, validation messages, allowed branches, timeout actions, and delivery/handover behavior. Add voice silence windows and interruption policy, and independent chat button labels.
 - [ ] Permit adding/reordering optional steps and routing through approved actions. Keep availability, price calculation, required consent and atomic booking creation as enforced server invariants. Forbid arbitrary Python, SQL or unvalidated external actions in the editor.
 - [ ] Provide a flow overview and simulator with example inputs, extracted values, chosen transition and rendered voice/chat output. Validate missing placeholders, unreachable states, loops, required contact/consent paths and terminal states before publishing.
-- [ ] Pin each conversation to its published scenario version. Publish atomically, retain the prior version for active sessions, and give staff a change diff and audit record.
+- [x] Record the selected scenario version and entry channel on new web conversations. Preserve the pin across same-language turns, retries, and later publication or rollback. See [web conversation pinning](scenario-version-records.md#web-conversation-pinning).
+- [x] Render supported web prompts from the pinned version, with built-in fallbacks and compatibility for unpinned conversations. See [pinned web prompts](scenario-version-records.md#pinned-web-prompts).
+- [ ] Use the pinned version for approved transition dispatch. Preserve the booking engine’s consent and booking guarantees.
 
 **Acceptance:** staff can configure every scenario state in both channels/languages; new sessions use a published version while active bookings finish consistently; simulator and real conversation agree; no edited branch can bypass confirmation or create duplicate/overlapping bookings.
 

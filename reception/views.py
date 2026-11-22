@@ -22,8 +22,15 @@ from .models import Conversation, StaffHandover
 from .parser_review import review_booking_input
 from .parsing import parse_stay_input
 from .receipt import DELIVERY_PENDING, refresh_receipt
-from .scenario import ENGLISH_WEB_GREETING, render_chat, scenario_overrides, set_prompt, voice_segments
-from .speech import MAX_PCM_BYTES, SpeechBusy, SpeechUnavailable, synthesize, synthesize_welcome, transcribe, transcribe_welcome
+from .scenario import (
+    ENGLISH_WEB_GREETING, render_chat, scenario_overrides, set_prompt, split_voice_parts, voice_segments,
+)
+from .scenario_pinned_prompts import pinned_overrides
+from .scenario_pinning import carry_web_scenario, pin_web_scenario, pinned_scenario_version_id, web_scenario_channel
+from .speech import (
+    MAX_PCM_BYTES, MAX_TEXT_CHARACTERS, SpeechBusy, SpeechUnavailable, synthesize, synthesize_welcome, transcribe,
+    transcribe_welcome,
+)
 
 
 MAX_BODY_BYTES = 4096
@@ -62,7 +69,8 @@ def index(request):
 
 def _result(state, *, stale=False, cursor=0):
     payload = {field: state[field] for field in ("language", "stage", "revision", "reply")}
-    overrides = scenario_overrides(state)
+    pinned = pinned_overrides(state)
+    overrides = scenario_overrides(state) if pinned is None else pinned
     payload["reply"] = render_chat(state, overrides=overrides)
     if state["stage"] in ("completed", DELIVERY_PENDING):
         payload["reference"] = state["reference"]
@@ -72,7 +80,11 @@ def _result(state, *, stale=False, cursor=0):
     if state["stage"] == "welcome":
         payload["welcome_parts"] = WELCOME_PARTS
     if parts := _browser_voice_parts(state, overrides=overrides):
-        if state["stage"] != "contact_confirm" and not any(row.chat_text for row in overrides.values()):
+        if (
+            pinned is None
+            and state["stage"] != "contact_confirm"
+            and not any(row.chat_text for row in overrides.values())
+        ):
             payload["reply"] = " ".join(part["text"] for part in parts)
         payload["voice_parts"] = parts
         payload["voice_key"] = _voice_key(parts)
@@ -129,18 +141,31 @@ def _browser_voice_parts(state, *, overrides=None):
             {"language": language, "text": text, "seconds": 0, "listen": False}
             for language, text in WELCOME_PARTS
         ]
+    if pinned_scenario_version_id(state) is not None:
+        bounded_parts = []
+        for part in parts:
+            if len(part["text"]) > MAX_TEXT_CHARACTERS:
+                bounded_parts.extend(split_voice_parts([part]))
+            else:
+                bounded_parts.append(part)
+        return bounded_parts
     return parts
 
 
-def _new_web_conversation(language):
+def _new_web_conversation(language, *, channel=None):
     if language == "pl":
-        return new_conversation(language)
-    state = new_conversation("en", "check_in")
-    set_prompt(state, "web_check_in", reply=f"{ENGLISH_WEB_GREETING} {state['reply']}")
+        state = new_conversation(language)
+    else:
+        state = new_conversation("en", "check_in")
+        set_prompt(state, "web_check_in", reply=f"{ENGLISH_WEB_GREETING} {state['reply']}")
+    if channel is not None:
+        pin_web_scenario(state, channel=channel)
     return state
 
 
-def _save_state(conversation, state):
+def _save_state(conversation, state, *, fresh=False):
+    if not fresh:
+        carry_web_scenario(conversation.state, state)
     if state != conversation.state:
         conversation.state = state
         conversation.save(update_fields=["state"])
@@ -174,11 +199,12 @@ def message(request):
     if not isinstance(payload, dict) or payload.get("language") not in ("en", "pl"):
         return _invalid()
     language = payload["language"]
-    start = payload.get("start") is True and payload.keys() == {"language", "start"}
-    reset = payload.get("reset") is True and payload.keys() == {"language", "reset"}
+    voice = payload.get("voice") is True
+    opening_keys = {"language", "voice"} if voice else {"language"}
+    start = payload.get("start") is True and payload.keys() == opening_keys | {"start"}
+    reset = payload.get("reset") is True and payload.keys() == opening_keys | {"reset"}
     voice_start = payload.get("voice_start") is True and payload.keys() == {"language", "voice_start", "revision"}
     poll = payload.get("poll") is True and payload.keys() == {"language", "poll", "revision", "cursor"}
-    voice = payload.get("voice") is True
     transcript_input = voice and payload.get("transcript") is True
     required_timeout_fields = {"language", "timeout", "revision"}
     timeout = payload.get("timeout") is True and (
@@ -236,14 +262,22 @@ def message(request):
         request.session.setdefault("reception", True)
         if request.session.session_key is None:
             request.session.create()
-        conversation, _ = Conversation.objects.get_or_create(
-            session_id=request.session.session_key, defaults={"state": _new_web_conversation(language)}
+        channel = "voice" if voice and (start or reset) else "chat"
+        conversation, created = Conversation.objects.get_or_create(
+            session_id=request.session.session_key,
+            defaults={"state": lambda: _new_web_conversation(language, channel=channel)},
         )
         state = conversation.state
-        if reset or (start and state["language"] != language):
+        language_changed = start and state["language"] != language
+        fresh = not created and (reset or language_changed)
+        if created and (start or reset):
+            return _result(state)
+        if fresh:
             if state["stage"] == "handover":
                 StaffHandover.objects.filter(pk=state["handover_id"]).update(closed=True)
-            state = _new_web_conversation(language)
+            if language_changed:
+                channel = web_scenario_channel(state) or channel
+            state = _new_web_conversation(language, channel=channel)
         elif start:
             old_arrival = state["stage"] == "check_in" and state["reply"].startswith(OLD_ARRIVAL_PROMPTS)
             english_welcome = language == "en" and state["stage"] == "welcome"
@@ -287,7 +321,7 @@ def message(request):
                 if text:
                     handover.messages.create(text=text)
                 state["handover_id"] = handover.pk
-        _save_state(conversation, state)
+        _save_state(conversation, state, fresh=fresh)
         return _result(state)
 
 
@@ -327,7 +361,9 @@ def audio(request):
         return HttpResponse(status=404)
     if state["revision"] != revision:
         return HttpResponse(status=409)
-    parts = _browser_voice_parts(state) if part is not None else ()
+    parts = ()
+    if part is not None:
+        parts = _browser_voice_parts(state, overrides=pinned_overrides(state))
     if voice_key is not None and _voice_key(parts) != voice_key:
         return HttpResponse(status=409)
     if part is not None and part >= len(parts):
