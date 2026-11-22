@@ -6,7 +6,7 @@ from django.db.models import Q
 
 from .models import ScenarioStep, ScenarioTransition, ScenarioVersion
 from .scenario_step_settings import prompt_fields, validate_step_configuration
-from .scenario_validation import APPROVED_STEPS, APPROVED_TRANSITIONS, MAX_TRANSITIONS
+from .scenario_validation import APPROVED_STEPS, MAX_TRANSITIONS, approved_destination
 
 
 def _read_graph(version_id, language, channel, using):
@@ -35,7 +35,7 @@ def _read_graph(version_id, language, channel, using):
         if source_id not in keys_by_id or target_id not in keys_by_id:
             raise ValidationError("Shared defaults cannot contain transitions between versions.")
         source, target = keys_by_id[source_id], keys_by_id[target_id]
-        if (source, event) in transitions or APPROVED_TRANSITIONS.get(source, {}).get(event) != target:
+        if (source, event) in transitions or approved_destination(source, event) != target:
             raise ValidationError("Shared defaults require unique approved booking transitions.")
         transitions[source, event] = target
     return steps, transitions

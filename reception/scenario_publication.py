@@ -13,7 +13,7 @@ from django.utils import timezone
 from .models import Scenario, ScenarioPublication, ScenarioStep, ScenarioTransition, ScenarioVersion
 from .scenario_answers import ROOM_ANSWER_LABEL
 from .scenario_materialization import materialize_scenario_defaults
-from .scenario_step_settings import ARRIVAL_INPUT_CHOICES, ARRIVAL_INPUT_FIELD
+from .scenario_step_settings import ARRIVAL_INPUT_CHOICES, ARRIVAL_INPUT_FIELD, retry_limit_value
 from .scenario_validation import APPROVED_STEPS, MAX_TRANSITIONS, validate_materialized_scenario
 
 
@@ -132,6 +132,13 @@ def describe_arrival_input(configuration):
     return None
 
 
+def describe_retry_limit(configuration):
+    limit = retry_limit_value(configuration)
+    if limit is None:
+        return None
+    return str(limit) if limit else "No limit"
+
+
 def _describe_step(position, configuration):
     if not isinstance(configuration, dict):
         return f"position {position}, invalid saved prompt configuration"
@@ -141,6 +148,8 @@ def _describe_step(position, configuration):
     ]
     if mode := describe_arrival_input(configuration):
         parts.append(f"Expected arrival input: {mode}")
+    if limit := describe_retry_limit(configuration):
+        parts.append(f"Retry limit: {limit}")
     return " | ".join(parts)
 
 

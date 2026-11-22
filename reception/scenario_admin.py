@@ -13,8 +13,8 @@ from .scenario import default_chat_text, default_voice_parts
 from .scenario_answers import MAX_ANSWER_LABEL, ROOM_ANSWER_LABEL, answer_label_defaults, answer_label_fields
 from .scenario_editor import ARRIVAL_KEYS, VoicePartsField, _fields, _placeholder_help
 from .scenario_step_settings import (
-    ARRIVAL_INPUT_CHOICES, ARRIVAL_INPUT_FIELD, CHAT_FIELD, MAX_CHAT_TEXT, OUTCOME_PROMPTS, VOICE_FIELD,
-    outcome_field, prompt_bindings,
+    ARRIVAL_INPUT_CHOICES, ARRIVAL_INPUT_FIELD, CHAT_FIELD, MAX_CHAT_TEXT, MAX_RETRY_LIMIT, OUTCOME_PROMPTS,
+    RETRY_LIMIT_FIELD, VOICE_FIELD, outcome_field, prompt_bindings,
     prompt_fields, validate_step_configuration,
 )
 
@@ -273,6 +273,13 @@ class ScenarioVersionAdmin(ScenarioDraftAdmin):
 
 
 class ScenarioStepDraftForm(forms.ModelForm):
+    retry_limit = forms.IntegerField(
+        required=False, min_value=0, max_value=MAX_RETRY_LIMIT, label="Retry limit",
+        help_text=(
+            "Number of consecutive same-step retries before handover. Set to 0 for no limit or leave it blank "
+            "to inherit. A positive limit requires a retry_exhausted transition to handover."
+        ),
+    )
     arrival_input = forms.ChoiceField(
         required=False, label="Expected arrival input",
         choices=(("", "Use shared or built-in setting"), *ARRIVAL_INPUT_CHOICES),
@@ -296,7 +303,7 @@ class ScenarioStepDraftForm(forms.ModelForm):
         step = self.instance
         scenario = step.version.scenario if step.pk else None
         applicable_fields = prompt_fields(scenario.language, scenario.channel, step.key) if scenario else ()
-        for name in (CHAT_FIELD, VOICE_FIELD, ARRIVAL_INPUT_FIELD):
+        for name in (CHAT_FIELD, VOICE_FIELD, ARRIVAL_INPUT_FIELD, RETRY_LIMIT_FIELD):
             if name not in applicable_fields:
                 self.fields.pop(name, None)
         if not step.pk or step.configuration == {}:
@@ -304,8 +311,9 @@ class ScenarioStepDraftForm(forms.ModelForm):
         if not scenario or not applicable_fields:
             return
         configuration = step.configuration if isinstance(step.configuration, dict) else {}
-        if ARRIVAL_INPUT_FIELD in self.fields:
-            self.initial[ARRIVAL_INPUT_FIELD] = configuration.get(ARRIVAL_INPUT_FIELD, "")
+        for name in (ARRIVAL_INPUT_FIELD, RETRY_LIMIT_FIELD):
+            if name in self.fields:
+                self.initial[name] = configuration.get(name)
         default_source = "the shared default or built-in prompt" if step.version.base_version_id else "the built-in prompt"
         for name, default in answer_label_defaults(scenario.language, step.key).items():
             if label := self.fields.get(name):
@@ -347,7 +355,10 @@ class ScenarioStepDraftForm(forms.ModelForm):
                 raise ValidationError("Clear the stored prompt overrides before entering new content.")
             configuration = {
                 **{name: value for name, value in step.configuration.items() if name not in editable},
-                **{name: data[name] for name in editable if data[name]},
+                **{
+                    name: data[name] for name in editable
+                    if data[name] or (name == RETRY_LIMIT_FIELD and data[name] == 0)
+                },
             }
             validate_step_configuration(scenario.language, scenario.channel, step.key, configuration)
             step.configuration = configuration
@@ -385,7 +396,8 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
             summary = ("outcome_wording",) if obj.key in OUTCOME_PROMPTS else ()
             labels = ("answer_button_labels",) if answer_label_fields(scenario.language, scenario.channel, obj.key) else ()
             parser = ("arrival_input_setting",) if ARRIVAL_INPUT_FIELD in prompts else ()
-            return (*self.fields, *primary, *summary, *labels, *parser)
+            retry = ("retry_limit_setting",) if RETRY_LIMIT_FIELD in prompts else ()
+            return (*self.fields, *primary, *summary, *labels, *parser, *retry)
         fields = (*self.fields, *prompts)
         if obj.configuration != {}:
             return (*fields, "clear_overrides")
@@ -446,6 +458,12 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
         from .scenario_publication import describe_arrival_input
 
         return describe_arrival_input(obj.configuration) or "Shared or built-in setting"
+
+    @admin.display(description="Retry limit")
+    def retry_limit_setting(self, obj):
+        from .scenario_publication import describe_retry_limit
+
+        return describe_retry_limit(obj.configuration) or "Shared or built-in setting"
 
     @admin.display(description="Chat wording")
     def chat_text(self, obj):

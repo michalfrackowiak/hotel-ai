@@ -13,7 +13,9 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 
 from .models import ScenarioStep, ScenarioTransition
-from .scenario_step_settings import validate_step_configuration
+from .scenario_step_settings import (
+    RETRY_EXHAUSTED_EVENT, RETRY_LIMIT_STEPS, retry_limit_value, validate_step_configuration,
+)
 
 
 TERMINAL_STEPS = frozenset({"completed", "cancelled", "handover"})
@@ -67,8 +69,15 @@ APPROVED_TRANSITIONS = {
         "retry": "delivery_pending",
     },
 }
+OPTIONAL_TRANSITIONS = {step: {RETRY_EXHAUSTED_EVENT: "handover"} for step in RETRY_LIMIT_STEPS}
 APPROVED_STEPS = TERMINAL_STEPS | frozenset(APPROVED_TRANSITIONS)
-MAX_TRANSITIONS = sum(map(len, APPROVED_TRANSITIONS.values()))
+MAX_TRANSITIONS = sum(map(len, APPROVED_TRANSITIONS.values())) + len(OPTIONAL_TRANSITIONS)
+
+
+def approved_destination(source, event):
+    return APPROVED_TRANSITIONS.get(source, {}).get(event) or OPTIONAL_TRANSITIONS.get(source, {}).get(event)
+
+
 QUOTE_APPROVAL = frozenset({("confirm", "approve_quote")})
 CONTACT_APPROVAL = frozenset({
     ("contact_confirm", "approve_contact"), ("contact_confirm", "approve_contact_without_wait"),
@@ -182,7 +191,7 @@ def _validate_scenario(version, *, require_outcomes, materialized=False):
         if source_id not in key_by_id or target_id not in key_by_id:
             raise ValidationError("Each transition must connect steps in this scenario version.")
         source, target = key_by_id[source_id], key_by_id[target_id]
-        if (source, event) in edges or APPROVED_TRANSITIONS.get(source, {}).get(event) != target:
+        if (source, event) in edges or approved_destination(source, event) != target:
             raise ValidationError(
                 "Unapproved or duplicate transition: %(source)s → %(target)s (%(event)s).",
                 params={"source": source, "target": target, "event": event},
@@ -190,11 +199,11 @@ def _validate_scenario(version, *, require_outcomes, materialized=False):
         edges.add((source, event))
         outgoing[source].append((event, target))
 
-    # Retry and explicitly named recovery edges are not independent progress.
+    # Retry, exhaustion, and explicitly named recovery edges do not replace normal progress.
     dependencies = {
         key: [
             target for event, target in outgoing[key]
-            if event != "retry" and event not in RECOVERY_EVENTS.get(key, ())
+            if event not in ("retry", RETRY_EXHAUSTED_EVENT) and event not in RECOVERY_EVENTS.get(key, ())
         ]
         for key in step_keys
     }
@@ -221,6 +230,9 @@ def _validate_scenario(version, *, require_outcomes, materialized=False):
             if source != "welcome" or language == "pl"
             for event in outcomes
         }
+        required.update(
+            (key, RETRY_EXHAUSTED_EVENT) for _, key, configuration in steps if retry_limit_value(configuration)
+        )
         if missing_outcomes := required - edges:
             raise ValidationError(
                 "Missing booking outcomes: %(outcomes)s.",

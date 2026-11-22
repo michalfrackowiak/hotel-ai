@@ -30,6 +30,12 @@ On the arrival step of a saved chat, voice, or shared draft, choose whether to a
 
 When **Require arrival and departure together** is selected, a reply that yields only one date prompts the guest for both dates without saving a partial stay. A recognized arrival date and stay length can also supply both dates. The rule applies to typed and transcribed replies, including dates entered during the Polish welcome. Single-date suggestions are hidden in this mode. Update the arrival wording to ask for both dates when enabling the setting. The booking engine still requires an arrival date today or later and a departure date after arrival.
 
+## Retry limits
+
+On a saved browser scenario step, enter a limit from 1 to 10 to hand over to reception when that many consecutive answers trigger the step's retry outcome. Leave the setting blank to inherit the shared value or use the default behavior. Enter 0 to disable the limit explicitly. A positive limit requires a `retry_exhausted` transition from that step to `handover` in the effective graph.
+
+Typed and transcribed answers count against the same limit. Moving to another step resets the count. Timeouts and stale requests do not count as retries. The automatic handover opens a staff conversation without copying the rejected answer into it.
+
 ## Review publication or rollback
 
 Open a scenario version in Django admin. Staff with publication and graph access can open a review for a saved draft or for a previously published version. Review the changes between the current graph and the proposed effective graph, including inherited settings, and confirm the action. Publication validates the draft before sealing it. Rollback selects an existing sealed version in the same scope. Both actions record the actor and the previous and new selections in publication history.

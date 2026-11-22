@@ -18,7 +18,7 @@ from model_providers.extraction import extract_stay_value
 
 from .contacts import parse_email
 from .conversation import COPY as BOOKING_COPY
-from .conversation import TERMINAL_STAGES, WELCOME_PARTS, advance, new_conversation, selects_english
+from .conversation import TERMINAL_STAGES, WELCOME_PARTS, new_conversation, selects_english
 from .models import Conversation, StaffHandover
 from .parser_review import review_booking_input
 from .parsing import parse_stay_input
@@ -27,7 +27,7 @@ from .scenario import (
     ENGLISH_WEB_GREETING, render_chat, scenario_overrides, set_prompt, split_voice_parts, voice_segments,
 )
 from .scenario_answers import answer_label_fields, quick_reply_defaults, suggestions, validate_answer_labels
-from .scenario_dispatch import resolve_web_transition
+from .scenario_dispatch import RETRY_HANDOVER, advance_web_turn, resolve_web_transition
 from .scenario_pinned_prompts import pinned_overrides
 from .scenario_pinning import (
     carry_web_scenario, pin_web_scenario, pinned_scenario_version_id, published_pinned_steps, web_scenario_channel,
@@ -115,7 +115,9 @@ def _result(state, *, stale=False, cursor=0):
     if state["stage"] == "handover":
         handover = StaffHandover.objects.get(pk=state["handover_id"])
         payload["handover_closed"] = handover.closed
-        payload["voice_welcome"] = not handover.closed and not handover.messages.exists()
+        payload["voice_welcome"] = (
+            not state.get(RETRY_HANDOVER) and not handover.closed and not handover.messages.exists()
+        )
         payload["handover_messages"] = list(
             handover.messages.filter(id__gt=cursor).order_by("id").values("id", "staff", "text")[:HANDOVER_PAGE_SIZE]
         )
@@ -312,7 +314,7 @@ def message(request):
         elif voice_start:
             if language == "pl" and state["stage"] == "check_in" and state.get("voice_welcome"):
                 state = _new_web_conversation(language)
-            elif state["stage"] == "handover":
+            elif state["stage"] == "handover" and not state.get(RETRY_HANDOVER):
                 handover = StaffHandover.objects.get(pk=state["handover_id"])
                 if not handover.closed and not handover.messages.exists():
                     handover.closed = True
@@ -340,16 +342,15 @@ def message(request):
                 parsed is not None and state["stage"] in ("welcome", "check_in")
                 and _requires_arrival_range(_pinned_step_configuration(state, "check_in"))
             )
-            state = advance(
+            state = advance_web_turn(
                 state, text or "", parsed, voice=voice, input_parsed=input_parsed,
-                resolve_transition=resolve_web_transition, timeout=timeout,
-                require_arrival_range=require_arrival_range,
+                timeout=timeout, require_arrival_range=require_arrival_range,
             )
             if was_welcome and state["stage"] == "check_in" and state["language"] == "pl" and not voice:
                 state["voice_welcome"] = True
             if state["stage"] == "handover":
                 handover = StaffHandover.objects.create(conversation=conversation, language=state["language"])
-                if text:
+                if text and not state.get(RETRY_HANDOVER):
                     handover.messages.create(text=text)
                 state["handover_id"] = handover.pk
         _save_state(conversation, state, fresh=fresh)
