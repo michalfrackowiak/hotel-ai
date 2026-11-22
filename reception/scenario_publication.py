@@ -89,21 +89,33 @@ def _graph_snapshot(version_id, using):
     return tuple((key, position, config) for _, key, position, config in rows), transitions
 
 
-def _describe_step(position, configuration):
-    parts = [f"position {position}"]
-    if not isinstance(configuration, dict):
-        return f"position {position}, invalid saved prompt configuration"
-    if text := configuration.get("chat_text"):
-        parts.append(f"chat: {text}")
-    voice = configuration.get("voice_parts")
+def _describe_prompt(configuration, *, prefix=""):
+    if text := configuration.get(f"{prefix}chat_text"):
+        yield f"{prefix.replace('_', ' ')}chat: {text}"
+    voice = configuration.get(f"{prefix}voice_parts")
     if isinstance(voice, list):
         for number, segment in enumerate(voice, 1):
             if isinstance(segment, dict):
                 listen = ", listen" if segment.get("listen") else ""
-                parts.append(
-                    f"voice {number}: {segment.get('text', '')} ({segment.get('seconds', 0)}s{listen})",
-                )
-    return " | ".join(parts)
+                yield f"{prefix.replace('_', ' ')}voice {number}: {segment.get('text', '')} ({segment.get('seconds', 0)}s{listen})"
+
+
+def describe_outcome_wording(configuration):
+    if isinstance(configuration, dict):
+        prefixes = {
+            field.removesuffix(kind)
+            for field in configuration
+            for kind in ("chat_text", "voice_parts")
+            if field.endswith(f"_{kind}")
+        }
+        for prefix in sorted(prefixes):
+            yield from _describe_prompt(configuration, prefix=prefix)
+
+
+def _describe_step(position, configuration):
+    if not isinstance(configuration, dict):
+        return f"position {position}, invalid saved prompt configuration"
+    return " | ".join((f"position {position}", *_describe_prompt(configuration), *describe_outcome_wording(configuration)))
 
 
 def _graph_diff(current, candidate):

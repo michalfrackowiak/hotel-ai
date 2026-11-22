@@ -12,7 +12,8 @@ from .models import Scenario, ScenarioPublication, ScenarioStep, ScenarioTransit
 from .scenario import default_chat_text, default_voice_parts
 from .scenario_editor import ARRIVAL_KEYS, VoicePartsField, _fields, _placeholder_help
 from .scenario_step_settings import (
-    CHAT_FIELD, MAX_CHAT_TEXT, VOICE_FIELD, prompt_fields, prompt_key, validate_step_configuration,
+    CHAT_FIELD, MAX_CHAT_TEXT, OUTCOME_PROMPTS, VOICE_FIELD, outcome_field, prompt_bindings,
+    prompt_fields, validate_step_configuration,
 )
 
 SELECTION_SALT = "reception.scenario-selection.v1"
@@ -296,28 +297,33 @@ class ScenarioStepDraftForm(forms.ModelForm):
         if not scenario or not applicable_fields:
             return
         configuration = step.configuration if isinstance(step.configuration, dict) else {}
-        key = prompt_key(scenario.language, step.key)
         default_source = "the shared default or built-in prompt" if step.version.base_version_id else "the built-in prompt"
-        if chat := self.fields.get(CHAT_FIELD):
-            default = default_chat_text(scenario.language, key)
-            self.initial[CHAT_FIELD] = configuration.get(CHAT_FIELD, "")
-            chat.help_text = f"Leave blank to use {default_source}." + _placeholder_help(_fields([default]))
-            chat.widget.attrs["placeholder"] = default
-        if voice := self.fields.get(VOICE_FIELD):
-            parts = configuration.get(VOICE_FIELD)
-            if isinstance(parts, list) and all(isinstance(part, dict) for part in parts):
-                self.initial[VOICE_FIELD] = parts
-            voice.widget.allow_listening = key in ARRIVAL_KEYS
-            defaults = default_voice_parts(scenario.language, key)
-            voice.help_text += f" Leave every row blank to use {default_source}."
-            voice.help_text += _placeholder_help(_fields(part["text"] for part in defaults))
+        for key, fields in prompt_bindings(scenario.language, scenario.channel, step.key).items():
+            chat_name, voice_name = fields.get(CHAT_FIELD), fields.get(VOICE_FIELD)
+            if chat := self.fields.get(chat_name):
+                default = default_chat_text(scenario.language, key)
+                self.initial[chat_name] = configuration.get(chat_name, "")
+                chat.help_text = f"Leave blank to use {default_source}." + _placeholder_help(_fields([default]))
+                chat.widget.attrs["placeholder"] = default
+            if voice := self.fields.get(voice_name):
+                parts = configuration.get(voice_name)
+                if isinstance(parts, list) and all(isinstance(part, dict) for part in parts):
+                    self.initial[voice_name] = parts
+                voice.widget.allow_listening = key in ARRIVAL_KEYS
+                defaults = default_voice_parts(scenario.language, key)
+                voice.help_text += f" Leave every row blank to use {default_source}."
+                voice.help_text += _placeholder_help(_fields(part["text"] for part in defaults))
+                if key == "option":
+                    voice.widget.max_parts = 1
+                    voice.help_text += " This segment is used inside the room list. Set its pause to zero."
 
     def clean(self):
         data = super().clean()
         step = self.instance
         if not step.pk:
             return data
-        editable = [name for name in (CHAT_FIELD, VOICE_FIELD) if name in self.fields]
+        scenario = step.version.scenario
+        editable = [name for name in prompt_fields(scenario.channel, step.key) if name in self.fields]
         if data.get("clear_overrides"):
             for name in editable:
                 self.errors.pop(name, None)
@@ -329,7 +335,6 @@ class ScenarioStepDraftForm(forms.ModelForm):
                 **{name: value for name, value in step.configuration.items() if name not in editable},
                 **{name: data[name] for name in editable if data[name]},
             }
-            scenario = step.version.scenario
             validate_step_configuration(scenario.language, scenario.channel, step.key, configuration)
             step.configuration = configuration
         return data
@@ -359,13 +364,46 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
     def get_fields(self, request, obj=None):
         if obj is None:
             return self.fields
-        fields = (*self.fields, *prompt_fields(obj.version.scenario.channel, obj.key))
-        if obj.configuration != {} and self.has_change_permission(request, obj):
+        prompts = prompt_fields(obj.version.scenario.channel, obj.key)
+        if not self.has_change_permission(request, obj):
+            primary = tuple(name for name in prompts if name in (CHAT_FIELD, VOICE_FIELD))
+            summary = ("outcome_wording",) if obj.key in OUTCOME_PROMPTS else ()
+            return (*self.fields, *primary, *summary)
+        fields = (*self.fields, *prompts)
+        if obj.configuration != {}:
             return (*fields, "clear_overrides")
         return fields
 
+    def get_form(self, request, obj=None, **kwargs):
+        if obj is not None and self.has_change_permission(request, obj):
+            variants = {}
+            available = prompt_fields(obj.version.scenario.channel, obj.key)
+            for prompt in OUTCOME_PROMPTS.get(obj.key, ()):
+                label = prompt.replace("_", " ").capitalize()
+                chat_name = outcome_field(prompt, CHAT_FIELD)
+                if chat_name in available:
+                    variants[chat_name] = forms.CharField(
+                        required=False, max_length=MAX_CHAT_TEXT, label=f"{label} chat wording",
+                        widget=forms.Textarea(attrs={"rows": 3}),
+                    )
+                voice_name = outcome_field(prompt, VOICE_FIELD)
+                if voice_name in available:
+                    variants[voice_name] = VoicePartsField(
+                        required=False, label=f"{label} voice segments",
+                        help_text="Segments play from top to bottom.",
+                    )
+            if variants:
+                kwargs["form"] = type("ScenarioStepOutcomeForm", (self.form,), variants)
+        return super().get_form(request, obj, **kwargs)
+
     def get_readonly_fields(self, request, obj=None):
         return ("version", "key") if obj is not None else ()
+
+    @admin.display(description="Outcome wording")
+    def outcome_wording(self, obj):
+        from .scenario_publication import describe_outcome_wording
+
+        return " | ".join(describe_outcome_wording(obj.configuration)) or "Default wording"
 
     @admin.display(description="Chat wording")
     def chat_text(self, obj):
