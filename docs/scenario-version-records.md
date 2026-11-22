@@ -36,8 +36,10 @@ Browser chat and speech read supported prompt settings from the sealed version r
 
 Each override applies to its exact prompt key. The English arrival override applies to direct English entry. Arrival after switching from Polish uses the built-in English prompt. Indexed browser audio uses pinned segments and the same segment key as the on-screen reply. Unindexed audio retains its existing literal-reply behavior. Unsupported prompts and steps with no override use built-in wording in pinned drafts. Drafts without a version ID keep the existing live prompt behavior. The phone renderer is unchanged. Staff configuration of additional prompt variants remains roadmap work.
 
-## Pinned arrival and departure transitions
+## Pinned browser transitions
 
 In browser chat and voice, the booking engine classifies input at the arrival and departure steps and validates dates before applying the corresponding transition. The recorded scenario version must contain the approved edge for that outcome. A missing edge keeps the draft on its current date step and prompts the guest again. The server logs the version, step and event without including guest input.
 
-A single arrival date leads to the departure step, a complete valid date range leads to the guest-count step, and a valid departure can proceed only after the arrival date. At the arrival step, unrecognized input and a listening timeout use separate handover outcomes. Drafts without a selected version use the built-in flow. The Polish welcome can accept dates through its existing path, which also handles language selection. Later booking stages and inbound phone retain their existing flows.
+A single arrival date leads to the departure step, a complete valid date range leads to the guest-count step, and a valid departure can proceed only after the arrival date. At the arrival step, unrecognized input and a listening timeout use separate handover outcomes. At the Polish welcome step, typed continuation, timeout, and valid dates use their named edges. Explicit English selection starts the English scenario for the same channel.
+
+Guest count, availability, room selection, quote approval or rejection, and delivery choice use their approved edges. The booking engine still checks availability and room selection before applying the route. A missing edge keeps the guest at the current step. Drafts without a selected version use the built-in flow. Contact review, booking and receipt outcomes are the remaining browser dispatch work. Inbound phone continues to use its own booking flow.

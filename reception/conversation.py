@@ -161,7 +161,19 @@ def advance(state, message, parsed, *, voice=False, input_parsed=False, resolve_
     answer = _answer(message)
     if stage in ("welcome", "check_in") and language == "pl" and answer in ENGLISH_SELECTIONS:
         return new_conversation("en", "check_in")
+    today = timezone.localdate() if stage in ("welcome", "check_in") else None
     if stage == "welcome":
+        if resolve_transition is not None:
+            if isinstance(parsed, StayDates) and today <= parsed.check_in < parsed.check_out:
+                event, destination = "stay_dates", "guests"
+            elif type(parsed) is date and parsed >= today:
+                event, destination = "arrival", "check_out"
+            else:
+                event, destination = ("timeout" if timeout else "continue"), "check_in"
+            if not _allows_transition(state, event, destination, resolve_transition):
+                return {**state, "revision": uuid4().hex}
+            # The validated welcome edge covers the same-turn date handling.
+            resolve_transition = None
         state = new_conversation(language, "check_in")
         if not isinstance(parsed, (date, StayDates)):
             return state
@@ -183,7 +195,7 @@ def advance(state, message, parsed, *, voice=False, input_parsed=False, resolve_
     state = {**state, "revision": uuid4().hex}
     if stage == "check_in":
         if isinstance(parsed, StayDates):
-            valid = timezone.localdate() <= parsed.check_in < parsed.check_out
+            valid = today <= parsed.check_in < parsed.check_out
             event, destination = ("stay_dates", "guests") if valid else ("retry", "check_in")
             allowed = _allows_transition(state, event, destination, resolve_transition)
             if valid and allowed:
@@ -192,7 +204,7 @@ def advance(state, message, parsed, *, voice=False, input_parsed=False, resolve_
             else:
                 set_prompt(state, "check_in")
         elif type(parsed) is date:
-            valid = parsed >= timezone.localdate()
+            valid = parsed >= today
             event, destination = ("arrival", "check_out") if valid else ("retry", "check_in")
             allowed = _allows_transition(state, event, destination, resolve_transition)
             if valid and allowed:
@@ -216,24 +228,36 @@ def advance(state, message, parsed, *, voice=False, input_parsed=False, resolve_
             set_prompt(state, "check_out_retry")
     elif stage == "guests":
         if type(parsed) is int and 1 <= parsed <= 32767:
-            return _offer_rooms(state, parsed, voice)
+            return _offer_rooms(state, parsed, voice, resolve_transition)
+        _allows_transition(state, "retry", "guests", resolve_transition)
         set_prompt(state, "guests_retry")
     elif stage == "room":
-        return _select_room(state, parsed if input_parsed else _room_choice(state, answer))
+        choice = parsed if input_parsed else _room_choice(state, answer)
+        event, destination = ("selected", "confirm") if choice is not None else ("retry", "room")
+        if _allows_transition(state, event, destination, resolve_transition):
+            return _select_room(state, choice)
     elif stage == "confirm":
         if answer in CANCEL[language]:
-            return _terminal(state, "cancelled")
-        if answer in CONFIRM[language]:
+            if _allows_transition(state, "decline_quote", "cancelled", resolve_transition):
+                return _terminal(state, "cancelled")
+        elif answer in CONFIRM[language]:
+            if not _allows_transition(state, "approve_quote", "delivery", resolve_transition):
+                return state
             state["stage"] = "delivery"
             set_prompt(state, "delivery")
             state.setdefault("booking_key", str(uuid4()))
+        else:
+            _allows_transition(state, "retry", "confirm", resolve_transition)
     elif stage == "delivery":
         if answer in EMAIL_ANSWERS:
-            state["stage"] = "email"
-            set_prompt(state, "email")
+            event, destination = "email", "email"
         elif answer in SMS_ANSWERS:
-            state["stage"] = "phone"
-            set_prompt(state, "phone")
+            event, destination = "sms", "phone"
+        else:
+            event, destination = "retry", "delivery"
+        if _allows_transition(state, event, destination, resolve_transition) and destination != "delivery":
+            state["stage"] = destination
+            set_prompt(state, destination)
     elif stage in CONTACT_STAGES:
         return _contact_turn(state, message, answer, parsed if input_parsed else None)
     return state
@@ -297,15 +321,21 @@ def _contact_turn(state, message, answer, parsed):
     return _set_candidate(state, method, candidate)
 
 
-def _offer_rooms(state, guests, voice):
+def _offer_rooms(state, guests, voice, resolve_transition):
     language = state["language"]
     check_in, check_out = _stay_dates(state)
     try:
         offers = available_rooms(check_in=check_in, check_out=check_out, guests=guests)
     except BookingError:
-        return new_conversation(language, "offer_changed")
+        if _allows_transition(state, "offer_changed", "check_in", resolve_transition):
+            return new_conversation(language, "offer_changed")
+        return state
     if not offers:
-        return new_conversation(language, "unavailable")
+        if _allows_transition(state, "unavailable", "check_in", resolve_transition):
+            return new_conversation(language, "unavailable")
+        return state
+    if not _allows_transition(state, "available", "room", resolve_transition):
+        return state
     if voice:
         offers = offers[:2]
     state.update(
