@@ -41,24 +41,40 @@ COPY = {
 }
 
 
-def start_receipt(state, reference, method):
+def waits_for_confirmation(method):
+    return method in settings.HOTEL_CONFIRMATION_WAIT_METHODS or method in configured_methods()
+
+
+def start_receipt(state, reference, method, *, wait=None):
     receipt = set_prompt({
         "language": state["language"], "revision": state["revision"], "flow": state["flow"],
         "stage": DELIVERY_PENDING, "reference": reference, "method": method,
     }, "receipt_waiting")
-    if method in settings.HOTEL_CONFIRMATION_WAIT_METHODS or method in configured_methods():
+    if wait is None:
+        wait = waits_for_confirmation(method)
+    if wait:
         receipt["delivery_deadline"] = timezone.now().timestamp() + DELIVERY_WAIT_SECONDS
         return receipt
     return _complete(receipt, BookingConfirmation.Status.PENDING)
 
 
-def refresh_receipt(state):
+def refresh_receipt(state, *, resolve_transition=None):
     status = BookingConfirmation.Status
     outcome = BookingConfirmation.objects.filter(booking__reference=state["reference"]).values_list(
         "status", flat=True,
     ).first()
     if outcome in (status.PENDING, status.SENDING) and timezone.now().timestamp() < state["delivery_deadline"]:
+        if resolve_transition is not None:
+            resolve_transition(state, "retry")
         return state
+    if resolve_transition is not None:
+        event = {
+            status.ACCEPTED: "dispatch_accepted",
+            status.PENDING: "dispatch_pending",
+        }.get(outcome, "dispatch_unverified")
+        # The booking already exists. The resolver reports graph drift, and
+        # the authoritative booking reference must still reach the guest.
+        resolve_transition(state, event)
     return _complete({**state, "revision": uuid4().hex}, outcome)
 
 

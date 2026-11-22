@@ -94,7 +94,7 @@ The current admin edits prompt text and voice segments; conversation transitions
 - [ ] Provide a flow overview and simulator with example inputs, extracted values, chosen transition and rendered voice/chat output. Validate missing placeholders, unreachable states, loops, required contact/consent paths and terminal states before publishing.
 - [x] Record the selected scenario version and entry channel on new web conversations. Preserve the pin across same-language turns, retries, and later publication or rollback. See [web conversation pinning](scenario-version-records.md#web-conversation-pinning).
 - [x] Render supported web prompts from the pinned version, with built-in fallbacks and compatibility for unpinned conversations. See [pinned web prompts](scenario-version-records.md#pinned-web-prompts).
-- [ ] Use the pinned version for approved transition dispatch. Preserve the booking engine’s consent and booking guarantees. Browser welcome through delivery choice use pinned edges. Contact review, booking and receipt outcomes remain open.
+- [x] Use the pinned version for approved browser transition dispatch, from welcome through contact confirmation and receipt. Preserve the booking engine’s consent and booking guarantees. See [pinned browser transitions](scenario-version-records.md#pinned-browser-transitions).
 
 **Acceptance:** staff can configure every scenario state in both channels/languages; new sessions use a published version while active bookings finish consistently; simulator and real conversation agree; no edited branch can bypass confirmation or create duplicate/overlapping bookings.
 

@@ -9,7 +9,7 @@ from bookings.services import BookingError, available_rooms, confirm_booking
 from . import legacy_conversation
 from .contacts import parse_email, parse_phone
 from .parsing import NUMBER_WORDS, ORDINALS, StayDates, parse_stay_input
-from .receipt import DELIVERY_PENDING, start_receipt
+from .receipt import DELIVERY_PENDING, start_receipt, waits_for_confirmation
 from .scenario import room_options, set_prompt
 
 
@@ -259,7 +259,7 @@ def advance(state, message, parsed, *, voice=False, input_parsed=False, resolve_
             state["stage"] = destination
             set_prompt(state, destination)
     elif stage in CONTACT_STAGES:
-        return _contact_turn(state, message, answer, parsed if input_parsed else None)
+        return _contact_turn(state, message, answer, parsed if input_parsed else None, resolve_transition)
     return state
 
 
@@ -280,24 +280,26 @@ def _set_candidate(state, method, candidate):
     return set_prompt(state, f"confirm_{entry}", {"contact": candidate})
 
 
-def _contact_turn(state, message, answer, parsed):
+def _contact_turn(state, message, answer, parsed, resolve_transition):
     language = state["language"]
     stage = state["stage"]
     reviewing = stage == "contact_confirm"
     method = state["contact_method"] if reviewing else ("email" if stage == "email" else "sms")
     entry = "email" if method == "email" else "phone"
     if answer in CONTACT_HANDOVER[language]:
-        return _terminal(state, "handover")
+        if _allows_transition(state, "reception", "handover", resolve_transition):
+            return _terminal(state, "handover")
+        return state
     if state.get("flow") == "neptun":
         if answer in DELIVERY_CHANGES[language]:
-            return _contact_entry(state, "delivery")
+            return _route_contact_entry(state, "change_delivery", "delivery", resolve_transition)
         if answer in EMAIL_ANSWERS:
-            return _contact_entry(state, "email")
+            return _route_contact_entry(state, "choose_email", "email", resolve_transition)
         if answer in SMS_ANSWERS:
-            return _contact_entry(state, "phone")
+            return _route_contact_entry(state, "choose_sms", "phone", resolve_transition)
     if reviewing:
         if answer in CANCEL[language] or answer in CONTACT_CHANGES[language]:
-            return _contact_entry(state, entry)
+            return _route_contact_entry(state, f"edit_{entry}", entry, resolve_transition)
         if answer in CONFIRM[language]:
             candidate = state["contact_candidate"]
             if state.get("flow") != "neptun":
@@ -312,13 +314,23 @@ def _contact_turn(state, message, answer, parsed):
                 return legacy_conversation.advance(state, candidate, None)
             return _book(
                 state, email=candidate if method == "email" else "",
-                phone=candidate if method == "sms" else "", method=method,
+                phone=candidate if method == "sms" else "", method=method, resolve_transition=resolve_transition,
             )
     parse_contact = parse_email if method == "email" else parse_phone
     candidate = parsed or parse_contact(message)
     if candidate is None:
+        _allows_transition(state, "retry", stage, resolve_transition)
         return state if reviewing else set_prompt(state, f"invalid_{entry}")
-    return _set_candidate(state, method, candidate)
+    event = "replace_contact" if reviewing else "valid_contact"
+    if _allows_transition(state, event, "contact_confirm", resolve_transition):
+        return _set_candidate(state, method, candidate)
+    return state
+
+
+def _route_contact_entry(state, event, entry, resolve_transition):
+    if _allows_transition(state, event, entry, resolve_transition):
+        return _contact_entry(state, entry)
+    return state
 
 
 def _offer_rooms(state, guests, voice, resolve_transition):
@@ -404,9 +416,15 @@ def recognizes_booking_answer(state, message):
     return False
 
 
-def _book(state, *, email, phone, method):
+def _book(state, *, email, phone, method, resolve_transition):
     language = state["language"]
     check_in, check_out = _stay_dates(state)
+    wait = waits_for_confirmation(method)
+    event, destination = (
+        ("approve_contact", DELIVERY_PENDING) if wait else ("approve_contact_without_wait", "completed")
+    )
+    if not _allows_transition(state, event, destination, resolve_transition):
+        return state
     try:
         booking, _ = confirm_booking(
             room_id=state["room_id"], check_in=check_in, check_out=check_out, guests=state["guests"],
@@ -415,7 +433,11 @@ def _book(state, *, email, phone, method):
         )
     except BookingError as error:
         if error.code in {"invalid_email", "invalid_phone"}:
-            _contact_entry(state, "email" if method == "email" else "phone")
-            return set_prompt(state, error.code)
-        return new_conversation(language, "offer_changed")
-    return start_receipt(state, str(booking.reference), method)
+            entry = "email" if method == "email" else "phone"
+            if _allows_transition(state, error.code, entry, resolve_transition):
+                _contact_entry(state, entry)
+                return set_prompt(state, error.code)
+        elif _allows_transition(state, "offer_changed", "check_in", resolve_transition):
+            return new_conversation(language, "offer_changed")
+        return state
+    return start_receipt(state, str(booking.reference), method, wait=wait)

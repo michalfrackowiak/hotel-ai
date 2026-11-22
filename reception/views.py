@@ -180,7 +180,7 @@ def _poll_receipt(session_id, language, revision):
     state = conversation.state
     if state["stage"] != DELIVERY_PENDING or state["revision"] != revision or state["language"] != language:
         return _result(state, stale=True)
-    state = refresh_receipt(state)
+    state = refresh_receipt(state, resolve_transition=resolve_web_transition)
     _save_state(conversation, state)
     return _result(state)
 
