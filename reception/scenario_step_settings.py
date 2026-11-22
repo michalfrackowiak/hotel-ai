@@ -51,11 +51,11 @@ def prompt_key(language, step_key):
     return STEP_PROMPTS.get(step_key)
 
 
-def prompt_fields(channel, step_key):
+def prompt_fields(language, channel, step_key):
     kinds = CHANNEL_FIELDS.get(channel, ())
     primary = kinds if step_key in STEP_PROMPTS else ()
     outcomes = (outcome_field(prompt, kind) for prompt in OUTCOME_PROMPTS.get(step_key, ()) for kind in kinds)
-    return (*primary, *outcomes, *answer_label_fields(channel, step_key))
+    return (*primary, *outcomes, *answer_label_fields(language, channel, step_key))
 
 
 def prompt_bindings(language, channel, step_key):
@@ -75,10 +75,10 @@ def validate_step_configuration(language, channel, key, configuration):
         raise ValidationError("Step configuration must be an object.")
     if not configuration:
         return
-    if language not in {"en", "pl"} or set(configuration).difference(prompt_fields(channel, key)):
+    if language not in {"en", "pl"} or set(configuration).difference(prompt_fields(language, channel, key)):
         raise ValidationError("This step or channel does not support the selected prompt settings.")
 
-    validate_answer_labels(channel, key, configuration)
+    validate_answer_labels(language, channel, key, configuration)
     for prompt, fields in prompt_bindings(language, channel, key).items():
         chat_field, voice_field = fields.get(CHAT_FIELD), fields.get(VOICE_FIELD)
         if chat_field not in configuration and voice_field not in configuration:

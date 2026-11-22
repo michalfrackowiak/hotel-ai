@@ -86,7 +86,7 @@ def materialize_scenario_defaults(draft):
         for key, base_step in base_steps.items():
             inherited = {
                 field: base_step.configuration[field]
-                for field in prompt_fields(channel, key)
+                for field in prompt_fields(language, channel, key)
                 if field in base_step.configuration
             }
             if local := channel_steps.get(key):

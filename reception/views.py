@@ -26,7 +26,7 @@ from .receipt import DELIVERY_PENDING, refresh_receipt
 from .scenario import (
     ENGLISH_WEB_GREETING, render_chat, scenario_overrides, set_prompt, split_voice_parts, voice_segments,
 )
-from .scenario_answers import answer_label_fields, suggestions, validate_answer_labels
+from .scenario_answers import answer_label_fields, quick_reply_defaults, suggestions, validate_answer_labels
 from .scenario_dispatch import resolve_web_transition
 from .scenario_pinned_prompts import pinned_overrides
 from .scenario_pinning import (
@@ -97,8 +97,15 @@ def _result(state, *, stale=False, cursor=0):
             payload["arrival_parts"] = parts
     elif payload["reply"] != state["reply"]:
         payload["voice_reply"] = state["reply"]
-    if suggestions := _suggestions(state):
-        payload["suggestions"] = suggestions
+    answer_labels = _pinned_answer_labels(state)
+    if suggested := suggestions(state, answer_labels):
+        payload["suggestions"] = suggested
+    if quick_replies := {
+        field: answer_labels[field]
+        for field in quick_reply_defaults(state["language"], state["stage"])
+        if field in answer_labels
+    }:
+        payload["quick_reply_labels"] = quick_replies
     if state["stage"] == "check_in" and state["language"] == "pl" and state.get("voice_welcome"):
         payload["voice_welcome"] = True
     if state["stage"] == "handover":
@@ -113,21 +120,19 @@ def _result(state, *, stale=False, cursor=0):
     return JsonResponse(payload, status=409 if stale else 200)
 
 
-def _suggestions(state):
-    stage = state["stage"]
-    labels = {}
-    if web_scenario_channel(state) == "chat" and pinned_scenario_version_id(state) and answer_label_fields("chat", stage):
-        configuration = (
-            published_pinned_steps(state).filter(key=stage).values_list("configuration", flat=True).first()
-        )
-        if isinstance(configuration, dict):
-            try:
-                validate_answer_labels("chat", stage, configuration)
-            except ValidationError:
-                pass
-            else:
-                labels = configuration
-    return suggestions(state, labels)
+def _pinned_answer_labels(state):
+    language, stage = state["language"], state["stage"]
+    fields = answer_label_fields(language, "chat", stage)
+    if not fields or web_scenario_channel(state) != "chat" or pinned_scenario_version_id(state) is None:
+        return {}
+    configuration = published_pinned_steps(state).filter(key=stage).values_list("configuration", flat=True).first()
+    if not isinstance(configuration, dict):
+        return {}
+    try:
+        validate_answer_labels(language, "chat", stage, configuration)
+    except ValidationError:
+        return {}
+    return {field: configuration[field] for field in fields if field in configuration}
 
 
 def _invalid(status=400):

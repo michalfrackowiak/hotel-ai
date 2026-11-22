@@ -119,7 +119,8 @@ def describe_answer_labels(configuration):
             if field == ROOM_ANSWER_LABEL:
                 yield f"Room answer button: {configuration[field]}"
             elif field.startswith("answer_label_"):
-                yield f"Answer button {field.removeprefix('answer_label_')}: {configuration[field]}"
+                label = field.removeprefix("answer_label_").replace("_", " ")
+                yield f"Answer button {label}: {configuration[field]}"
 
 
 def _describe_step(position, configuration):

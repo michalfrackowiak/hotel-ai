@@ -289,7 +289,7 @@ class ScenarioStepDraftForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         step = self.instance
         scenario = step.version.scenario if step.pk else None
-        applicable_fields = prompt_fields(scenario.channel, step.key) if scenario else ()
+        applicable_fields = prompt_fields(scenario.language, scenario.channel, step.key) if scenario else ()
         for name in (CHAT_FIELD, VOICE_FIELD):
             if name not in applicable_fields:
                 self.fields.pop(name, None)
@@ -329,7 +329,7 @@ class ScenarioStepDraftForm(forms.ModelForm):
         if not step.pk:
             return data
         scenario = step.version.scenario
-        editable = [name for name in prompt_fields(scenario.channel, step.key) if name in self.fields]
+        editable = [name for name in prompt_fields(scenario.language, scenario.channel, step.key) if name in self.fields]
         if data.get("clear_overrides"):
             for name in editable:
                 self.errors.pop(name, None)
@@ -370,11 +370,12 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
     def get_fields(self, request, obj=None):
         if obj is None:
             return self.fields
-        prompts = prompt_fields(obj.version.scenario.channel, obj.key)
+        scenario = obj.version.scenario
+        prompts = prompt_fields(scenario.language, scenario.channel, obj.key)
         if not self.has_change_permission(request, obj):
             primary = tuple(name for name in prompts if name in (CHAT_FIELD, VOICE_FIELD))
             summary = ("outcome_wording",) if obj.key in OUTCOME_PROMPTS else ()
-            labels = ("answer_button_labels",) if answer_label_fields(obj.version.scenario.channel, obj.key) else ()
+            labels = ("answer_button_labels",) if answer_label_fields(scenario.language, scenario.channel, obj.key) else ()
             return (*self.fields, *primary, *summary, *labels)
         fields = (*self.fields, *prompts)
         if obj.configuration != {}:
@@ -384,8 +385,9 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
     def get_form(self, request, obj=None, **kwargs):
         if obj is not None and self.has_change_permission(request, obj):
             variants = {}
-            available = prompt_fields(obj.version.scenario.channel, obj.key)
-            for field, answer in answer_label_defaults(obj.version.scenario.language, obj.key).items():
+            scenario = obj.version.scenario
+            available = prompt_fields(scenario.language, scenario.channel, obj.key)
+            for field, answer in answer_label_defaults(scenario.language, obj.key).items():
                 if field not in available:
                     continue
                 if field == ROOM_ANSWER_LABEL:

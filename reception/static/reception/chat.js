@@ -88,6 +88,7 @@
     let staffReplied = false;
     let cursor = 0;
     let suggestedAnswers = [];
+    let quickReplyLabels = {};
     let displayedTurn = null;
     let transcriptShown = false;
     let canChangeDelivery = false;
@@ -108,21 +109,31 @@
         resetButton.textContent = copy.reset;
         retryButton.textContent = copy.retry;
         languageChoice.hidden = language !== "pl" || !["welcome", "check_in"].includes(stage);
+        const english = languageChoice.querySelector("button");
+        english.textContent = quickReplyLabels.answer_label_choose_english || "English";
+        english.lang = quickReplyLabels.answer_label_choose_english ? language : "en";
         const contactConfirmation = stage === "contact_confirm";
         confirmation.hidden = stage !== "confirm" && !contactConfirmation;
         contactValue.hidden = !contactConfirmation;
         changeDelivery.hidden = !contactConfirmation || !canChangeDelivery;
-        changeDelivery.textContent = copy.changeDelivery;
+        changeDelivery.textContent = quickReplyLabels.answer_label_change_delivery || copy.changeDelivery;
         changeDelivery.disabled = !canSend;
         typeInstead.hidden = !voiceActive || !["email", "phone", "contact_confirm"].includes(stage);
         typeInstead.disabled = !canSend;
         typeInstead.textContent = copy.typeInstead;
         const [yes, no] = confirmation.querySelectorAll("button");
-        yes.textContent = contactConfirmation ? copy.correct : copy.yes;
+        yes.textContent = contactConfirmation
+            ? quickReplyLabels.answer_label_approve_contact || copy.correct
+            : quickReplyLabels.answer_label_approve_quote || copy.yes;
         yes.dataset.answer = language === "pl" ? "Tak" : "Yes";
-        no.textContent = contactConfirmation ? copy.change : copy.no;
+        no.textContent = contactConfirmation
+            ? quickReplyLabels.answer_label_edit_contact || copy.change
+            : quickReplyLabels.answer_label_decline_quote || copy.no;
         no.dataset.answer = copy.no;
         delivery.hidden = stage !== "delivery";
+        const [email, sms] = delivery.querySelectorAll("button");
+        email.textContent = quickReplyLabels.answer_label_email || "E-mail";
+        sms.textContent = quickReplyLabels.answer_label_sms || "SMS";
         answerButtons.forEach((button) => {
             button.disabled = !canSend;
         });
@@ -228,6 +239,7 @@
                 lastReply = result.reply;
                 displayReply(result);
                 suggestedAnswers = result.suggestions || [];
+                quickReplyLabels = result.quick_reply_labels || {};
                 status.textContent = "";
                 updateControls();
                 announceReply(result);
@@ -306,6 +318,7 @@
             revision = result.revision;
             voiceWelcome = Boolean(result.voice_welcome);
             suggestedAnswers = result.suggestions || [];
+            quickReplyLabels = result.quick_reply_labels || {};
             transcriptShown = false;
             connected = true;
             status.textContent = result.stale ? labels[language].updated : "";
