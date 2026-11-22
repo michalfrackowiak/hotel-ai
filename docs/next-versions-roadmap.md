@@ -90,7 +90,8 @@ The current admin edits prompt text and voice segments; conversation transitions
 - [x] Expose permission-gated staff publication and rollback with an effective graph diff, recent selection history, and stale-review protection. See [staff review](scenario-version-records.md#review-publication-or-rollback).
 - [x] Edit primary draft prompts with validated chat placeholders and ordered voice segments, pauses and arrival listening.
 - [x] Add per-outcome chat wording and voice segments for supported browser prompts.
-- [ ] Extend editing to answer buttons, expected parser fields, retry limits, additional validation messages, allowed branches, timeout actions, and delivery/handover behavior. Add voice silence windows and interruption policy, and independent chat button labels.
+- [x] Edit chat suggestion labels for arrival, departure, guest count and room selection independently of submitted answers.
+- [ ] Extend editing to other answer buttons, expected parser fields, retry limits, additional validation messages, allowed branches, timeout actions, and delivery/handover behavior. Add voice silence windows and interruption policy.
 - [ ] Permit adding/reordering optional steps and routing through approved actions. Keep availability, price calculation, required consent and atomic booking creation as enforced server invariants. Forbid arbitrary Python, SQL or unvalidated external actions in the editor.
 - [ ] Provide a flow overview and simulator with example inputs, extracted values, chosen transition and rendered voice/chat output. Validate missing placeholders, unreachable states, loops, required contact/consent paths and terminal states before publishing.
 - [x] Record the selected scenario version and entry channel on new web conversations. Preserve the pin across same-language turns, retries, and later publication or rollback. See [web conversation pinning](scenario-version-records.md#web-conversation-pinning).

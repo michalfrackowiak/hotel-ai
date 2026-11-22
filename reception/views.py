@@ -5,6 +5,7 @@ from hashlib import sha256
 from uuid import uuid4
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.http.request import UnreadablePostError
@@ -25,9 +26,12 @@ from .receipt import DELIVERY_PENDING, refresh_receipt
 from .scenario import (
     ENGLISH_WEB_GREETING, render_chat, scenario_overrides, set_prompt, split_voice_parts, voice_segments,
 )
+from .scenario_answers import answer_label_fields, suggestions, validate_answer_labels
 from .scenario_dispatch import resolve_web_transition
 from .scenario_pinned_prompts import pinned_overrides
-from .scenario_pinning import carry_web_scenario, pin_web_scenario, pinned_scenario_version_id, web_scenario_channel
+from .scenario_pinning import (
+    carry_web_scenario, pin_web_scenario, pinned_scenario_version_id, published_pinned_steps, web_scenario_channel,
+)
 from .speech import (
     MAX_PCM_BYTES, MAX_TEXT_CHARACTERS, SpeechBusy, SpeechUnavailable, synthesize, synthesize_welcome, transcribe,
     transcribe_welcome,
@@ -110,21 +114,20 @@ def _result(state, *, stale=False, cursor=0):
 
 
 def _suggestions(state):
-    language, stage = state["language"], state["stage"]
-    if stage == "check_in":
-        answers = ("Dzisiaj", "Jutro", "Pojutrze") if language == "pl" else ("Today", "Tomorrow", "Day after tomorrow")
-    elif stage == "check_out":
-        answers = ("1 noc", "2 noce", "3 noce") if language == "pl" else ("1 night", "2 nights", "3 nights")
-    elif stage == "guests":
-        answers = ("1", "2", "3", "4")
-    elif stage == "room":
-        return [
-            {"label": offer["room"], "text": str(number)}
-            for number, offer in enumerate(state["choices"], 1)
-        ]
-    else:
-        return []
-    return [{"label": answer, "text": answer} for answer in answers]
+    stage = state["stage"]
+    labels = {}
+    if web_scenario_channel(state) == "chat" and pinned_scenario_version_id(state) and answer_label_fields("chat", stage):
+        configuration = (
+            published_pinned_steps(state).filter(key=stage).values_list("configuration", flat=True).first()
+        )
+        if isinstance(configuration, dict):
+            try:
+                validate_answer_labels("chat", stage, configuration)
+            except ValidationError:
+                pass
+            else:
+                labels = configuration
+    return suggestions(state, labels)
 
 
 def _invalid(status=400):

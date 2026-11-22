@@ -10,6 +10,7 @@ from django.views.decorators.http import require_http_methods
 
 from .models import Scenario, ScenarioPublication, ScenarioStep, ScenarioTransition, ScenarioVersion
 from .scenario import default_chat_text, default_voice_parts
+from .scenario_answers import MAX_ANSWER_LABEL, ROOM_ANSWER_LABEL, answer_label_defaults, answer_label_fields
 from .scenario_editor import ARRIVAL_KEYS, VoicePartsField, _fields, _placeholder_help
 from .scenario_step_settings import (
     CHAT_FIELD, MAX_CHAT_TEXT, OUTCOME_PROMPTS, VOICE_FIELD, outcome_field, prompt_bindings,
@@ -298,6 +299,11 @@ class ScenarioStepDraftForm(forms.ModelForm):
             return
         configuration = step.configuration if isinstance(step.configuration, dict) else {}
         default_source = "the shared default or built-in prompt" if step.version.base_version_id else "the built-in prompt"
+        for name, default in answer_label_defaults(scenario.language, step.key).items():
+            if label := self.fields.get(name):
+                self.initial[name] = configuration.get(name, "")
+                label.widget.attrs["placeholder"] = default
+                label.help_text += f" Leave blank to use {default_source}."
         for key, fields in prompt_bindings(scenario.language, scenario.channel, step.key).items():
             chat_name, voice_name = fields.get(CHAT_FIELD), fields.get(VOICE_FIELD)
             if chat := self.fields.get(chat_name):
@@ -368,7 +374,8 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
         if not self.has_change_permission(request, obj):
             primary = tuple(name for name in prompts if name in (CHAT_FIELD, VOICE_FIELD))
             summary = ("outcome_wording",) if obj.key in OUTCOME_PROMPTS else ()
-            return (*self.fields, *primary, *summary)
+            labels = ("answer_button_labels",) if answer_label_fields(obj.version.scenario.channel, obj.key) else ()
+            return (*self.fields, *primary, *summary, *labels)
         fields = (*self.fields, *prompts)
         if obj.configuration != {}:
             return (*fields, "clear_overrides")
@@ -378,6 +385,18 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
         if obj is not None and self.has_change_permission(request, obj):
             variants = {}
             available = prompt_fields(obj.version.scenario.channel, obj.key)
+            for field, answer in answer_label_defaults(obj.version.scenario.language, obj.key).items():
+                if field not in available:
+                    continue
+                if field == ROOM_ANSWER_LABEL:
+                    label = "Room answer button label"
+                    help_text = "Keep {room} in the label. The button still selects the quoted room."
+                else:
+                    label = f"Answer button label for {answer}"
+                    help_text = "Keep the same answer meaning. Only the displayed label changes."
+                variants[field] = forms.CharField(
+                    required=False, max_length=MAX_ANSWER_LABEL, label=label, help_text=help_text,
+                )
             for prompt in OUTCOME_PROMPTS.get(obj.key, ()):
                 label = prompt.replace("_", " ").capitalize()
                 chat_name = outcome_field(prompt, CHAT_FIELD)
@@ -404,6 +423,12 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
         from .scenario_publication import describe_outcome_wording
 
         return " | ".join(describe_outcome_wording(obj.configuration)) or "Default wording"
+
+    @admin.display(description="Answer button labels")
+    def answer_button_labels(self, obj):
+        from .scenario_publication import describe_answer_labels
+
+        return " | ".join(describe_answer_labels(obj.configuration)) or "Default labels"
 
     @admin.display(description="Chat wording")
     def chat_text(self, obj):

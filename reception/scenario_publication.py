@@ -11,6 +11,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .models import Scenario, ScenarioPublication, ScenarioStep, ScenarioTransition, ScenarioVersion
+from .scenario_answers import ROOM_ANSWER_LABEL
 from .scenario_materialization import materialize_scenario_defaults
 from .scenario_validation import APPROVED_STEPS, MAX_TRANSITIONS, validate_materialized_scenario
 
@@ -112,10 +113,22 @@ def describe_outcome_wording(configuration):
             yield from _describe_prompt(configuration, prefix=prefix)
 
 
+def describe_answer_labels(configuration):
+    if isinstance(configuration, dict):
+        for field in sorted(configuration):
+            if field == ROOM_ANSWER_LABEL:
+                yield f"Room answer button: {configuration[field]}"
+            elif field.startswith("answer_label_"):
+                yield f"Answer button {field.removeprefix('answer_label_')}: {configuration[field]}"
+
+
 def _describe_step(position, configuration):
     if not isinstance(configuration, dict):
         return f"position {position}, invalid saved prompt configuration"
-    return " | ".join((f"position {position}", *_describe_prompt(configuration), *describe_outcome_wording(configuration)))
+    return " | ".join((
+        f"position {position}", *_describe_prompt(configuration), *describe_outcome_wording(configuration),
+        *describe_answer_labels(configuration),
+    ))
 
 
 def _graph_diff(current, candidate):
