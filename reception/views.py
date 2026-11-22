@@ -25,6 +25,7 @@ from .receipt import DELIVERY_PENDING, refresh_receipt
 from .scenario import (
     ENGLISH_WEB_GREETING, render_chat, scenario_overrides, set_prompt, split_voice_parts, voice_segments,
 )
+from .scenario_dispatch import resolve_web_transition
 from .scenario_pinned_prompts import pinned_overrides
 from .scenario_pinning import carry_web_scenario, pin_web_scenario, pinned_scenario_version_id, web_scenario_channel
 from .speech import (
@@ -313,7 +314,10 @@ def message(request):
                 parsed, input_parsed = review_booking_input(
                     state, text, parsed, source="voice" if transcript_input else "chat",
                 )
-            state = advance(state, text or "", parsed, voice=voice, input_parsed=input_parsed)
+            state = advance(
+                state, text or "", parsed, voice=voice, input_parsed=input_parsed,
+                resolve_transition=resolve_web_transition, timeout=timeout,
+            )
             if was_welcome and state["stage"] == "check_in" and state["language"] == "pl" and not voice:
                 state["voice_welcome"] = True
             if state["stage"] == "handover":

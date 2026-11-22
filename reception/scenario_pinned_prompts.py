@@ -3,11 +3,9 @@
 from dataclasses import dataclass
 
 from django.core.exceptions import ValidationError
-from django.db.models import Exists, OuterRef
 
-from .models import ScenarioPublication, ScenarioStep
 from .scenario import _specs
-from .scenario_pinning import pinned_scenario_version_id, web_scenario_channel
+from .scenario_pinning import pinned_scenario_version_id, published_pinned_steps, web_scenario_channel
 from .scenario_step_settings import CHAT_FIELD, STEP_PROMPTS, VOICE_FIELD, prompt_key, validate_step_configuration
 
 
@@ -39,20 +37,8 @@ def pinned_overrides(state):
     if not keys_by_step:
         return {}
 
-    publication = ScenarioPublication.objects.filter(
-        scenario_id=OuterRef("version__scenario_id"),
-        selected_version_id=OuterRef("version_id"),
-        action="publish",
-    )
     steps = (
-        ScenarioStep.objects.filter(
-            version_id=version_id,
-            version__published_at__isnull=False,
-            version__scenario__language=language,
-            version__scenario__channel=channel,
-            key__in=keys_by_step,
-        )
-        .filter(Exists(publication))
+        published_pinned_steps(state).filter(key__in=keys_by_step)
         .values_list("key", "configuration")[:len(keys_by_step)]
     )
     overrides = {}

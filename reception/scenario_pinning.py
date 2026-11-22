@@ -2,7 +2,7 @@
 
 from django.db.models import Exists, F, OuterRef, Subquery
 
-from .models import Scenario, ScenarioPublication
+from .models import Scenario, ScenarioPublication, ScenarioStep
 
 
 _PIN = "scenario_pin"
@@ -64,6 +64,21 @@ def pinned_scenario_version_id(state):
     """Return the recorded version for the current language without reselecting."""
     version_id = _active_pin(state).get("version_id")
     return version_id if type(version_id) is int and version_id > 0 else None
+
+
+def published_pinned_steps(state):
+    """Select steps from the scoped version originally published for this pin."""
+    publication = ScenarioPublication.objects.filter(
+        scenario_id=OuterRef("version__scenario_id"),
+        selected_version_id=OuterRef("version_id"),
+        action="publish",
+    )
+    return ScenarioStep.objects.filter(
+        version_id=pinned_scenario_version_id(state),
+        version__published_at__isnull=False,
+        version__scenario__language=state["language"],
+        version__scenario__channel=web_scenario_channel(state),
+    ).filter(Exists(publication))
 
 
 def carry_web_scenario(previous, state):

@@ -149,7 +149,11 @@ def selects_english(message):
     return _answer(message) in ENGLISH_SELECTIONS
 
 
-def advance(state, message, parsed, *, voice=False, input_parsed=False):
+def _allows_transition(state, event, destination, resolve_transition):
+    return resolve_transition is None or resolve_transition(state, event) == destination
+
+
+def advance(state, message, parsed, *, voice=False, input_parsed=False, resolve_transition=None, timeout=False):
     stage = state["stage"]
     if stage in TERMINAL_STAGES or stage == DELIVERY_PENDING:
         return state
@@ -179,21 +183,33 @@ def advance(state, message, parsed, *, voice=False, input_parsed=False):
     state = {**state, "revision": uuid4().hex}
     if stage == "check_in":
         if isinstance(parsed, StayDates):
-            if timezone.localdate() <= parsed.check_in < parsed.check_out:
+            valid = timezone.localdate() <= parsed.check_in < parsed.check_out
+            event, destination = ("stay_dates", "guests") if valid else ("retry", "check_in")
+            allowed = _allows_transition(state, event, destination, resolve_transition)
+            if valid and allowed:
                 state.update(stage="guests", check_in=parsed.check_in.isoformat(), check_out=parsed.check_out.isoformat())
                 set_prompt(state, "stay_dates", _display_dates(state), tail="guests")
             else:
                 set_prompt(state, "check_in")
         elif type(parsed) is date:
-            if parsed >= timezone.localdate():
+            valid = parsed >= timezone.localdate()
+            event, destination = ("arrival", "check_out") if valid else ("retry", "check_in")
+            allowed = _allows_transition(state, event, destination, resolve_transition)
+            if valid and allowed:
                 state.update(stage="check_out", check_in=parsed.isoformat())
                 set_prompt(state, "check_out")
             else:
                 set_prompt(state, "check_in")
         else:
-            return _terminal(state, "handover")
+            event = "timeout" if timeout else "unrecognized"
+            if _allows_transition(state, event, "handover", resolve_transition):
+                return _terminal(state, "handover")
+            set_prompt(state, "check_in")
     elif stage == "check_out":
-        if type(parsed) is date and parsed > date.fromisoformat(state["check_in"]):
+        departure = type(parsed) is date and parsed > date.fromisoformat(state["check_in"])
+        event, destination = ("departure", "guests") if departure else ("retry", "check_out")
+        allowed = _allows_transition(state, event, destination, resolve_transition)
+        if departure and allowed:
             state.update(stage="guests", check_out=parsed.isoformat())
             set_prompt(state, "guests")
         else:
