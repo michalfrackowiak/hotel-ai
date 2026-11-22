@@ -32,6 +32,7 @@ from .scenario_pinned_prompts import pinned_overrides
 from .scenario_pinning import (
     carry_web_scenario, pin_web_scenario, pinned_scenario_version_id, published_pinned_steps, web_scenario_channel,
 )
+from .scenario_step_settings import ARRIVAL_INPUT_FIELD, REQUIRE_ARRIVAL_RANGE
 from .speech import (
     MAX_PCM_BYTES, MAX_TEXT_CHARACTERS, SpeechBusy, SpeechUnavailable, synthesize, synthesize_welcome, transcribe,
     transcribe_welcome,
@@ -97,8 +98,11 @@ def _result(state, *, stale=False, cursor=0):
             payload["arrival_parts"] = parts
     elif payload["reply"] != state["reply"]:
         payload["voice_reply"] = state["reply"]
-    answer_labels = _pinned_answer_labels(state)
-    if suggested := suggestions(state, answer_labels):
+    step_configuration = _pinned_step_configuration(state, state["stage"])
+    answer_labels = _pinned_answer_labels(state, step_configuration)
+    if not (state["stage"] == "check_in" and _requires_arrival_range(step_configuration)) and (
+        suggested := suggestions(state, answer_labels)
+    ):
         payload["suggestions"] = suggested
     if quick_replies := {
         field: answer_labels[field]
@@ -120,13 +124,23 @@ def _result(state, *, stale=False, cursor=0):
     return JsonResponse(payload, status=409 if stale else 200)
 
 
-def _pinned_answer_labels(state):
-    language, stage = state["language"], state["stage"]
-    fields = answer_label_fields(language, "chat", stage)
-    if not fields or web_scenario_channel(state) != "chat" or pinned_scenario_version_id(state) is None:
+def _pinned_step_configuration(state, stage):
+    if pinned_scenario_version_id(state) is None:
+        return {}
+    if stage != "check_in" and not answer_label_fields(state["language"], web_scenario_channel(state), stage):
         return {}
     configuration = published_pinned_steps(state).filter(key=stage).values_list("configuration", flat=True).first()
-    if not isinstance(configuration, dict):
+    return configuration if isinstance(configuration, dict) else {}
+
+
+def _requires_arrival_range(configuration):
+    return configuration.get(ARRIVAL_INPUT_FIELD) == REQUIRE_ARRIVAL_RANGE
+
+
+def _pinned_answer_labels(state, configuration):
+    language, stage = state["language"], state["stage"]
+    fields = answer_label_fields(language, "chat", stage)
+    if not fields or web_scenario_channel(state) != "chat":
         return {}
     try:
         validate_answer_labels(language, "chat", stage, configuration)
@@ -322,9 +336,14 @@ def message(request):
                 parsed, input_parsed = review_booking_input(
                     state, text, parsed, source="voice" if transcript_input else "chat",
                 )
+            require_arrival_range = (
+                parsed is not None and state["stage"] in ("welcome", "check_in")
+                and _requires_arrival_range(_pinned_step_configuration(state, "check_in"))
+            )
             state = advance(
                 state, text or "", parsed, voice=voice, input_parsed=input_parsed,
                 resolve_transition=resolve_web_transition, timeout=timeout,
+                require_arrival_range=require_arrival_range,
             )
             if was_welcome and state["stage"] == "check_in" and state["language"] == "pl" and not voice:
                 state["voice_welcome"] = True

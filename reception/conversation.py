@@ -50,6 +50,7 @@ COPY = {
         "check_out_retry": "Please give a departure date after arrival or the length of your stay. For example, say for three nights.",
         "guests": "Please tell me the total number of guests (adults and children) for the reservation.",
         "stay_dates": "Check-in is {check_in} and check-out is {check_out}.",
+        "stay_dates_required": "Please give both your arrival and departure dates in one answer.",
         "guests_retry": "Please give the total number of adults and children as a positive whole number.",
         "rooms": "I have checked availability. For your dates, we have the following rooms available: {options}. Which option would you like to select?",
         "option": "room {room} for {total} PLN total",
@@ -75,6 +76,7 @@ COPY = {
         "check_out_retry": "Podaj datę wyjazdu po dacie przyjazdu lub długość pobytu, na przykład na trzy noce.",
         "guests": "Podaj łączną liczbę osób (dorosłych i dzieci), dla których mamy przygotować rezerwację.",
         "stay_dates": "Przyjazd {check_in}, wyjazd {check_out}.",
+        "stay_dates_required": "Podaj datę przyjazdu i datę wyjazdu w jednej odpowiedzi.",
         "guests_retry": "Podaj łączną liczbę dorosłych i dzieci jako dodatnią liczbę całkowitą.",
         "rooms": "Sprawdziłam dostępność. Na wybrany termin mamy następujące wolne pokoje: {options}. Którą opcję chciałbyś wybrać?",
         "option": "pokój {room} w cenie {total} PLN za pobyt",
@@ -153,7 +155,10 @@ def _allows_transition(state, event, destination, resolve_transition):
     return resolve_transition is None or resolve_transition(state, event) == destination
 
 
-def advance(state, message, parsed, *, voice=False, input_parsed=False, resolve_transition=None, timeout=False):
+def advance(
+    state, message, parsed, *, voice=False, input_parsed=False, resolve_transition=None, timeout=False,
+    require_arrival_range=False,
+):
     stage = state["stage"]
     if stage in TERMINAL_STAGES or stage == DELIVERY_PENDING:
         return state
@@ -166,7 +171,7 @@ def advance(state, message, parsed, *, voice=False, input_parsed=False, resolve_
         if resolve_transition is not None:
             if isinstance(parsed, StayDates) and today <= parsed.check_in < parsed.check_out:
                 event, destination = "stay_dates", "guests"
-            elif type(parsed) is date and parsed >= today:
+            elif type(parsed) is date and parsed >= today and not require_arrival_range:
                 event, destination = "arrival", "check_out"
             else:
                 event, destination = ("timeout" if timeout else "continue"), "check_in"
@@ -194,6 +199,7 @@ def advance(state, message, parsed, *, voice=False, input_parsed=False, resolve_
 
     state = {**state, "revision": uuid4().hex}
     if stage == "check_in":
+        retry_prompt = "stay_dates_required" if require_arrival_range else "check_in"
         if isinstance(parsed, StayDates):
             valid = today <= parsed.check_in < parsed.check_out
             event, destination = ("stay_dates", "guests") if valid else ("retry", "check_in")
@@ -202,16 +208,16 @@ def advance(state, message, parsed, *, voice=False, input_parsed=False, resolve_
                 state.update(stage="guests", check_in=parsed.check_in.isoformat(), check_out=parsed.check_out.isoformat())
                 set_prompt(state, "stay_dates", _display_dates(state), tail="guests")
             else:
-                set_prompt(state, "check_in")
+                set_prompt(state, retry_prompt)
         elif type(parsed) is date:
-            valid = parsed >= today
+            valid = parsed >= today and not require_arrival_range
             event, destination = ("arrival", "check_out") if valid else ("retry", "check_in")
             allowed = _allows_transition(state, event, destination, resolve_transition)
             if valid and allowed:
                 state.update(stage="check_out", check_in=parsed.isoformat())
                 set_prompt(state, "check_out")
             else:
-                set_prompt(state, "check_in")
+                set_prompt(state, retry_prompt)
         else:
             event = "timeout" if timeout else "unrecognized"
             if _allows_transition(state, event, "handover", resolve_transition):

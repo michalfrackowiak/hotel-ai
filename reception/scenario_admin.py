@@ -13,7 +13,8 @@ from .scenario import default_chat_text, default_voice_parts
 from .scenario_answers import MAX_ANSWER_LABEL, ROOM_ANSWER_LABEL, answer_label_defaults, answer_label_fields
 from .scenario_editor import ARRIVAL_KEYS, VoicePartsField, _fields, _placeholder_help
 from .scenario_step_settings import (
-    CHAT_FIELD, MAX_CHAT_TEXT, OUTCOME_PROMPTS, VOICE_FIELD, outcome_field, prompt_bindings,
+    ARRIVAL_INPUT_CHOICES, ARRIVAL_INPUT_FIELD, CHAT_FIELD, MAX_CHAT_TEXT, OUTCOME_PROMPTS, VOICE_FIELD,
+    outcome_field, prompt_bindings,
     prompt_fields, validate_step_configuration,
 )
 
@@ -272,6 +273,11 @@ class ScenarioVersionAdmin(ScenarioDraftAdmin):
 
 
 class ScenarioStepDraftForm(forms.ModelForm):
+    arrival_input = forms.ChoiceField(
+        required=False, label="Expected arrival input",
+        choices=(("", "Use shared or built-in setting"), *ARRIVAL_INPUT_CHOICES),
+        help_text="Require both stay dates in one answer or allow guests to give their departure separately.",
+    )
     chat_text = forms.CharField(
         required=False, max_length=MAX_CHAT_TEXT, label="Chat wording", widget=forms.Textarea(attrs={"rows": 4}),
     )
@@ -279,7 +285,7 @@ class ScenarioStepDraftForm(forms.ModelForm):
         required=False, label="Voice segments",
         help_text="Segments play from top to bottom. Clear a row's text, pause and Listen setting to remove it.",
     )
-    clear_overrides = forms.BooleanField(required=False, label="Clear all prompt overrides")
+    clear_overrides = forms.BooleanField(required=False, label="Clear all step overrides")
 
     class Meta:
         model = ScenarioStep
@@ -290,7 +296,7 @@ class ScenarioStepDraftForm(forms.ModelForm):
         step = self.instance
         scenario = step.version.scenario if step.pk else None
         applicable_fields = prompt_fields(scenario.language, scenario.channel, step.key) if scenario else ()
-        for name in (CHAT_FIELD, VOICE_FIELD):
+        for name in (CHAT_FIELD, VOICE_FIELD, ARRIVAL_INPUT_FIELD):
             if name not in applicable_fields:
                 self.fields.pop(name, None)
         if not step.pk or step.configuration == {}:
@@ -298,6 +304,8 @@ class ScenarioStepDraftForm(forms.ModelForm):
         if not scenario or not applicable_fields:
             return
         configuration = step.configuration if isinstance(step.configuration, dict) else {}
+        if ARRIVAL_INPUT_FIELD in self.fields:
+            self.initial[ARRIVAL_INPUT_FIELD] = configuration.get(ARRIVAL_INPUT_FIELD, "")
         default_source = "the shared default or built-in prompt" if step.version.base_version_id else "the built-in prompt"
         for name, default in answer_label_defaults(scenario.language, step.key).items():
             if label := self.fields.get(name):
@@ -376,7 +384,8 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
             primary = tuple(name for name in prompts if name in (CHAT_FIELD, VOICE_FIELD))
             summary = ("outcome_wording",) if obj.key in OUTCOME_PROMPTS else ()
             labels = ("answer_button_labels",) if answer_label_fields(scenario.language, scenario.channel, obj.key) else ()
-            return (*self.fields, *primary, *summary, *labels)
+            parser = ("arrival_input_setting",) if ARRIVAL_INPUT_FIELD in prompts else ()
+            return (*self.fields, *primary, *summary, *labels, *parser)
         fields = (*self.fields, *prompts)
         if obj.configuration != {}:
             return (*fields, "clear_overrides")
@@ -431,6 +440,12 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
         from .scenario_publication import describe_answer_labels
 
         return " | ".join(describe_answer_labels(obj.configuration)) or "Default labels"
+
+    @admin.display(description="Expected arrival input")
+    def arrival_input_setting(self, obj):
+        from .scenario_publication import describe_arrival_input
+
+        return describe_arrival_input(obj.configuration) or "Shared or built-in setting"
 
     @admin.display(description="Chat wording")
     def chat_text(self, obj):

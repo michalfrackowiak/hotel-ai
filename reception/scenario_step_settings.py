@@ -8,6 +8,12 @@ from .scenario_editor import validate_prompt
 
 CHAT_FIELD = "chat_text"
 VOICE_FIELD = "voice_parts"
+ARRIVAL_INPUT_FIELD = "arrival_input"
+REQUIRE_ARRIVAL_RANGE = "require_range"
+ARRIVAL_INPUT_CHOICES = (
+    ("arrival_or_range", "Arrival date or both stay dates"),
+    (REQUIRE_ARRIVAL_RANGE, "Require arrival and departure together"),
+)
 MAX_CHAT_TEXT = 2000
 CHANNEL_FIELDS = {
     "chat": (CHAT_FIELD,),
@@ -27,7 +33,7 @@ STEP_PROMPTS = {
     "handover": "handover",
 }
 OUTCOME_PROMPTS = {
-    "check_in": ("unavailable", "offer_changed"),
+    "check_in": ("unavailable", "offer_changed", "stay_dates_required"),
     "check_out": ("check_out_retry",),
     "guests": ("stay_dates", "guests_retry"),
     "room": ("option",),
@@ -55,7 +61,8 @@ def prompt_fields(language, channel, step_key):
     kinds = CHANNEL_FIELDS.get(channel, ())
     primary = kinds if step_key in STEP_PROMPTS else ()
     outcomes = (outcome_field(prompt, kind) for prompt in OUTCOME_PROMPTS.get(step_key, ()) for kind in kinds)
-    return (*primary, *outcomes, *answer_label_fields(language, channel, step_key))
+    parser = (ARRIVAL_INPUT_FIELD,) if step_key == "check_in" and channel in CHANNEL_FIELDS else ()
+    return (*primary, *outcomes, *answer_label_fields(language, channel, step_key), *parser)
 
 
 def prompt_bindings(language, channel, step_key):
@@ -79,6 +86,10 @@ def validate_step_configuration(language, channel, key, configuration):
         raise ValidationError("This step or channel does not support the selected prompt settings.")
 
     validate_answer_labels(language, channel, key, configuration)
+    if ARRIVAL_INPUT_FIELD in configuration:
+        mode = configuration[ARRIVAL_INPUT_FIELD]
+        if not isinstance(mode, str) or mode not in dict(ARRIVAL_INPUT_CHOICES):
+            raise ValidationError("Choose a supported arrival input mode.")
     for prompt, fields in prompt_bindings(language, channel, key).items():
         chat_field, voice_field = fields.get(CHAT_FIELD), fields.get(VOICE_FIELD)
         if chat_field not in configuration and voice_field not in configuration:
