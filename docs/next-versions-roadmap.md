@@ -130,7 +130,8 @@ The current admin edits prompt text and voice segments; conversation transitions
 
 - [ ] Add dedicated `/voice/` and `/chat/` views with clear navigation and a shared booking draft. Switching view preserves progress and releases microphone resources. Keep the selected language consistent across views.
 - [ ] Voice view: prominent start/stop control, microphone status, visible transcript, accessible captions, retry/edit-last-answer action, compact booking summary and receptionist handover. Chat view: conversation history, contextual answer buttons, date picker and editable booking summary.
-- [ ] Introduce a navy/deep-blue primary palette, restrained blue accents, warm neutral backgrounds, generous spacing, refined typography and real licensed hotel photography. Create reusable tokens and layouts for reception, rooms, booking, login and account pages. Aim for a five-star hospitality feel without asserting an unverified hotel star rating.
+- [x] Introduce a navy/deep-blue palette, warm neutrals, refined typography and responsive styling for reception, room availability, reservation and booking lookup.
+- [ ] Add licensed hotel photography and extend the shared guest styling to login and account pages when those views are available.
 - [ ] Start with a lightweight CSS/SVG sphere animated from actual audio playback state and amplitude. Give listening, processing, speaking and disconnected states distinct appearances. For browser-native speech fallback, use speech start/end events when amplitude is unavailable. Stop animation on cancellation and support reduced motion. Avoid a generated video avatar on this hardware; an optional prebuilt avatar can follow if measured cost is acceptable.
 - [ ] Design mobile layouts, keyboard/focus behavior, screen-reader status updates and accessible contrast. Optimize images and fonts; pause animation in hidden tabs.
 

@@ -1,5 +1,13 @@
 # Session handoff
 
+## Guest frontend styling
+
+The first 0.7 visual update applies Neptun Resort branding, a shared navy and warm-neutral palette, and compact mobile layouts to reception, availability, reservation and booking lookup. Browser booking and voice controls retain their existing behavior.
+
+Verification includes 248 passing Django tests, a clean migration drift check, and independent Chromium review across six widths from 320 to 1440 pixels in both languages. The reviewer identified excess mobile header and intro height. The revised layout kept navigation to one row and improved the composer position at 390 and 760 pixels. The reviewer approved the revised styles with no open findings.
+
+Next visual step: add approved hotel photography and extend the styles to account views when those views are available. Continue the hardware acceptance checks below independently.
+
 ## Latest milestone
 
 Persistent systemd startup is installed and has passed a real reboot on the ARM64 production host. Boot ID changed from `51b89ac7-9c11-4a1e-9fc5-60babf1541cf` to `bdab942b-23d1-403c-a100-420ec65b9aef`; the controller passed authenticated readiness before web started. A fresh booking backup and both candidate/rollback image checks passed. Post-boot English and Polish Piper/Vosk, local health, public health, reception and admin login checks passed. Public HTTPS admin login is authentication-protected and rate-limited; HTTP redirects to HTTPS. The web container uses the pinned image, original booking volume and traffic mount with Docker restart disabled. Only the routed primary workers are running; standby and legacy fixed workers remain stopped. Provider switching and recovery actions remain disabled. [Installation and production reboot evidence](speech-pilot-systemd.md#production-reboot-check)
