@@ -1,4 +1,5 @@
 from datetime import timedelta
+from time import sleep
 from unittest.mock import patch
 
 from django.conf import settings
@@ -70,7 +71,8 @@ class SessionContinuityTests(TestCase):
         first = self.post(start=True, voice=True).json()
 
         def expire(*_):
-            Conversation.objects.update(expires_at=timezone.now() - timedelta(seconds=1))
+            Conversation.objects.update(expires_at=timezone.now() + timedelta(milliseconds=20))
+            sleep(0.04)
             return b"fixture-audio"
 
         with patch("reception.views.synthesize", side_effect=expire) as synthesize:
