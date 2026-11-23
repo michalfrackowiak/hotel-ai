@@ -6,6 +6,8 @@ The dedicated `/chat/` and `/voice/` pages use the same session-backed booking d
 
 A new draft selects the scenario for its entry mode and language. Changing modes resumes the current revision and keeps its original scenario pin. A full page navigation resumes at the current prompt. Earlier message bubbles stay in their original page rather than being copied into browser storage.
 
+Five focused Django tests passed. The full Windows run passed 263 of 264 tests and reproduced the existing recovery-client deadline error. The hosted Linux Django and route smoke steps passed. Nginx syntax validation passed in a disposable container. Independent Chromium review checked English and Polish at 320, 390 and 1440 pixels, including a deliberately delayed voice script, mode switching, microphone cleanup, overflow and axe WCAG A/AA. The reviewer completed a fictional booking in each language after switching modes and confirmed the reference survived another switch. A deliberate resume-guard bypass failed the four language and entry-mode regression cases. See [PR #86 and release checks](https://github.com/michalfrackowiak/hotel-ai/pull/86/checks).
+
 The next reception increment is the playback-driven speaking animation with reduced-motion support. Public deployment of the new routes requires the updated [Nginx guest snippet](../deploy/nginx/hotel-ai-reception.inc) with the application image.
 
 ## Admin workflows
