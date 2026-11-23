@@ -1,5 +1,15 @@
 # Session handoff
 
+## Voice receptionist handover
+
+The dedicated voice page offers a bilingual **Message reception** button before booking. It stops playback and releases the microphone, then moves focus to the typed composer for the existing staff inbox. Staff reply and close the thread through the existing admin workflow. The guest can switch to chat and resume the same thread.
+
+The action uses the current conversation revision and creates the thread in the same transaction. It clears the unconfirmed booking draft and sends only messages the guest explicitly types and submits. It remains unavailable during pending delivery and after completion.
+
+Twelve focused Django tests passed, including bilingual handover, replay rejection, protected stages and resume in chat. JavaScript syntax, Django system and migration checks passed.
+
+Next roadmap increment: assess the stable hostname and Google OAuth configuration needed for guest sign-in.
+
 ## Booking summary and date picker
 
 Dedicated chat and voice show the current dates, guest count, room and quoted total as the booking progresses. Guests can return to the relevant prompt to change a detail. Changing the room checks current availability. All edits clear the previous quote approval and contact confirmation and flow through the usual quote and booking steps. The summary excludes contact details and edit actions are limited to unconfirmed drafts.
@@ -8,7 +18,9 @@ The native date picker submits explicit dates using the hotel calendar and the p
 
 Thirteen focused Django tests passed, as did JavaScript syntax, Django system and migration checks. Independent Chromium completed one fictional booking per language after re-quoting an edit. It also verified mobile keyboard and accessibility behavior, idle timeout suspension, stale approvals, date retention after same-revision reconnect, date clearing after revision changes, and microphone release on the voice page. A Windows reception run passed 137 of 138 tests with the known intermittent speech-drain timing failure in unchanged code.
 
-Next reception increment: add an explicit receptionist handover action to the dedicated voice page.
+Production deployed revision `41c37a4` on 23 November 2026. The native ARM64 image passed all 13 draft and mode tests before activation. The booking backup passed checksum, integrity, foreign-key, fictional booking and replay checks. The previous image read the disposable restore. Live English and Polish Piper and Vosk checks passed and both workers retained their container IDs and start times. External HTTPS verified the dedicated booking controls, combined reception, versioned assets, health and admin login. The Nginx guest snippet retained its approved checksum. [PR #89](https://github.com/michalfrackowiak/hotel-ai/pull/89)
+
+The [voice receptionist handover](#voice-receptionist-handover) followed this release.
 
 ## Voice answer review
 
