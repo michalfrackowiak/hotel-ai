@@ -54,6 +54,28 @@ The next implementation increment is optional Google credential verification and
 sessions with a test verifier. Bind any active legacy draft before rotating its session, including when
 the guest signs in before the reception page starts its conversation. The approved hostname and Google web client remain pending for live sign-in.
 
+## Google guest sign-in backend
+
+The feature requires `HOTEL_GOOGLE_GUEST_SIGNIN_ENABLED=1` and a Google web client ID in
+`HOTEL_GOOGLE_CLIENT_ID`. Keep it disabled until the public configuration and browser pilot are ready.
+Django verifies Google credentials, maps the validated subject to a guest account, and keeps guest
+identity in server-side session data. The guest account has no Django staff credentials or email link.
+
+The GIS popup client posts to `/guest/google/nonce/` for its client ID and short-lived nonce. It sends
+`{"credential":"…"}` to `/guest/google/sign-in/` with Django's CSRF header. After sign-in, reload the current reception page so its form and scripts
+use the rotated CSRF token. For public exposure, add route-specific limits for nonce issuance and
+credential checks. `GET /guest/session/` reports guest sign-in status and
+`POST /guest/sign-out/` clears the guest session. Sign-in preserves the guest's active reception draft
+on first login or return to the same account. An account change or sign-out clears the association.
+
+With the feature disabled, deployment can apply the new guest-account tables before the browser pilot.
+After sign-in is enabled, plan rollback around rotated guest sessions and any challenges linked to Django
+sessions. Keep the continuity-aware image as the rollback target for guest traffic.
+
+Next increment is an explicit bilingual Google button and browser pilot with the approved HTTPS hostname
+and Google project. The production Nginx route list, public account UI and booking ownership are separate
+increments. Follow the [Google readiness report](google-guest-signin-readiness.md) for rollout.
+
 ## Google guest sign-in readiness
 
 The production TLS certificate identifies the public IP. A read-only check confirmed the IP in the certificate's
