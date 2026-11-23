@@ -70,7 +70,11 @@ on first login or return to the same account. An account change or sign-out clea
 
 With the feature disabled, deployment can apply the new guest-account tables before the browser pilot.
 After sign-in is enabled, plan rollback around rotated guest sessions and any challenges linked to Django
-sessions. Keep the continuity-aware image as the rollback target for guest traffic.
+sessions. Keep a release that supports the guest account and challenge tables as the rollback target.
+
+Twelve focused tests passed, including RSA signature verification with a fictional certificate, invalid issuer,
+audience and expiry, concurrent nonce consumption, CSRF rotation, staff isolation and draft continuity.
+An existing guest can still sign out after sign-in is disabled.
 
 Next increment is an explicit bilingual Google button and browser pilot with the approved HTTPS hostname
 and Google project. The production Nginx route list, public account UI and booking ownership are separate
