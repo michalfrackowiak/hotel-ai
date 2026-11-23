@@ -94,10 +94,11 @@ The current admin edits prompt text and voice segments; conversation transitions
 - [x] Configure whether an arrival step accepts a single arrival date or requires both stay dates in one reply.
 - [x] Configure retry limits for supported browser booking steps and route exhausted retries to reception.
 - [x] Configure pinned browser voice silence windows for arrival, departure and guest count.
+- [x] Extend pinned browser voice silence windows to room selection, quote decisions, delivery choice, email, phone and contact confirmation.
 - [x] Configure whether guests can skip spoken prompts at the arrival, departure and guest-count steps.
 - [x] Configure whether final browser voice silence at arrival continues the booking in chat.
 - [x] Configure optional model parser fallback for browser arrival, departure, and guest-count replies.
-- [ ] Extend editing to other parser settings, additional validation messages, allowed branches, timeout actions, and delivery/handover behavior. Extend silence controls to additional steps.
+- [ ] Extend editing to other parser settings, additional validation messages, allowed branches, timeout actions, and delivery/handover behavior. Evaluate a silence control for the Polish welcome.
 - [ ] Permit adding/reordering optional steps and routing through approved actions. Keep availability, price calculation, required consent and atomic booking creation as enforced server invariants. Forbid arbitrary Python, SQL or unvalidated external actions in the editor.
 - [x] Provide a read-only admin flow overview of the saved or effective inherited graph and its validation findings.
 - [x] Preview one bilingual browser arrival reply in the flow overview using built-in parsing, effective transitions and rendered chat/voice wording.

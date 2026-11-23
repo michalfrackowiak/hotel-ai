@@ -19,7 +19,9 @@ PARSER_FALLBACK_CHOICES = (
 PARSER_FALLBACK_LABELS = dict(PARSER_FALLBACK_CHOICES)
 RETRY_LIMIT_FIELD = "retry_limit"
 SILENCE_WINDOW_FIELD = "voice_silence_seconds"
-SILENCE_WINDOW_STEPS = frozenset({"check_in", "check_out", "guests"})
+SILENCE_WINDOW_STEPS = frozenset({
+    "check_in", "check_out", "guests", "room", "confirm", "delivery", "email", "phone", "contact_confirm",
+})
 MAX_SILENCE_SECONDS = 20
 VOICE_INTERRUPTION_FIELD = "voice_interruption"
 VOICE_INTERRUPTION_STEPS = frozenset({"check_in", "check_out", "guests"})
