@@ -6,6 +6,8 @@ The voice and combined reception pages show a decorative sphere alongside the lo
 
 The 131 reception tests passed on Windows. Django system and migration checks passed. Independent Chromium tests used a real WAV with quiet and loud sections to check the waveform response, captions, waiting and listening states, booking-mode cancellation, and reduced motion changes without interrupting playback. Browser speech events were controlled by the fixture. Physical microphone and performance checks on the 2019 MacBook remain open.
 
+Production deployed revision `88c54ba` on 23 November 2026. The candidate passed five ARM64 reception tests before activation. The SQLite backup checksum, integrity, foreign keys, fictional booking and idempotent replay passed. The previous image read the disposable restore. Live English and Polish Piper synthesis and Vosk microphone-format and silence checks passed, and both speech workers retained their container IDs and start times. Public HTTPS confirmed the voice indicator and versioned assets on the voice and combined pages, chat-only markup on chat in both languages, health and admin login. The Nginx guest snippet retained its approved checksum. [PR #87](https://github.com/michalfrackowiak/hotel-ai/pull/87)
+
 Next reception increment: improve the mobile voice controls and add an explicit retry or edit action for the last answer.
 
 ## Guest reception modes
@@ -18,7 +20,7 @@ Five focused Django tests passed. The full Windows run passed 263 of 264 tests a
 
 Production deployed revision `1528de1` on 23 November 2026 with the matching Nginx guest snippet. Public HTTPS checks from outside the server passed both languages on both new routes, the combined reception, health, admin login and static scripts. The SQLite backup passed its checksum, integrity and foreign-key checks. The disposable restore passed bilingual chat, a fictional booking and idempotent replay, and the previous image read the restored database. Live English and Polish Piper synthesis and Vosk microphone-format and silence checks passed. The routed workers kept their original container IDs and start times. The independent reviewer approved the rollout and rollback ordering.
 
-Next reception increment: playback-driven speaking animation with reduced-motion support.
+The [speaking animation](#voice-speaking-animation) followed this release.
 
 ## Admin workflows
 
