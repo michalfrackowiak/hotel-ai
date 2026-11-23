@@ -95,6 +95,7 @@ The current admin edits prompt text and voice segments; conversation transitions
 - [x] Configure retry limits for supported browser booking steps and route exhausted retries to reception.
 - [x] Configure pinned browser voice silence windows for arrival, departure and guest count.
 - [x] Configure whether guests can skip spoken prompts at the arrival, departure and guest-count steps.
+- [x] Configure whether final browser voice silence at arrival continues the booking in chat.
 - [ ] Extend editing to other parser settings, additional validation messages, allowed branches, timeout actions, and delivery/handover behavior. Extend silence controls to additional steps.
 - [ ] Permit adding/reordering optional steps and routing through approved actions. Keep availability, price calculation, required consent and atomic booking creation as enforced server invariants. Forbid arbitrary Python, SQL or unvalidated external actions in the editor.
 - [ ] Provide a flow overview and simulator with example inputs, extracted values, chosen transition and rendered voice/chat output. Validate missing placeholders, unreachable states, loops, required contact/consent paths and terminal states before publishing.

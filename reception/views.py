@@ -33,8 +33,8 @@ from .scenario_pinning import (
     carry_web_scenario, pin_web_scenario, pinned_scenario_version_id, published_pinned_steps, web_scenario_channel,
 )
 from .scenario_step_settings import (
-    ALLOW_VOICE_SKIP, ARRIVAL_INPUT_FIELD, REQUIRE_ARRIVAL_RANGE, SILENCE_WINDOW_STEPS, VOICE_INTERRUPTION_STEPS,
-    silence_window_seconds, voice_interruption_mode,
+    ALLOW_VOICE_SKIP, ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, REQUIRE_ARRIVAL_RANGE, SILENCE_WINDOW_STEPS,
+    VOICE_INTERRUPTION_STEPS, silence_window_seconds, voice_interruption_mode, voice_timeout_mode,
 )
 from .speech import (
     MAX_PCM_BYTES, MAX_TEXT_CHARACTERS, SpeechBusy, SpeechUnavailable, synthesize, synthesize_welcome, transcribe,
@@ -106,6 +106,8 @@ def _result(state, *, stale=False, cursor=0):
         payload["voice_silence_seconds"] = seconds
     if state["stage"] in VOICE_INTERRUPTION_STEPS and voice_interruption_mode(step_configuration) == ALLOW_VOICE_SKIP:
         payload["voice_can_skip_prompt"] = True
+    if state["stage"] == "check_in" and voice_timeout_mode(step_configuration) == CONTINUE_IN_CHAT:
+        payload["voice_timeout_continue_in_chat"] = True
     answer_labels = _pinned_answer_labels(state, step_configuration)
     if not (state["stage"] == "check_in" and _requires_arrival_range(step_configuration)) and (
         suggested := suggestions(state, answer_labels)

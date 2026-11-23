@@ -76,6 +76,7 @@
     };
 
     let revision = null;
+    let voiceTimeoutChatRevision = null;
     let stage = null;
     let pending = false;
     let connected = false;
@@ -266,6 +267,7 @@
             voiceParts: result.voice_parts, voiceKey: result.voice_key, voiceReply: result.voice_reply,
             voiceSilenceSeconds: result.voice_silence_seconds,
             voiceCanSkipPrompt: result.voice_can_skip_prompt === true,
+            voiceTimeoutContinueInChat: result.voice_timeout_continue_in_chat === true,
         } }));
     }
 
@@ -370,7 +372,9 @@
         clearTimeout(idleTimer);
         if (voiceActive || document.hidden || !connected || pending) return;
         if (stage === "welcome") idleTimer = setTimeout(replyTimeout, 2000);
-        if (stage === "check_in" && !messageInput.value.trim()) idleTimer = setTimeout(replyTimeout, 10000);
+        if (stage === "check_in" && revision !== voiceTimeoutChatRevision && !messageInput.value.trim()) {
+            idleTimer = setTimeout(replyTimeout, 10000);
+        }
     }
 
     messageInput.addEventListener("input", () => {
@@ -378,6 +382,7 @@
     });
     document.addEventListener("visibilitychange", trackSilence);
     form.addEventListener("reception:voice-session", (event) => {
+        if (event.detail.continueInChat) voiceTimeoutChatRevision = revision;
         voiceActive = event.detail.active;
         if (displayedTurn) {
             if (voiceActive) {

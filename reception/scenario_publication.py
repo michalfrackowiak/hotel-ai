@@ -14,8 +14,8 @@ from .models import Scenario, ScenarioPublication, ScenarioStep, ScenarioTransit
 from .scenario_answers import ROOM_ANSWER_LABEL
 from .scenario_materialization import materialize_scenario_defaults
 from .scenario_step_settings import (
-    ARRIVAL_INPUT_CHOICES, ARRIVAL_INPUT_FIELD, VOICE_INTERRUPTION_LABELS, retry_limit_value, silence_window_seconds,
-    voice_interruption_mode,
+    ARRIVAL_INPUT_CHOICES, ARRIVAL_INPUT_FIELD, VOICE_INTERRUPTION_LABELS, VOICE_TIMEOUT_LABELS, retry_limit_value,
+    silence_window_seconds, voice_interruption_mode, voice_timeout_mode,
 )
 from .scenario_validation import APPROVED_STEPS, MAX_TRANSITIONS, validate_materialized_scenario
 
@@ -157,6 +157,8 @@ def _describe_step(position, configuration):
         parts.append(f"Voice silence window: {seconds} seconds")
     if mode := voice_interruption_mode(configuration):
         parts.append(f"Voice interruption: {VOICE_INTERRUPTION_LABELS[mode]}")
+    if mode := voice_timeout_mode(configuration):
+        parts.append(f"Voice timeout action: {VOICE_TIMEOUT_LABELS[mode]}")
     return " | ".join(parts)
 
 

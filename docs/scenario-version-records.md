@@ -44,6 +44,10 @@ Set **Voice silence window (seconds)** on a saved arrival, departure or guest-co
 
 At the arrival, departure or guest-count step, set **Voice interruption** to **Allow guests to skip the spoken prompt**. During browser voice playback the guest can choose **Skip prompt and speak** to read the current reply in chat and start speaking immediately. With a segmented reply, the button skips the remaining segments and uses the final listening window or the step default. The booking stays on the current step until the guest responds or the existing silence behavior applies. Leave the setting blank to inherit, or select **Play the prompt as usual** to turn off the button even when the shared template enables it. The setting applies to the pinned scenario during browser voice.
 
+## Browser voice timeout at arrival
+
+Set **Voice timeout action** to **End voice and continue in chat** on the arrival step. The last unanswered listening window stops browser voice and restores the full reply in chat. Earlier listening windows still advance to the next spoken segment. After voice ends this way, the chat waits on the same reply until the guest acts. The setting applies while the page is open and follows the booking's pinned version. Leave it blank to inherit, or select **Follow the usual timeout route** to override an inherited chat continuation.
+
 ## Review publication or rollback
 
 Open a scenario version in Django admin. Staff with publication and graph access can open a review for a saved draft or for a previously published version. Review the changes between the current graph and the proposed effective graph, including inherited settings, and confirm the action. Publication validates the draft before sealing it. Rollback selects an existing sealed version in the same scope. Both actions record the actor and the previous and new selections in publication history.
