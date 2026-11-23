@@ -76,6 +76,16 @@ Twelve focused tests passed, including RSA signature verification with a fiction
 audience and expiry, concurrent nonce consumption, CSRF rotation, staff isolation and draft continuity.
 An existing guest can still sign out after sign-in is disabled.
 
+Production deployed PR #93 on 2026-11-23 at revision `86910d7fa8235e6118b443474a3dc2c18992fa7b`
+with ARM64 image `sha256:893c74d18f3cc83843dd201219103412438c154df464f8bf6de78257a3dd229a`.
+All 23 focused ARM64 tests passed. On disposable migrated SQLite, the previous production image resumed
+and updated bilingual drafts and deleted sessions. The candidate rejected guest requests while disabled.
+The live backup and rollback checks are retained in `/var/lib/hotel-ai-speech/operator/scenario-release.P7OBGOlA`.
+
+Live Django reports Google sign-in disabled and both guest tables are empty. External HTTPS returned 404
+for all four guest routes. The bilingual reception pages, admin login, web health, and Piper and Vosk
+checks passed. Both speech workers retained their container identities and start times.
+
 Next increment is an explicit bilingual Google button and browser pilot with the approved HTTPS hostname
 and Google project. The production Nginx route list, public account UI and booking ownership are separate
 increments. Follow the [Google readiness report](google-guest-signin-readiness.md) for rollout.
