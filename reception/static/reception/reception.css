@@ -650,6 +650,78 @@ button:disabled, input:disabled {
     font-size: .875rem;
 }
 
+.booking-summary,
+.booking-date-picker {
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--field-border);
+    border-radius: 10px;
+    color: var(--ink);
+}
+
+.booking-summary h3 {
+    margin: 0 0 6px;
+    font-size: 1rem;
+}
+
+.booking-summary dl {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    margin: 0 0 8px;
+}
+
+.booking-summary dt {
+    font-size: .8rem;
+}
+
+.booking-summary dd {
+    margin: 0;
+    font-weight: 650;
+    overflow-wrap: anywhere;
+}
+
+.booking-date-picker summary {
+    display: list-item;
+    align-content: center;
+    min-height: 36px;
+    cursor: pointer;
+    font-weight: 650;
+}
+
+.booking-date-picker fieldset {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 8px 12px;
+    padding: 0;
+    margin: 8px 0 0;
+    border: 0;
+    min-inline-size: 0;
+}
+
+.booking-date-picker label {
+    display: grid;
+    gap: 4px;
+    font-size: .875rem;
+    max-width: 100%;
+}
+
+.booking-date-picker input {
+    padding: 6px 8px;
+    border: 1px solid var(--field-border);
+    border-radius: 8px;
+    color: var(--ink);
+    background: var(--surface, #fff);
+    font: inherit;
+}
+
+.booking-summary .quiet-button,
+.booking-date-picker input,
+.booking-date-picker button {
+    min-height: 44px;
+}
+
 .voice-answer-review {
     margin-bottom: 9px;
     padding: 8px 10px;

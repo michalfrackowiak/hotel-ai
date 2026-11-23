@@ -16,6 +16,7 @@ from django.views.decorators.http import require_POST, require_safe
 
 from model_providers.extraction import extract_stay_value
 
+from .booking_draft import DATE_STAGES, date_picker, edit_actions, parse_selection, rewind, selected_dates, summary
 from .contacts import parse_email
 from .conversation import COPY as BOOKING_COPY
 from .conversation import TERMINAL_STAGES, WELCOME_PARTS, new_conversation, selects_english
@@ -88,7 +89,7 @@ def index(request, mode="combined"):
     })
 
 
-def _result(state, *, stale=False, cursor=0):
+def _result(state, *, stale=False, cursor=0, date_error=False):
     payload = {field: state[field] for field in ("language", "stage", "revision", "reply")}
     pinned = pinned_overrides(state)
     overrides = scenario_overrides(state) if pinned is None else pinned
@@ -114,6 +115,16 @@ def _result(state, *, stale=False, cursor=0):
     elif payload["reply"] != state["reply"]:
         payload["voice_reply"] = state["reply"]
     step_configuration = _pinned_step_configuration(state, state["stage"])
+    if draft := summary(state):
+        payload["booking_summary"] = draft
+    if state["stage"] in DATE_STAGES:
+        arrival_configuration = (
+            _pinned_step_configuration(state, "check_in") if state["stage"] == "welcome" else step_configuration
+        )
+        if picker := date_picker(state, require_range=_requires_arrival_range(arrival_configuration)):
+            payload["date_picker"] = picker
+    if date_error:
+        payload["date_error"] = True
     if state["stage"] in SILENCE_WINDOW_STEPS and (seconds := silence_window_seconds(step_configuration)):
         payload["voice_silence_seconds"] = seconds
     if state["stage"] in VOICE_INTERRUPTION_STEPS and voice_interruption_mode(step_configuration) == ALLOW_VOICE_SKIP:
@@ -267,6 +278,11 @@ def message(request):
     text = payload.get("message")
     revision = payload.get("revision")
     required_turn_fields = {"language", "message", "revision"}
+    structured_fields = opening_keys | {"revision"}
+    dates = payload.keys() == structured_fields | {"dates"}
+    edit = payload.keys() == structured_fields | {"edit"}
+    selection = parse_selection(payload["dates"]) if dates else None
+    action = payload.get("edit") if edit else None
     turn = (
         payload.keys() == required_turn_fields
         or (voice and payload.keys() == required_turn_fields | {"voice"})
@@ -279,7 +295,9 @@ def message(request):
             if not isinstance(text, str) or not 1 <= len(text.strip()) <= MAX_MESSAGE_LENGTH:
                 return _invalid()
             text = text.strip()
-        elif not (poll or timeout or voice_start):
+        elif not (poll or timeout or voice_start or (dates and selection) or (
+            edit and action in ("dates", "guests", "room")
+        )):
             return _invalid()
         if poll and (type(cursor) is not int or not 0 <= cursor < 2**63):
             return _invalid()
@@ -343,6 +361,18 @@ def message(request):
             state = _new_web_conversation(language)
         elif state["revision"] != revision or state["language"] != language:
             return _result(state, stale=True)
+        elif edit:
+            if action not in edit_actions(state):
+                return _result(state, stale=True)
+            state = rewind(state, action, voice=voice)
+        elif dates:
+            if state["stage"] not in DATE_STAGES or state.get("flow") != "neptun":
+                return _result(state, stale=True)
+            require_range = _requires_arrival_range(_pinned_step_configuration(state, "check_in"))
+            selected = selected_dates(state, selection, require_range=require_range)
+            if selected is None:
+                return _result(state, date_error=True)
+            state = advance_web_turn(state, "", selected, voice=voice, require_arrival_range=require_range)
         elif voice_start:
             if language == "pl" and state["stage"] == "check_in" and state.get("voice_welcome"):
                 state = _new_web_conversation(language)
