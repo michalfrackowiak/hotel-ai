@@ -164,10 +164,6 @@ body {
     font-size: .875rem;
 }
 
-#voice-status:empty {
-    display: none;
-}
-
 button, input, select {
     color: inherit;
     font: inherit;
@@ -696,7 +692,8 @@ button:disabled, input:disabled {
     color: var(--muted);
 }
 
-.sr-only {
+.sr-only,
+#voice-status:empty {
     position: absolute;
     width: 1px;
     height: 1px;
