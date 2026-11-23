@@ -20,7 +20,7 @@ PARSER_FALLBACK_LABELS = dict(PARSER_FALLBACK_CHOICES)
 RETRY_LIMIT_FIELD = "retry_limit"
 SILENCE_WINDOW_FIELD = "voice_silence_seconds"
 SILENCE_WINDOW_STEPS = frozenset({
-    "check_in", "check_out", "guests", "room", "confirm", "delivery", "email", "phone", "contact_confirm",
+    "welcome", "check_in", "check_out", "guests", "room", "confirm", "delivery", "email", "phone", "contact_confirm",
 })
 MAX_SILENCE_SECONDS = 20
 VOICE_INTERRUPTION_FIELD = "voice_interruption"
@@ -98,7 +98,9 @@ def prompt_fields(language, channel, step_key):
     parser = (ARRIVAL_INPUT_FIELD,) if step_key == "check_in" and channel in CHANNEL_FIELDS else ()
     fallback = (PARSER_FALLBACK_FIELD,) if step_key in PARSER_FALLBACK_STEPS and channel in CHANNEL_FIELDS else ()
     retry = (RETRY_LIMIT_FIELD,) if step_key in RETRY_LIMIT_STEPS and channel in CHANNEL_FIELDS else ()
-    silence = (SILENCE_WINDOW_FIELD,) if step_key in SILENCE_WINDOW_STEPS and channel in CHANNEL_FIELDS else ()
+    silence = (SILENCE_WINDOW_FIELD,) if (
+        step_key in SILENCE_WINDOW_STEPS and kinds and (step_key != "welcome" or language == "pl")
+    ) else ()
     interruption = (
         (VOICE_INTERRUPTION_FIELD,) if step_key in VOICE_INTERRUPTION_STEPS and channel in CHANNEL_FIELDS else ()
     )
