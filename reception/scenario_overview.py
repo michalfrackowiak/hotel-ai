@@ -24,7 +24,7 @@ def _effective_graph(version, *, language, channel):
     return list(steps.values()), transitions
 
 
-def scenario_flow_overview(version, *, arrival_form):
+def scenario_flow_overview(version, *, simulation_form):
     language, channel = version.scenario.language, version.scenario.channel
     require_outcomes = channel != "shared"
     errors = []
@@ -50,17 +50,18 @@ def scenario_flow_overview(version, *, arrival_form):
     for source, event, target in transitions:
         outgoing[source].append((event, step_keys.get(target, "Outside this version")))
     simulation = None
-    if not errors and require_outcomes and arrival_form.is_valid():
-        from .scenario_simulator import simulate_arrival
+    if not errors and require_outcomes and simulation_form.is_valid():
+        from .scenario_simulator import simulate_stay_reply
 
-        simulation = simulate_arrival(language, channel, steps, transitions, arrival_form.cleaned_data["reply"])
+        simulation = simulate_stay_reply(language, channel, steps, transitions, **simulation_form.cleaned_data)
     return {
-        "arrival_form": arrival_form if not errors and require_outcomes else None,
+        "simulation_form": simulation_form if not errors and require_outcomes else None,
         "arrival_examples": {
             "en": ("tomorrow", "from tomorrow for three nights"),
             "pl": ("jutro", "od jutra na trzy noce"),
         }.get(language, ()),
-        "arrival_simulation": simulation,
+        "departure_example": {"en": "for three nights", "pl": "na trzy noce"}.get(language),
+        "simulation": simulation,
         "flow_entry": entry,
         "flow_errors": errors,
         "flow_saved_only": fallback,

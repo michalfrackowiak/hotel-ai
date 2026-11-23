@@ -101,6 +101,7 @@ The current admin edits prompt text and voice segments; conversation transitions
 - [ ] Permit adding/reordering optional steps and routing through approved actions. Keep availability, price calculation, required consent and atomic booking creation as enforced server invariants. Forbid arbitrary Python, SQL or unvalidated external actions in the editor.
 - [x] Provide a read-only admin flow overview of the saved or effective inherited graph and its validation findings.
 - [x] Preview one bilingual browser arrival reply in the flow overview using built-in parsing, effective transitions and rendered chat/voice wording.
+- [x] Simulate a bilingual departure reply using a fictional arrival date, including stay durations and departure retries.
 - [ ] Extend the simulator to additional steps and live parser parity. Validate missing placeholders, unreachable states, loops, required contact/consent paths and terminal states before publishing.
 - [x] Record the selected scenario version and entry channel on new web conversations. Preserve the pin across same-language turns, retries, and later publication or rollback. See [web conversation pinning](scenario-version-records.md#web-conversation-pinning).
 - [x] Render supported web prompts from the pinned version, with built-in fallbacks and compatibility for unpinned conversations. See [pinned web prompts](scenario-version-records.md#pinned-web-prompts).
