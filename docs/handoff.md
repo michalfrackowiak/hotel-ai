@@ -8,7 +8,25 @@ The action uses the current conversation revision and creates the thread in the 
 
 Twelve focused Django tests passed, including bilingual handover, replay rejection, protected stages and resume in chat. JavaScript syntax, Django system and migration checks passed.
 
-Next roadmap increment: assess the stable hostname and Google OAuth configuration needed for guest sign-in.
+Production deployed PR [#90](https://github.com/michalfrackowiak/hotel-ai/pull/90) on 2026-11-23
+at revision `7522a825ba2765c7eb731815965d70d15e6d0054` with ARM64 image
+`sha256:f7c2aeb0832ea1c10358811909eeba35b2d708557f61852d5272ea63848edc84`.
+All 12 isolated ARM64 tests passed. The rollout verified a SQLite backup and rollback image, and exercised
+Piper and Vosk in English and Polish. Both workers kept their container identities and start times.
+Public HTTPS checks passed for all three reception pages in both languages, the voice-only receptionist control,
+versioned assets, health and the admin login page. The isolated tests exercised handover writes.
+The root-only backup and rollout evidence are in `/var/lib/hotel-ai-speech/operator/scenario-release.VYWIC2aE`.
+
+## Google guest sign-in readiness
+
+The production TLS certificate identifies the public IP. A read-only check confirmed the IP in the certificate's
+subject alternative name. The planned sign-in setup uses an HTTPS hostname under a hotel-controlled domain
+and a separate Google Auth Platform web client. The [readiness report](google-guest-signin-readiness.md)
+documents provider registration, session and booking continuity checks, and a staged pilot.
+
+Next action is to identify the approved hostname and the hotel-owned Google Cloud project. Hostname approval,
+DNS control and a configured web client remain pending for live sign-in. The integration can be developed
+behind a disabled-by-default flag with fictional identity responses while that setup is pending.
 
 ## Booking summary and date picker
 
