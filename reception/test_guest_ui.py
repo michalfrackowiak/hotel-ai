@@ -10,6 +10,7 @@ from guest_accounts.views import GUEST_SESSION_KEY
 
 @override_settings(
     HOTEL_GOOGLE_GUEST_SIGNIN_ENABLED=True,
+    HOTEL_GOOGLE_GUEST_HOST="testserver",
     HOTEL_GOOGLE_CLIENT_ID="fictional-guest-ui.apps.googleusercontent.com",
 )
 class GuestAccountUITests(TestCase):
@@ -38,6 +39,10 @@ class GuestAccountUITests(TestCase):
         with self.settings(HOTEL_GOOGLE_GUEST_SIGNIN_ENABLED=False):
             check_hidden()
         with self.settings(HOTEL_GOOGLE_CLIENT_ID=""):
+            check_hidden()
+        with self.settings(HOTEL_GOOGLE_GUEST_HOST="pilot.example.test"):
+            check_hidden()
+        with self.settings(HOTEL_GOOGLE_GUEST_HOST=""):
             check_hidden()
         staff = get_user_model().objects.create_user(username="fictional-staff", is_staff=True)
         self.client.force_login(staff)

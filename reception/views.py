@@ -70,7 +70,7 @@ OLD_ARRIVAL_PROMPTS = (
 def index(request, mode="combined"):
     language = request.GET.get("lang")
     valid_language = language in ("en", "pl")
-    guest_enabled = bool(google_client_id()) and not request.user.is_authenticated
+    guest_enabled = bool(google_client_id(request)) and not request.user.is_authenticated
     resume = (
         (mode != "combined" and not valid_language)
         or ((mode != "combined" or guest_enabled) and request.GET.get("continue") == "1")

@@ -56,8 +56,8 @@ the guest signs in before the reception page starts its conversation. The approv
 
 ## Google guest sign-in backend
 
-The feature requires `HOTEL_GOOGLE_GUEST_SIGNIN_ENABLED=1` and a Google web client ID in
-`HOTEL_GOOGLE_CLIENT_ID`. Keep it disabled until the public configuration and browser pilot are ready.
+The feature requires `HOTEL_GOOGLE_GUEST_SIGNIN_ENABLED=1`, a Google web client ID in
+`HOTEL_GOOGLE_CLIENT_ID` and the pilot hostname in `HOTEL_GOOGLE_GUEST_HOST`. Keep it disabled until the public configuration and browser pilot are ready.
 Django verifies Google credentials, maps the validated subject to a guest account, and keeps guest
 identity in server-side session data. The guest account has no Django staff credentials or email link.
 
@@ -100,11 +100,34 @@ fresh anonymous session.
 
 All 31 focused Django tests passed, with no migration drift. JavaScript syntax and whitespace checks passed.
 
+Production deployment, 24 November 2026 (Europe/Warsaw). Build `05545ee` is live on ARM64
+with Google guest sign-in disabled. All 31 focused tests passed in the isolated release image.
+The pre-deploy SQLite backup passed the restore drill and the prior image read the disposable
+copy. The root-only release evidence is in
+`/var/lib/hotel-ai-speech/operator/scenario-release.JZmznD0p`.
+
+Public HTTPS checks passed for the combined, chat and voice pages in both languages, their
+versioned assets and response headers, health and admin login. Guest routes returned 404,
+and the Google controls and script were absent. Both guest tables were empty. Piper and
+Vosk passed bilingual smoke checks with the existing worker containers. The web container
+was healthy and the Nginx reception configuration matched the reviewed checksum.
+
 Before a live pilot, register the exact HTTPS origin in the Google web client, publish the agreed
 privacy information and expose only the required guest paths with request limits. Verify actual Google
 popup behavior in the supported browsers, including browser privacy settings and the page's CSP and
 opener policy. Keep anonymous voice and chat available throughout. See [Google setup](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid)
 and the [readiness report](google-guest-signin-readiness.md).
+
+## Google guest pilot routing
+
+The pilot Nginx snippet exposes four exact guest account routes with a shared per-IP rate limit
+and a 4,224-byte body cap. Django requires the configured pilot hostname before enabling
+Google controls or processing guest account requests. Existing IP virtual host configuration
+is untouched. The isolated Nginx Docker check passed host and path isolation, upstream
+forwarding, body size and rate-limit cases, and remained able to forward chat and voice.
+
+Next action is getting the hotel-approved HTTPS hostname and Google web client, then running
+the real bilingual browser pilot. See [pilot proxy configuration](google-guest-signin-readiness.md#pilot-proxy-configuration).
 
 ## Google guest sign-in readiness
 
