@@ -102,6 +102,7 @@ The current admin edits prompt text and voice segments; conversation transitions
 - [x] Configure whether final browser voice silence at the Polish welcome keeps the welcome open in chat, and preview the result in the simulator.
 - [x] Configure optional model parser fallback for browser arrival, departure, and guest-count replies.
 - [x] Configure whether reviewed parser corrections apply to browser arrival, departure, and guest-count replies, including when the Polish welcome uses the arrival parser.
+- [x] Extend the reviewed correction policy to browser room selection, email and phone entry.
 - [ ] Extend editing to other parser settings, additional validation messages, allowed branches, timeout actions, and delivery/handover behavior.
 - [ ] Permit adding/reordering optional steps and routing through approved actions. Keep availability, price calculation, required consent and atomic booking creation as enforced server invariants. Forbid arbitrary Python, SQL or unvalidated external actions in the editor.
 - [x] Provide a read-only admin flow overview of the saved or effective inherited graph and its validation findings.

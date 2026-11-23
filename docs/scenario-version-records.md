@@ -38,7 +38,7 @@ The setting follows the pinned browser scenario for typed and transcribed replie
 
 ## Reviewed parser corrections
 
-Use **Reviewed parser corrections** on arrival, departure, or guest count to control whether the pinned scenario applies staff-reviewed corrections. The Polish welcome uses the arrival setting when it reaches parser review. Choose **Skip reviewed corrections** to ignore saved rules, or **Apply reviewed corrections when enabled** to override a shared skip setting. Leave it blank to inherit or keep the existing behavior. Model fallback and sample recording keep their own controls.
+Use **Reviewed parser corrections** on arrival, departure, guest count, room selection, email entry, or phone entry to control whether the pinned scenario applies staff-reviewed corrections. The Polish welcome uses the arrival setting when it reaches parser review. Choose **Skip reviewed corrections** to ignore saved rules, or **Apply reviewed corrections when enabled** to override a shared skip setting. Leave it blank to inherit or keep the existing behavior. Model fallback and sample recording keep their own controls.
 
 ## Retry limits
 

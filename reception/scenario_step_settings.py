@@ -18,6 +18,7 @@ PARSER_FALLBACK_CHOICES = (
 )
 PARSER_FALLBACK_LABELS = dict(PARSER_FALLBACK_CHOICES)
 PARSER_CORRECTIONS_FIELD = "parser_corrections"
+PARSER_CORRECTIONS_STEPS = STAY_PARSER_STEPS | {"room", "email", "phone"}
 SKIP_PARSER_CORRECTIONS = "skip"
 PARSER_CORRECTIONS_CHOICES = (
     ("apply", "Apply reviewed corrections when enabled"),
@@ -106,10 +107,8 @@ def prompt_fields(language, channel, step_key):
     primary = kinds if step_key in STEP_PROMPTS else ()
     outcomes = (outcome_field(prompt, kind) for prompt in OUTCOME_PROMPTS.get(step_key, ()) for kind in kinds)
     parser = (ARRIVAL_INPUT_FIELD,) if step_key == "check_in" and channel in CHANNEL_FIELDS else ()
-    stay_parser = (
-        (PARSER_FALLBACK_FIELD, PARSER_CORRECTIONS_FIELD)
-        if step_key in STAY_PARSER_STEPS and channel in CHANNEL_FIELDS else ()
-    )
+    fallback = (PARSER_FALLBACK_FIELD,) if step_key in STAY_PARSER_STEPS and kinds else ()
+    corrections = (PARSER_CORRECTIONS_FIELD,) if step_key in PARSER_CORRECTIONS_STEPS and kinds else ()
     retry = (RETRY_LIMIT_FIELD,) if step_key in RETRY_LIMIT_STEPS and channel in CHANNEL_FIELDS else ()
     silence = (SILENCE_WINDOW_FIELD,) if (
         step_key in SILENCE_WINDOW_STEPS and kinds and (step_key != "welcome" or language == "pl")
@@ -122,7 +121,7 @@ def prompt_fields(language, channel, step_key):
     ) else ()
     return (
         *primary, *outcomes, *answer_label_fields(language, channel, step_key),
-        *parser, *stay_parser, *retry, *silence, *interruption, *timeout,
+        *parser, *fallback, *corrections, *retry, *silence, *interruption, *timeout,
     )
 
 

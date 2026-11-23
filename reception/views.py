@@ -33,8 +33,8 @@ from .scenario_pinning import (
     carry_web_scenario, pin_web_scenario, pinned_scenario_version_id, published_pinned_steps, web_scenario_channel,
 )
 from .scenario_step_settings import (
-    ALLOW_VOICE_SKIP, ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, REQUIRE_ARRIVAL_RANGE, SILENCE_WINDOW_STEPS,
-    STAY_PARSER_STEPS, VOICE_INTERRUPTION_STEPS, VOICE_TIMEOUT_STEPS, allows_model_fallback,
+    ALLOW_VOICE_SKIP, ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, PARSER_CORRECTIONS_STEPS, REQUIRE_ARRIVAL_RANGE,
+    SILENCE_WINDOW_STEPS, STAY_PARSER_STEPS, VOICE_INTERRUPTION_STEPS, VOICE_TIMEOUT_STEPS, allows_model_fallback,
     allows_parser_corrections, silence_window_seconds, voice_interruption_mode, voice_timeout_mode,
 )
 from .speech import (
@@ -138,7 +138,9 @@ def _result(state, *, stale=False, cursor=0):
 def _pinned_step_configuration(state, stage):
     if pinned_scenario_version_id(state) is None:
         return {}
-    configured_stages = SILENCE_WINDOW_STEPS | VOICE_INTERRUPTION_STEPS | VOICE_TIMEOUT_STEPS | STAY_PARSER_STEPS
+    configured_stages = (
+        SILENCE_WINDOW_STEPS | VOICE_INTERRUPTION_STEPS | VOICE_TIMEOUT_STEPS | PARSER_CORRECTIONS_STEPS
+    )
     if stage not in configured_stages and not answer_label_fields(
         state["language"], web_scenario_channel(state), stage,
     ):
@@ -350,7 +352,7 @@ def message(request):
             input_parsed = False
             if turn and settings.HOTEL_PARSER_TRAINING_ENABLED:
                 parser_stage = "check_in" if was_welcome else state["stage"]
-                apply_corrections = parser_stage not in STAY_PARSER_STEPS or allows_parser_corrections(
+                apply_corrections = parser_stage not in PARSER_CORRECTIONS_STEPS or allows_parser_corrections(
                     _pinned_step_configuration(state, parser_stage),
                 )
                 parsed, input_parsed = review_booking_input(
