@@ -64,7 +64,7 @@ class ReceptionModeTests(TestCase):
                     self.assertEqual(initial["stage"], "welcome" if language == "pl" else "check_in")
                     advance = self.post(client=client, language=language, message=message, revision=initial["revision"])
                     self.assertEqual(advance.json()["stage"], "guests")
-                    conversation = Conversation.objects.get(session_id=client.session.session_key)
+                    conversation = Conversation.objects.get(conversation_id=client.session.session_key)
                     saved = conversation.state
 
                     destination = client.get(reverse(f"reception-{other}"), {

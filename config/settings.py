@@ -25,11 +25,11 @@ INSTALLED_APPS = [
     "config.admin.HotelAdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
+    "reception",  # Extends clearsessions to prune detached reception conversations.
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "bookings",
-    "reception",
     "model_providers",
     "telephony",
 ]

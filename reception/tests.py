@@ -441,7 +441,7 @@ class ReceptionHandoverTests(TestCase):
                 self.assertEqual(self.post(start=True, resume=True, language=language).json(), current)
                 legacy = self.post(voice_start=True, revision=current["revision"], language=language).json()
                 self.assertEqual(legacy, current)
-                conversation = Conversation.objects.get(session_id=self.client.session.session_key)
+                conversation = Conversation.objects.get(conversation_id=self.client.session.session_key)
                 handover = StaffHandover.objects.get(conversation=conversation, language=language, closed=False)
                 self.assertEqual(conversation.state["scenario_pin"]["channel"], "voice")
                 followup = self.post(revision=current["revision"], language=language, message="Please help.")
@@ -453,7 +453,7 @@ class ReceptionHandoverTests(TestCase):
             with self.subTest(stage=stage):
                 self.client = Client()
                 opening = self.post(start=True, voice=True).json()
-                conversation = Conversation.objects.get(session_id=self.client.session.session_key)
+                conversation = Conversation.objects.get(conversation_id=self.client.session.session_key)
                 conversation.state.update(stage=stage, reference="SAMPLE-REFERENCE")
                 conversation.save(update_fields=["state"])
                 response = self.post(revision=opening["revision"], handover=True, voice=True)

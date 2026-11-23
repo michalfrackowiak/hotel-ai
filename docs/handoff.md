@@ -17,6 +17,31 @@ Public HTTPS checks passed for all three reception pages in both languages, the 
 versioned assets, health and the admin login page. The isolated tests exercised handover writes.
 The root-only backup and rollout evidence are in `/var/lib/hotel-ai-speech/operator/scenario-release.VYWIC2aE`.
 
+## Reception session continuity
+
+Booking drafts, pending delivery receipts and staff conversations use a database identifier carried in the
+server-side browser session. The migration preserves existing identifiers and child records. Rotating
+the session can retain the identifier for the new session and invalidate the old browser cookie.
+Reception enforces the draft expiry on access. Running `python manage.py clearsessions`
+also removes a batch of up to 200 expired reception conversations and their dependent staff records.
+Run the command often enough to clear the host's expired draft backlog.
+
+The migration has a forward-only data step. Before rollout, take a verified SQLite backup and exercise
+the previous image on a disposable migrated copy. On a fictional file-backed database the prior
+application resumed and advanced bilingual drafts and wrote new rows after migration. The candidate
+retained these active rows during cleanup. Independent replay also confirmed an existing handover and
+its guest and staff messages survive migration and rotation. The previous application can resume
+conversations under their original sessions. A later rollout that rotates production sessions for sign-in
+needs its own rollback plan.
+
+All 174 reception and telephony tests passed, together with the Django system, migration drift and whitespace
+checks. The tests cover credential-session rotation with a fictional account and a speech response that reaches
+its expiry while synthesis is in progress. [PR #92](https://github.com/michalfrackowiak/hotel-ai/pull/92)
+
+The next implementation increment is optional Google credential verification and new or returning guest
+sessions with a test verifier. Bind any active legacy draft before rotating its session, including when
+the guest signs in before the reception page starts its conversation. The approved hostname and Google web client remain pending for live sign-in.
+
 ## Google guest sign-in readiness
 
 The production TLS certificate identifies the public IP. A read-only check confirmed the IP in the certificate's
