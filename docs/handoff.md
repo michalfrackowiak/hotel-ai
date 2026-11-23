@@ -38,6 +38,18 @@ All 174 reception and telephony tests passed, together with the Django system, m
 checks. The tests cover credential-session rotation with a fictional account and a speech response that reaches
 its expiry while synthesis is in progress. [PR #92](https://github.com/michalfrackowiak/hotel-ai/pull/92)
 
+Production deployed PR #92 on 2026-11-23 at revision `6fa024ff620c5491d576c7314464d75f1a4e40b3`
+with ARM64 image `sha256:26fed18b19854c37d465ef4abacfac4c89ad87873b04e961cc98cfdee787f3dc`.
+All 21 focused ARM64 tests passed. The actual previous production image created, resumed and advanced
+fictional bilingual drafts on disposable SQLite before and after migration. Candidate cleanup preserved
+the active drafts, and SQLite integrity and foreign-key checks passed. The live backup and rollback
+verification are retained in `/var/lib/hotel-ai-speech/operator/scenario-release.5d9U0ck1`.
+Production migration 0010 is applied. Public health, admin login, and the bilingual reception routes passed.
+English and Polish Piper and Vosk checks passed. Both workers retained their container identities and start times.
+
+Expiry is enforced on access. Production currently schedules parser sample expiry only. Scheduling
+`clearsessions` for physical cleanup of expired reception records remains pending.
+
 The next implementation increment is optional Google credential verification and new or returning guest
 sessions with a test verifier. Bind any active legacy draft before rotating its session, including when
 the guest signs in before the reception page starts its conversation. The approved hostname and Google web client remain pending for live sign-in.
