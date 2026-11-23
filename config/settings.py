@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "bookings",
+    "guest_accounts",
     "model_providers",
     "telephony",
 ]
@@ -116,6 +117,9 @@ HOTEL_SPEECH_CONTROL_SWITCH_ENABLED = os.environ.get("HOTEL_SPEECH_CONTROL_SWITC
 HOTEL_SPEECH_CONTROL_HOST = os.environ.get("HOTEL_SPEECH_CONTROL_HOST", "")
 HOTEL_SPEECH_CONTROLLER_TOKEN = os.environ.get("HOTEL_SPEECH_CONTROLLER_TOKEN", "")
 HOTEL_SPEECH_CONTROLLER_HOST = os.environ.get("HOTEL_SPEECH_CONTROLLER_HOST", "")
+HOTEL_GOOGLE_GUEST_SIGNIN_ENABLED = os.environ.get("HOTEL_GOOGLE_GUEST_SIGNIN_ENABLED") == "1"
+HOTEL_GOOGLE_CLIENT_ID = os.environ.get("HOTEL_GOOGLE_CLIENT_ID", "").strip()
+
 HOTEL_PARSER_TRAINING_ENABLED = os.environ.get("HOTEL_PARSER_TRAINING_ENABLED") == "1"
 try:
     HOTEL_PIPER_TIMEOUT = int(os.environ.get("HOTEL_PIPER_TIMEOUT", "10"))

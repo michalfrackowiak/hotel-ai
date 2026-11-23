@@ -38,9 +38,47 @@ All 174 reception and telephony tests passed, together with the Django system, m
 checks. The tests cover credential-session rotation with a fictional account and a speech response that reaches
 its expiry while synthesis is in progress. [PR #92](https://github.com/michalfrackowiak/hotel-ai/pull/92)
 
+Production deployed PR #92 on 2026-11-23 at revision `6fa024ff620c5491d576c7314464d75f1a4e40b3`
+with ARM64 image `sha256:26fed18b19854c37d465ef4abacfac4c89ad87873b04e961cc98cfdee787f3dc`.
+All 21 focused ARM64 tests passed. The actual previous production image created, resumed and advanced
+fictional bilingual drafts on disposable SQLite before and after migration. Candidate cleanup preserved
+the active drafts, and SQLite integrity and foreign-key checks passed. The live backup and rollback
+verification are retained in `/var/lib/hotel-ai-speech/operator/scenario-release.5d9U0ck1`.
+Production migration 0010 is applied. Public health, admin login, and the bilingual reception routes passed.
+English and Polish Piper and Vosk checks passed. Both workers retained their container identities and start times.
+
+Expiry is enforced on access. Production currently schedules parser sample expiry only. Scheduling
+`clearsessions` for physical cleanup of expired reception records remains pending.
+
 The next implementation increment is optional Google credential verification and new or returning guest
 sessions with a test verifier. Bind any active legacy draft before rotating its session, including when
 the guest signs in before the reception page starts its conversation. The approved hostname and Google web client remain pending for live sign-in.
+
+## Google guest sign-in backend
+
+The feature requires `HOTEL_GOOGLE_GUEST_SIGNIN_ENABLED=1` and a Google web client ID in
+`HOTEL_GOOGLE_CLIENT_ID`. Keep it disabled until the public configuration and browser pilot are ready.
+Django verifies Google credentials, maps the validated subject to a guest account, and keeps guest
+identity in server-side session data. The guest account has no Django staff credentials or email link.
+
+The GIS popup client posts to `/guest/google/nonce/` for its client ID and short-lived nonce. It sends
+`{"credential":"…"}` to `/guest/google/sign-in/` with Django's CSRF header. After sign-in, reload the current reception page so its form and scripts
+use the rotated CSRF token. For public exposure, add route-specific limits for nonce issuance and
+credential checks. `GET /guest/session/` reports guest sign-in status and
+`POST /guest/sign-out/` clears the guest session. Sign-in preserves the guest's active reception draft
+on first login or return to the same account. An account change or sign-out clears the association.
+
+With the feature disabled, deployment can apply the new guest-account tables before the browser pilot.
+After sign-in is enabled, plan rollback around rotated guest sessions and any challenges linked to Django
+sessions. Keep a release that supports the guest account and challenge tables as the rollback target.
+
+Twelve focused tests passed, including RSA signature verification with a fictional certificate, invalid issuer,
+audience and expiry, concurrent nonce consumption, CSRF rotation, staff isolation and draft continuity.
+An existing guest can still sign out after sign-in is disabled.
+
+Next increment is an explicit bilingual Google button and browser pilot with the approved HTTPS hostname
+and Google project. The production Nginx route list, public account UI and booking ownership are separate
+increments. Follow the [Google readiness report](google-guest-signin-readiness.md) for rollout.
 
 ## Google guest sign-in readiness
 

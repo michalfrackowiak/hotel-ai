@@ -34,6 +34,27 @@ def active_conversations(session, locator):
     )
 
 
+def preserve_conversation_for_rotation(session):
+    locator = conversation_id(session)
+    if locator is None:
+        return False
+    conversations = active_conversations(session, locator)
+    draft = conversations.first()
+    if draft is None:
+        session.pop(CONVERSATION_SESSION_KEY, None)
+        return False
+    if draft.expires_at is None:
+        # The previous Django image may have inserted this legacy draft without an expiry.
+        expiry = Session.objects.filter(
+            pk=session.session_key, expire_date__gt=Now(),
+        ).values_list("expire_date", flat=True).first()
+        if expiry is None:
+            return False
+        conversations.filter(expires_at__isnull=True).update(expires_at=expiry)
+    bind_conversation_id(session, locator)
+    return True
+
+
 def open_conversation(session, locator, initial_state, *, allow_create):
     if session.session_key is None:
         if not allow_create:

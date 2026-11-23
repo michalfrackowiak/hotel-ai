@@ -141,6 +141,8 @@ The current admin edits prompt text and voice segments; conversation transitions
 
 ## 0.8 — Google accounts and guest continuity
 
+- [x] Add the opt-in Google credential backend and guest session lifecycle. Verify with fictional credentials before exposing public sign-in. See [backend checks](handoff.md#google-guest-sign-in-backend).
+
 - [x] Preserve reception state across browser session rotation. Verify draft, pending receipt and staff handover continuity and deny access from the old cookie. See [verification](handoff.md#reception-session-continuity).
 
 - [ ] Add public registration/login using Google Identity Services or a maintained Django OIDC integration. First successful Google sign-in creates a guest account; later sign-ins return to it. Password registration is a separate optional scope decision. Guest booking remains available.
