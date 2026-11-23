@@ -14,8 +14,9 @@ CORRECTED_SAMPLE_AGE = timedelta(days=180)
 
 
 class Conversation(models.Model):
-    session = models.OneToOneField("sessions.Session", on_delete=models.CASCADE, primary_key=True)
+    conversation_id = models.CharField(max_length=40, primary_key=True, db_column="session_id")
     state = models.JSONField()
+    expires_at = models.DateTimeField(null=True, db_index=True)
 
 
 class StaffHandover(models.Model):

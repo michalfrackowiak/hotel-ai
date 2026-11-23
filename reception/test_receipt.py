@@ -1,6 +1,7 @@
 from datetime import timedelta
 from unittest.mock import patch
 
+from django.conf import settings
 from django.core.management import call_command
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
@@ -85,3 +86,23 @@ class DeliveryReceiptTests(TestCase):
         self.assertNotIn("We have sent", completed["reply"])
         self.assertIn(pending["reference"], completed["reply"])
         self.assertEqual(BookingConfirmation.objects.get().status, BookingConfirmation.Status.PENDING)
+
+    @patch("bookings.confirmations._submit", return_value=("fixture-message", True))
+    def test_pending_receipt_survives_rotation_and_rejects_old_session(self, submit):
+        pending = self.collect_contact(
+            "en", ("tomorrow", "for 3 nights", "2", "1", "yes", "email", "guest@example.test", "yes"),
+        )
+        session = self.client.session
+        old_client = Client()
+        old_client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key
+        session.cycle_key()
+        self.client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key
+
+        self.assertEqual(self.poll(pending, client=old_client).status_code, 404)
+        self.assertEqual(self.poll(pending).json(), pending)
+        self.assertEqual(dispatch_confirmations(["email"]), (1, 0))
+        completed = self.poll(pending).json()
+        self.assertEqual(completed["stage"], "completed")
+        self.assertEqual(completed["reference"], pending["reference"])
+        self.assertEqual(Booking.objects.count(), 1)
+        submit.assert_called_once()

@@ -150,7 +150,7 @@ class ParserReviewTests(TestCase):
         skip_version = self.publish_parser_policy(scenario, actor, number=2, skip_stage=stage)
         applied = self.answer(failed, raw, **answer_flags)
         self.assertEqual(applied["stage"], expected_stage)
-        state = Conversation.objects.get(session_id=self.client.session.session_key).state
+        state = Conversation.objects.get(conversation_id=self.client.session.session_key).state
         self.assertEqual(state["scenario_pin"]["version_id"], default_version)
         self.assertEqual(state[state_field], expected)
 
@@ -160,7 +160,7 @@ class ParserReviewTests(TestCase):
         self.assertEqual(turn["stage"], stage)
         skipped = self.answer(turn, raw, **answer_flags)
         self.assertEqual(skipped["stage"], stage)
-        state = Conversation.objects.get(session_id=self.client.session.session_key).state
+        state = Conversation.objects.get(conversation_id=self.client.session.session_key).state
         self.assertEqual(state["scenario_pin"]["version_id"], skip_version)
         self.assertNotIn(state_field, state)
         self.assertEqual(
@@ -169,7 +169,7 @@ class ParserReviewTests(TestCase):
 
         accepted = self.answer(skipped, direct, **answer_flags)
         self.assertEqual(accepted["stage"], expected_stage)
-        state = Conversation.objects.get(session_id=self.client.session.session_key).state
+        state = Conversation.objects.get(conversation_id=self.client.session.session_key).state
         self.assertEqual(state[state_field], expected)
         self.assertFalse(Booking.objects.exists())
 

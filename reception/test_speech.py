@@ -184,7 +184,7 @@ class ReceptionAudioTests(TestCase):
     @patch("reception.views.synthesize")
     def test_changed_revision_is_rejected_with_or_without_audio(self, generate):
         def change_revision(*_):
-            conversation = Conversation.objects.get(session_id=self.client.session.session_key)
+            conversation = Conversation.objects.get(conversation_id=self.client.session.session_key)
             conversation.state["revision"] = "a" * 32
             conversation.save(update_fields=["state"])
             if generate.return_value is None:

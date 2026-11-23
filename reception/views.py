@@ -20,7 +20,7 @@ from .booking_draft import DATE_STAGES, date_picker, edit_actions, parse_selecti
 from .contacts import parse_email
 from .conversation import COPY as BOOKING_COPY
 from .conversation import TERMINAL_STAGES, WELCOME_PARTS, new_conversation, selects_english
-from .models import Conversation, StaffHandover
+from .models import StaffHandover
 from .parser_review import review_booking_input
 from .parsing import parse_stay_input
 from .receipt import DELIVERY_PENDING, refresh_receipt
@@ -38,6 +38,7 @@ from .scenario_step_settings import (
     SILENCE_WINDOW_STEPS, STAY_PARSER_STEPS, VOICE_INTERRUPTION_STEPS, VOICE_TIMEOUT_STEPS, allows_model_fallback,
     allows_parser_corrections, silence_window_seconds, voice_interruption_mode, voice_timeout_mode,
 )
+from .session_continuity import active_conversations, conversation_id, open_conversation
 from .speech import (
     MAX_PCM_BYTES, MAX_TEXT_CHARACTERS, SpeechBusy, SpeechUnavailable, synthesize, synthesize_welcome, transcribe,
     transcribe_welcome,
@@ -71,8 +72,9 @@ def index(request, mode="combined"):
     resume = mode != "combined" and (request.GET.get("continue") == "1" or not valid_language)
     if resume or not valid_language:
         language = language if valid_language else "pl"
-        if request.session.session_key:
-            state = Conversation.objects.filter(session_id=request.session.session_key).values_list("state", flat=True).first()
+        locator = conversation_id(request.session)
+        if locator:
+            state = active_conversations(request.session, locator).values_list("state", flat=True).first()
             if state:
                 language = state["language"]
     request.session.setdefault("reception", True)
@@ -250,8 +252,8 @@ def _save_state(conversation, state, *, fresh=False):
 
 
 @transaction.atomic
-def _poll_receipt(session_id, language, revision):
-    conversation = Conversation.objects.filter(session_id=session_id).first()
+def _poll_receipt(session, locator, language, revision):
+    conversation = active_conversations(session, locator).first()
     if conversation is None:
         return HttpResponse(status=404)
     state = conversation.state
@@ -319,19 +321,25 @@ def message(request):
         if poll and (type(cursor) is not int or not 0 <= cursor < 2**63):
             return _invalid()
 
+    locator = conversation_id(request.session)
     preview = None
-    if not (start or reset) and request.session.session_key:
-        preview = Conversation.objects.filter(session_id=request.session.session_key).values_list(
+    if not (start or reset) and locator:
+        preview = active_conversations(request.session, locator).values_list(
             "state", flat=True,
         ).first()
     if poll:
         if not preview:
             return HttpResponse(status=404)
         if preview["stage"] == DELIVERY_PENDING:
-            return _poll_receipt(request.session.session_key, language, revision)
+            return _poll_receipt(request.session, locator, language, revision)
         if preview["stage"] != "handover" or preview["language"] != language:
             return _result(preview, stale=True)
         return _result(preview, stale=preview["revision"] != revision, cursor=cursor)
+    # Preserve the initial stale reply for a new browser. A request carrying
+    # an expired, rotated or unknown cookie must reconnect explicitly.
+    allow_create = start or reset or settings.SESSION_COOKIE_NAME not in request.COOKIES
+    if not (allow_create or preview):
+        return HttpResponse(status=404)
     parsed = None
     if (
         turn and preview and preview["revision"] == revision and preview["language"] == language
@@ -349,14 +357,13 @@ def message(request):
     # Recheck the revision under SQLite's write lock after parsing. Booking and
     # conversation updates commit together, including a retried confirmation.
     with transaction.atomic():
-        request.session.setdefault("reception", True)
-        if request.session.session_key is None:
-            request.session.create()
         channel = "voice" if voice and (start or reset) else "chat"
-        conversation, created = Conversation.objects.get_or_create(
-            session_id=request.session.session_key,
-            defaults={"state": lambda: _new_web_conversation(language, channel=channel)},
+        conversation, created = open_conversation(
+            request.session, locator, lambda: _new_web_conversation(language, channel=channel),
+            allow_create=allow_create,
         )
+        if conversation is None:
+            return HttpResponse(status=404)
         state = conversation.state
         if start and resume:
             return _result(state)
@@ -477,9 +484,10 @@ def audio(request):
     if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{32}", revision):
         return _invalid()
 
-    if not request.session.get("reception"):
+    locator = conversation_id(request.session)
+    if not locator:
         return HttpResponse(status=404)
-    conversation = Conversation.objects.filter(session_id=request.session.session_key)
+    conversation = active_conversations(request.session, locator)
     state = conversation.values_list("state", flat=True).first()
     if state is None:
         return HttpResponse(status=404)
@@ -525,9 +533,10 @@ def transcript(request):
     if not re.fullmatch(r"[0-9a-f]{32}", revision):
         return _invalid()
 
-    if not request.session.get("reception"):
+    locator = conversation_id(request.session)
+    if not locator:
         return HttpResponse(status=404)
-    conversation = Conversation.objects.filter(session_id=request.session.session_key)
+    conversation = active_conversations(request.session, locator)
     state = conversation.values_list("state", flat=True).first()
     if state is None:
         return HttpResponse(status=404)

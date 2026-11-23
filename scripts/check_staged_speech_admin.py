@@ -236,7 +236,7 @@ def guest_draft(language):
          "revision": response.json()["revision"]}, content_type="application/json", **csrf(guest))
     require(response.status_code == 200 and response.json()["stage"] == "check_out",
             "Fictional arrival date did not advance the draft.")
-    return guest, Conversation.objects.get(session_id=guest.session.session_key).state
+    return guest, Conversation.objects.get(conversation_id=guest.session.session_key).state
 
 
 def guest_speech(guest, draft):
@@ -251,7 +251,7 @@ def guest_speech(guest, draft):
     response = guest.post("/reception/transcribe/", b"\0" * 32000, content_type="application/octet-stream",
                           HTTP_X_RECEPTION_REVISION=draft["revision"], **csrf(guest))
     require(response.status_code == 200 and response.json() == {"text": ""}, "Real Vosk silence probe failed.")
-    require(Conversation.objects.get(session_id=guest.session.session_key).state == draft, "The booking draft changed.")
+    require(Conversation.objects.get(conversation_id=guest.session.session_key).state == draft, "The booking draft changed.")
 
 
 def check_restarted_drafts(operator, workers):
@@ -265,7 +265,7 @@ def check_restarted_drafts(operator, workers):
     live_state(staff, 4, {slot: workers[f"{slot[1]}-new"] for slot in SLOTS})
     expected = json.loads(EXPECTED_DRAFTS.read_text(encoding="utf-8"))
     require(len(expected) == 2 and {draft["language"] for draft in expected.values()} == {"en", "pl"}
-            and dict(Conversation.objects.values_list("session_id", "state")) == expected,
+            and dict(Conversation.objects.values_list("conversation_id", "state")) == expected,
             "The original bilingual drafts did not survive the restart.")
     for session_id, draft in expected.items():
         guest = Client(enforce_csrf_checks=True)

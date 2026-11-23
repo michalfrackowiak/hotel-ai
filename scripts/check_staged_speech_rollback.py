@@ -70,10 +70,10 @@ def main():
     require(len(drafts) == 2 and {draft.state["language"] for draft in drafts} == {"en", "pl"},
             "The restore did not contain both language drafts.")
     for draft in drafts:
-        require(draft.state["stage"] == "check_out" and SessionStore(session_key=draft.session_id).load().get("reception"),
+        require(draft.state["stage"] == "check_out" and SessionStore(session_key=draft.conversation_id).load().get("reception"),
                 "An existing restored booking session was not readable.")
         guest = Client(enforce_csrf_checks=True)
-        guest.cookies[settings.SESSION_COOKIE_NAME] = draft.session_id
+        guest.cookies[settings.SESSION_COOKIE_NAME] = draft.conversation_id
         require(guest.get("/", {"lang": draft.state["language"]}).status_code == 200,
                 "Fixed speech reception did not load for the restored session.")
         guest_speech(guest, draft.state)
