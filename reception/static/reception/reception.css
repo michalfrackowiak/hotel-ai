@@ -896,3 +896,16 @@ button:disabled, input:disabled {
         flex-wrap: wrap;
     }
 }
+
+.guest-account {
+    margin-top: 16px;
+}
+
+.guest-account p {
+    margin: 6px 0 0;
+    font-size: .875rem;
+}
+
+.guest-account [role="status"]:empty {
+    margin: 0;
+}

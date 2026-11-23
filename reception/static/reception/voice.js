@@ -686,6 +686,10 @@
         const segment = currentSegment();
         awaitGuest(segment?.listen ? segment.seconds * 1000 : undefined);
     });
+    form.addEventListener("reception:guest-session-lock", (event) => {
+        if (event.detail.busy && active) stop(copy.finished);
+        button.disabled = !canStart();
+    });
     form.addEventListener("reception:type-instead", () => {
         if (active) stop(copy.finished);
     });

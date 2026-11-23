@@ -1,0 +1,13 @@
+<section class="guest-account" id="guest-account" aria-label="{% if language == 'pl' %}Konto gościa{% else %}Guest account{% endif %}"
+    data-nonce-url="{% url 'guest-google-nonce' %}" data-sign-in-url="{% url 'guest-google-sign-in' %}"
+    data-sign-out-url="{% url 'guest-sign-out' %}" data-session-url="{% url 'guest-session' %}">
+    {% if guest_signed_in %}
+    <button id="guest-sign-out" type="button" class="quiet-button">{% if language == "pl" %}Wyloguj się{% else %}Sign out{% endif %}</button>
+    <p>{% if language == "pl" %}Zalogowano na konto gościa.{% else %}Signed in to your guest account.{% endif %}</p>
+    {% else %}
+    <button id="guest-google-prepare" type="button" class="quiet-button" aria-describedby="guest-account-note">{% if language == "pl" %}Otwórz logowanie Google{% else %}Open Google sign-in{% endif %}</button>
+    <div id="guest-google-button" tabindex="-1" hidden></div>
+    <p id="guest-account-note">{% if language == "pl" %}Możesz zarezerwować pokój bez konta. Przy pierwszym logowaniu użyjemy identyfikatora konta Google, aby utworzyć konto gościa.{% else %}You can book without an account. On first sign-in, we use your Google account identifier to create a guest account.{% endif %}</p>
+    {% endif %}
+    <p id="guest-account-status" role="status"></p>
+</section>

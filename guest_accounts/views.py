@@ -77,16 +77,19 @@ def _credential(request):
     return None
 
 
+def guest_signed_in(session):
+    account_id = session.get(GUEST_SESSION_KEY)
+    return type(account_id) is int and GuestAccount.objects.filter(
+        Exists(_live_session(session.session_key)), pk=account_id,
+    ).exists()
+
+
 @never_cache
 @require_safe
 def session_status(request):
     if error := _access_error(request):
         return error
-    account_id = request.session.get(GUEST_SESSION_KEY)
-    signed_in = type(account_id) is int and GuestAccount.objects.filter(
-        Exists(_live_session(request.session.session_key)), pk=account_id,
-    ).exists()
-    return JsonResponse({"signed_in": signed_in})
+    return JsonResponse({"signed_in": guest_signed_in(request.session)})
 
 
 @never_cache

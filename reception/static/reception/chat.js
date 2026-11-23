@@ -656,9 +656,21 @@
         });
     });
     resetButton.addEventListener("click", () => requestChat({ reset: true, ...(dedicatedVoice ? { voice: true } : {}) }));
+    form.addEventListener("reception:guest-session-change", (event) => {
+        if (event.detail.busy && pending) {
+            event.preventDefault();
+            return;
+        }
+        pending = event.detail.busy;
+        updateControls();
+        form.dispatchEvent(new CustomEvent("reception:guest-session-lock", { detail: { busy: pending } }));
+        trackSilence();
+    });
     retryButton.addEventListener("click", () => requestChat(openConversation({ resume: connected || revision !== null || app.hasAttribute("data-resume") })));
     window.addEventListener("pageshow", (event) => {
-        if (event.persisted) requestChat(openConversation({ resume: true }));
+        if (event.persisted && !document.querySelector("#guest-account")) {
+            requestChat(openConversation({ resume: true }));
+        }
     });
 
     requestChat(openConversation({ resume: app.hasAttribute("data-resume") }));
