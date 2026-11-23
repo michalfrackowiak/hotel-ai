@@ -6,11 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <title>{{ page_title }} · Neptun Resort</title>
-    <link rel="stylesheet" href="{% static 'reception/reception.css' %}?v=speaking-sphere">
+    <link rel="stylesheet" href="{% static 'reception/reception.css' %}?v=voice-answer-review">
     {% if mode != "chat" %}
-    <script src="{% static 'reception/voice.js' %}?v=speaking-sphere" defer></script>
+    <script src="{% static 'reception/voice.js' %}?v=voice-answer-review" defer></script>
     {% endif %}
-    <script src="{% static 'reception/chat.js' %}?v=reception-modes" defer></script>
+    <script src="{% static 'reception/chat.js' %}?v=voice-answer-review" defer></script>
 </head>
 <body>
     {% include "reception/_header.html" with active_page="reception" %}
@@ -71,6 +71,12 @@
                 </div>
                 <div id="chat-suggestions" class="confirmation-actions" role="group"
                     aria-label="{% if language == 'pl' %}Proponowane odpowiedzi{% else %}Suggested replies{% endif %}" hidden></div>
+                {% if mode == "voice" %}
+                <div id="voice-answer-review" class="voice-answer-review" hidden>
+                    <p id="voice-answer-help"></p>
+                    <button id="voice-answer-retry" class="quiet-button" type="button"></button>
+                </div>
+                {% endif %}
                 <form id="chat-form" class="chat-form" method="post" action="{% url 'reception-message' %}">
                     {% csrf_token %}
                     <label class="sr-only" for="chat-message">{% if language == "pl" %}Twoja wiadomość{% else %}Your message{% endif %}</label>

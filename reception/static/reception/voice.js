@@ -2,6 +2,7 @@
     const button = document.getElementById("start-voice");
     const status = document.getElementById("voice-status");
     const sphere = document.getElementById("voice-sphere");
+    const reviewAnswer = document.getElementById("voice-answer-review");
     const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
     const skipPrompt = document.getElementById("skip-voice-prompt");
     const form = document.getElementById("chat-form");
@@ -25,6 +26,8 @@
         unavailable: "Ta przeglądarka nie obsługuje rozmów głosowych. Skorzystaj z czatu.",
         listening: "Słucham…",
         waiting: "Czekam na odpowiedź…",
+        reviewing: "Sprawdź rozpoznaną odpowiedź przed wysłaniem.",
+        typing: "Możesz wysłać wpisaną odpowiedź.",
         preparing: "Recepcja przygotowuje odpowiedź głosową…",
         speaking: "Recepcja odpowiada…",
         paused: "Odtwarzanie odpowiedzi zostało wstrzymane.",
@@ -48,6 +51,8 @@
         unavailable: "Voice booking is unavailable in this browser. You can still use chat.",
         listening: "Listening…",
         waiting: "Waiting for a reply…",
+        reviewing: "Check the captured answer before sending.",
+        typing: "You can send your typed reply.",
         preparing: "Preparing the spoken reply…",
         speaking: "Reception is speaking…",
         paused: "Spoken reply playback is paused.",
@@ -224,6 +229,15 @@
         }
         if (input.disabled || transcript.length > input.maxLength) {
             stop(copy.error);
+            return;
+        }
+        if (reviewAnswer) {
+            pauseAudio();
+            const accepted = form.dispatchEvent(new CustomEvent("reception:voice-review", {
+                detail: transcript, cancelable: true,
+            }));
+            if (accepted) setVoiceState("processing", copy.reviewing);
+            else stop(copy.typing);
             return;
         }
         input.value = transcript;
@@ -665,6 +679,12 @@
     form.addEventListener("reception:error", () => {
         if (active) stop(copy.error);
         button.disabled = true;
+    });
+    form.addEventListener("reception:voice-retry-answer", () => {
+        if (!active || input.disabled) return;
+        button.focus();
+        const segment = currentSegment();
+        awaitGuest(segment?.listen ? segment.seconds * 1000 : undefined);
     });
     form.addEventListener("reception:type-instead", () => {
         if (active) stop(copy.finished);

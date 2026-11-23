@@ -129,7 +129,8 @@ The current admin edits prompt text and voice segments; conversation transitions
 ## 0.7 — Separate experiences and premium blue design
 
 - [x] Add dedicated `/voice/` and `/chat/` views with clear navigation and a shared booking draft. Switching view preserves progress and releases microphone resources. Keep the selected language consistent across views.
-- [ ] Voice view: prominent start/stop control, microphone status, visible transcript, accessible captions, retry/edit-last-answer action, compact booking summary and receptionist handover. Chat view: conversation history, contextual answer buttons, date picker and editable booking summary.
+- [x] Improve mobile voice controls and let guests review, edit or repeat a recognized answer before submitting it on the dedicated voice page.
+- [ ] Extend the voice view with a compact booking summary and receptionist handover. Extend the chat view with a date picker and editable booking summary.
 - [x] Introduce a navy/deep-blue palette, warm neutrals, refined typography and responsive styling for reception, room availability, reservation and booking lookup.
 - [ ] Add licensed hotel photography and extend the shared guest styling to login and account pages when those views are available.
 - [x] Add a lightweight CSS sphere that follows actual playback and amplitude. Give listening, processing, speaking and disconnected states distinct appearances. Browser-native speech uses start/end events. Cancellation and hidden tabs stop motion, and reduced motion retains a static indicator.

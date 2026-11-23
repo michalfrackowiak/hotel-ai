@@ -9,6 +9,9 @@
     const contactValue = document.getElementById("chat-contact-value");
     const changeDelivery = document.getElementById("chat-change-delivery");
     const typeInstead = document.getElementById("chat-type-instead");
+    const voiceReview = document.getElementById("voice-answer-review");
+    const voiceReviewHelp = document.getElementById("voice-answer-help");
+    const voiceReviewRetry = document.getElementById("voice-answer-retry");
     const languageChoice = document.getElementById("chat-language");
     const delivery = document.getElementById("chat-delivery");
     const suggestions = document.getElementById("chat-suggestions");
@@ -48,6 +51,8 @@
             change: "Change contact details",
             changeDelivery: "Change delivery method",
             typeInstead: "Type instead",
+            reviewAnswer: "Review the captured answer. You can edit it before sending.",
+            retryAnswer: "Say it again",
         },
         pl: {
             guest: "Ty",
@@ -74,6 +79,8 @@
             change: "Popraw dane kontaktowe",
             changeDelivery: "Zmień sposób dostawy",
             typeInstead: "Wpisz zamiast dyktować",
+            reviewAnswer: "Sprawdź rozpoznaną odpowiedź. Możesz ją poprawić przed wysłaniem.",
+            retryAnswer: "Powiedz ponownie",
         },
     };
 
@@ -94,6 +101,7 @@
     let quickReplyLabels = {};
     let displayedTurn = null;
     let transcriptShown = false;
+    let voiceDraft = null;
     let canChangeDelivery = false;
 
     function updateControls() {
@@ -143,6 +151,15 @@
             button.disabled = !canSend;
         });
         suggestions.hidden = suggestedAnswers.length === 0 || !canSend;
+        if (voiceReview) {
+            const reviewing = voiceDraft !== null && canSend;
+            voiceReview.hidden = !reviewing;
+            voiceReviewHelp.textContent = copy.reviewAnswer;
+            voiceReviewRetry.textContent = copy.retryAnswer;
+            voiceReviewRetry.hidden = !voiceActive;
+            if (reviewing) messageInput.setAttribute("aria-describedby", voiceReviewHelp.id);
+            else messageInput.removeAttribute("aria-describedby");
+        }
         suggestions.replaceChildren(...suggestedAnswers.map((answer) => {
             const button = document.createElement("button");
             button.type = "button";
@@ -279,6 +296,12 @@
         return { start: true, ...(resume ? { resume: true } : {}), ...(dedicatedVoice ? { voice: true } : {}) };
     }
 
+    function discardVoiceDraft() {
+        if (!voiceDraft) return;
+        voiceDraft = null;
+        messageInput.value = "";
+    }
+
     async function requestChat(payload) {
         if (pending) return;
         clearTimeout(idleTimer);
@@ -287,6 +310,7 @@
         let reply = null;
         let failure = null;
 
+        if (payload.reset) discardVoiceDraft();
         pending = true;
         retryButton.hidden = true;
         status.textContent = payload.message ? labels[language].waiting : labels[language].connecting;
@@ -298,6 +322,9 @@
             if (!result) {
                 failure = labels[language].reload;
                 return;
+            }
+            if (voiceDraft && (payload.message || result.stale || result.revision !== voiceDraft.revision)) {
+                discardVoiceDraft();
             }
             const preserveLog = payload.start && payload.resume && connected && result.revision === revision;
             if ((payload.start && !preserveLog) || payload.reset) {
@@ -333,7 +360,7 @@
                 reply = result;
             }
             lastReply = result.reply;
-            if (!preserveLog && !result.stale && !payload.timeout && !payload.voice_start) messageInput.value = "";
+            if (!voiceDraft && !preserveLog && !result.stale && !payload.timeout && !payload.voice_start) messageInput.value = "";
             stage = result.stage;
             revision = result.revision;
             voiceWelcome = legacyVoice && Boolean(result.voice_welcome);
@@ -394,9 +421,20 @@
     }
 
     messageInput.addEventListener("input", () => {
+        if (voiceDraft) voiceDraft.edited = true;
         if (stage === "check_in") trackSilence();
     });
-    document.addEventListener("visibilitychange", trackSilence);
+    function discardHiddenVoiceDraft() {
+        if (!voiceDraft) return;
+        discardVoiceDraft();
+        updateControls();
+    }
+
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden) discardHiddenVoiceDraft();
+        trackSilence();
+    });
+    window.addEventListener("pagehide", discardHiddenVoiceDraft);
     form.addEventListener("reception:voice-session", (event) => {
         if (event.detail.continueInChat) voiceTimeoutChatRevision = revision;
         voiceActive = event.detail.active;
@@ -425,6 +463,24 @@
         displayedTurn.item.querySelector("p").textContent = [...displayedTurn.spoken.values()].join(" ");
         log.scrollTop = log.scrollHeight;
     });
+    form.addEventListener("reception:voice-review", (event) => {
+        if (!voiceReview || !connected || pending || handoverClosed || terminalStages.has(stage) ||
+            messageInput.value.trim()) {
+            event.preventDefault();
+            return;
+        }
+        voiceDraft = { text: event.detail, edited: false, revision };
+        messageInput.value = voiceDraft.text;
+        updateControls();
+    });
+
+    voiceReviewRetry?.addEventListener("click", () => {
+        if (!voiceDraft || !voiceActive || pending) return;
+        discardVoiceDraft();
+        updateControls();
+        form.dispatchEvent(new CustomEvent("reception:voice-retry-answer"));
+    });
+
     form.addEventListener("reception:transcript", (event) => {
         if (!connected || pending || handoverClosed || terminalStages.has(stage)) return;
         appendMessage(event.detail, "guest");
@@ -434,7 +490,9 @@
 
     form.addEventListener("submit", (event) => {
         event.preventDefault();
-        sendMessage(messageInput.value.trim());
+        const message = messageInput.value.trim();
+        const transcript = voiceActive && voiceDraft && !voiceDraft.edited && message === voiceDraft.text;
+        sendMessage(message, transcript);
     });
 
     answerButtons.forEach((button) => {
