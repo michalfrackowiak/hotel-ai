@@ -1,5 +1,13 @@
 # Session handoff
 
+## Voice speaking animation
+
+The voice and combined reception pages show a decorative sphere alongside the localized live status. Piper playback reads a short window of the decoded reply at the current playback position to drive its scale. Browser speech uses utterance start, pause, resume and end events. Waiting and listening have static treatments. Ending voice, switching pages or hiding the tab stops the indicator and releases the microphone. The motion preference can change during playback, and guests who request reduced motion still see the state and captions.
+
+The 131 reception tests passed on Windows. Django system and migration checks passed. Independent Chromium tests used a real WAV with quiet and loud sections to check the waveform response, captions, waiting and listening states, booking-mode cancellation, and reduced motion changes without interrupting playback. Browser speech events were controlled by the fixture. Physical microphone and performance checks on the 2019 MacBook remain open.
+
+Next reception increment: improve the mobile voice controls and add an explicit retry or edit action for the last answer.
+
 ## Guest reception modes
 
 The dedicated `/chat/` and `/voice/` pages use the same session-backed booking draft. Chat offers typed replies and suggestions. Voice retains captions, transcribed replies and typed fallback, and requests microphone access only after the guest starts voice. Leaving the voice page stops playback and releases microphone tracks. The original `/` page retains its combined controls.
@@ -8,7 +16,9 @@ A new draft selects the scenario for its entry mode and language. Changing modes
 
 Five focused Django tests passed. The full Windows run passed 263 of 264 tests and reproduced the existing recovery-client deadline error. The hosted Linux Django and route smoke steps passed. Nginx syntax validation passed in a disposable container. Independent Chromium review checked English and Polish at 320, 390 and 1440 pixels, including a deliberately delayed voice script, mode switching, microphone cleanup, overflow and axe WCAG A/AA. The reviewer completed a fictional booking in each language after switching modes and confirmed the reference survived another switch. A deliberate resume-guard bypass failed the four language and entry-mode regression cases. See [PR #86 and release checks](https://github.com/michalfrackowiak/hotel-ai/pull/86/checks).
 
-The next reception increment is the playback-driven speaking animation with reduced-motion support. Public deployment of the new routes requires the updated [Nginx guest snippet](../deploy/nginx/hotel-ai-reception.inc) with the application image.
+Production deployed revision `1528de1` on 23 November 2026 with the matching Nginx guest snippet. Public HTTPS checks from outside the server passed both languages on both new routes, the combined reception, health, admin login and static scripts. The SQLite backup passed its checksum, integrity and foreign-key checks. The disposable restore passed bilingual chat, a fictional booking and idempotent replay, and the previous image read the restored database. Live English and Polish Piper synthesis and Vosk microphone-format and silence checks passed. The routed workers kept their original container IDs and start times. The independent reviewer approved the rollout and rollback ordering.
+
+Next reception increment: playback-driven speaking animation with reduced-motion support.
 
 ## Admin workflows
 

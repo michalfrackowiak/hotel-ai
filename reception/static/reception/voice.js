@@ -1,6 +1,8 @@
 (() => {
     const button = document.getElementById("start-voice");
     const status = document.getElementById("voice-status");
+    const sphere = document.getElementById("voice-sphere");
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
     const skipPrompt = document.getElementById("skip-voice-prompt");
     const form = document.getElementById("chat-form");
     const input = document.getElementById("chat-message");
@@ -25,6 +27,7 @@
         waiting: "Czekam na odpowiedź…",
         preparing: "Recepcja przygotowuje odpowiedź głosową…",
         speaking: "Recepcja odpowiada…",
+        paused: "Odtwarzanie odpowiedzi zostało wstrzymane.",
         fallback: "Piper jest niedostępny. Używam głosu przeglądarki…",
         stale: "Rozmowa zmieniła się w innej karcie. Odśwież stronę, aby wznowić rozmowę głosową.",
         connecting: "Włączam mikrofon…",
@@ -47,6 +50,7 @@
         waiting: "Waiting for a reply…",
         preparing: "Preparing the spoken reply…",
         speaking: "Reception is speaking…",
+        paused: "Spoken reply playback is paused.",
         fallback: "Piper is unavailable. Using the browser voice…",
         stale: "The conversation changed in another tab. Refresh to resume voice booking.",
         connecting: "Opening the microphone…",
@@ -84,6 +88,52 @@
     let lastReply = null;
     let voiceWelcome = false;
     let voicePart = 0;
+    let sphereFrame = null;
+
+    function stopSphereMotion() {
+        if (sphereFrame !== null) cancelAnimationFrame(sphereFrame);
+        sphereFrame = null;
+        sphere.removeAttribute("data-measured");
+        sphere.style.removeProperty("--voice-scale");
+    }
+
+    function setVoiceState(state, message) {
+        stopSphereMotion();
+        sphere.dataset.state = state;
+        if (status.textContent !== message) status.textContent = message;
+    }
+
+    function measurePlayback(current) {
+        const { context, buffer, startedAt } = current;
+        if (document.hidden || reducedMotion.matches || context.state !== "running") return;
+        // Read the decoded reply without changing its audio graph or sampling the microphone.
+        const channels = Array.from({ length: buffer.numberOfChannels },
+            (_, channel) => buffer.getChannelData(channel));
+        const windowSize = Math.ceil(buffer.sampleRate * 0.032);
+        sphere.dataset.measured = "";
+        function update() {
+            if (playback !== current || document.hidden || reducedMotion.matches || context.state !== "running") {
+                stopSphereMotion();
+                return;
+            }
+            const offset = Math.max(0, Math.floor((context.currentTime - startedAt) * buffer.sampleRate));
+            let amplitude = 0;
+            for (const samples of channels) {
+                const end = Math.min(samples.length, offset + windowSize);
+                for (let sample = offset; sample < end; sample += 1) {
+                    amplitude = Math.max(amplitude, Math.abs(samples[sample]));
+                }
+            }
+            sphere.style.setProperty("--voice-scale", (1 + Math.min(.24, amplitude * .35)).toFixed(3));
+            sphereFrame = requestAnimationFrame(update);
+        }
+        update();
+    }
+
+    reducedMotion.addEventListener?.("change", () => {
+        stopSphereMotion();
+        if (playback?.startedAt !== undefined) measurePlayback(playback);
+    });
 
     function currentSegment() {
         return lastReply?.voiceParts?.[voicePart];
@@ -99,7 +149,9 @@
         const current = playback;
         playback = null;
         current.controller.abort();
+        stopSphereMotion();
         if (current.source) {
+            current.context.removeEventListener("statechange", current.syncVisual);
             current.source.onended = null;
             current.source.stop();
             current.source.disconnect();
@@ -140,7 +192,7 @@
         button.disabled = !canStart();
         button.textContent = copy.start;
         button.setAttribute("aria-pressed", "false");
-        status.textContent = message;
+        setVoiceState("disconnected", message);
     }
 
     function playNextSegment() {
@@ -175,7 +227,7 @@
             return;
         }
         input.value = transcript;
-        status.textContent = copy.waiting;
+        setVoiceState("processing", copy.waiting);
         form.dispatchEvent(new CustomEvent("reception:transcript", { detail: transcript }));
     }
 
@@ -218,7 +270,7 @@
         try {
             current.start();
             if (silenceLimit) silenceTimer = setTimeout(handleSilence, silenceLimit);
-            status.textContent = copy.listening;
+            setVoiceState("listening", copy.listening);
         } catch {
             recognition = null;
             stop(copy.recognition);
@@ -270,7 +322,7 @@
             handleSilence();
             return;
         }
-        status.textContent = copy.transcribing;
+        setVoiceState("processing", copy.transcribing);
         try {
             const bytes = await encodePcm(samples, audioContext.sampleRate);
             if (recording !== current) return;
@@ -327,7 +379,7 @@
             node.onprocessorerror = () => stop(copy.microphone);
             source.connect(node).connect(audioContext.destination);
             track.enabled = true;
-            status.textContent = copy.listening;
+            setVoiceState("listening", copy.listening);
         } catch {
             stop(copy.microphone);
         }
@@ -336,7 +388,7 @@
     async function openMicrophone() {
         const current = {};
         microphone = current;
-        status.textContent = copy.connecting;
+        setVoiceState("processing", copy.connecting);
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -373,7 +425,7 @@
             : defaultSilenceLimit;
         if (!active) return;
         if (terminalStages.has(stage)) stop(copy.finished);
-        else if (stage === "delivery_pending") status.textContent = copy.waiting;
+        else if (stage === "delivery_pending") setVoiceState("processing", copy.waiting);
         else if (canRecord) listenWithMicrophone(silenceLimit);
         else listenWithBrowser(silenceLimit);
     }
@@ -383,7 +435,7 @@
         if (segment?.listen) {
             awaitGuest(segment.seconds * 1000);
         } else if (segment?.seconds) {
-            status.textContent = copy.waiting;
+            setVoiceState("processing", copy.waiting);
             silenceTimer = setTimeout(() => {
                 if (active && !playNextSegment()) awaitGuest();
             }, segment.seconds * 1000);
@@ -406,20 +458,32 @@
             if (voice) current.voice = voice;
             speech = current;
             current.onstart = () => {
-                if (speech === current) announceSpoken(turn, reply, voicePart + index);
+                if (speech !== current) return;
+                setVoiceState("speaking", message);
+                announceSpoken(turn, reply, voicePart + index);
+            };
+            current.onpause = () => {
+                if (speech === current) setVoiceState("processing", copy.paused);
+            };
+            current.onresume = () => {
+                if (speech === current) setVoiceState("speaking", message);
             };
             current.onend = () => {
                 if (speech !== current) return;
                 speech = null;
-                if (index + 1 < parts.length) speakPart(index + 1);
-                else finishReply();
+                if (index + 1 < parts.length) {
+                    setVoiceState("processing", copy.preparing);
+                    speakPart(index + 1);
+                } else {
+                    finishReply();
+                }
             };
             current.onerror = () => {
                 if (speech === current) stop(copy.error);
             };
             synthesis.speak(current);
         }
-        status.textContent = message;
+        setVoiceState("processing", copy.preparing);
         speakPart(0);
     }
 
@@ -464,7 +528,7 @@
 
         const current = prepared ?? requestAudio(turn, segment ? voicePart : undefined);
         playback = current;
-        status.textContent = copy.preparing;
+        setVoiceState("processing", copy.preparing);
 
         function fallback() {
             if (playback !== current) return;
@@ -478,7 +542,7 @@
             if ([404, 409].includes(responseStatus)) {
                 if (responseStatus === 409 && turn.stage === "delivery_pending") {
                     clearPlayback();
-                    status.textContent = copy.waiting;
+                    setVoiceState("processing", copy.waiting);
                     return;
                 }
                 stop(copy.stale);
@@ -509,10 +573,21 @@
                 clearPlayback();
                 finishReply();
             };
-            source.start();
+            const startedAt = context.currentTime;
+            source.start(startedAt);
+            function syncVisual() {
+                if (playback !== current) return;
+                if (context.state === "running") {
+                    setVoiceState("speaking", copy.speaking);
+                    measurePlayback(current);
+                } else {
+                    setVoiceState("processing", copy.paused);
+                }
+            }
+            Object.assign(current, { source, context, buffer, startedAt, syncVisual });
+            context.addEventListener("statechange", syncVisual);
+            syncVisual();
             announceSpoken(spokenTurn, spokenTurn.reply);
-            current.source = source;
-            status.textContent = copy.speaking;
             if (segment && turn.voiceParts[voicePart + 1]) {
                 nextAudio = requestAudio(turn, voicePart + 1);
             }
@@ -563,7 +638,7 @@
         }
         hideSkipPrompt();
         pauseAudio();
-        status.textContent = copy.waiting;
+        setVoiceState("processing", copy.waiting);
     });
     form.addEventListener("reception:reply", (event) => {
         stage = event.detail.stage;

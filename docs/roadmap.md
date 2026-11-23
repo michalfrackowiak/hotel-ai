@@ -14,6 +14,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 - [x] 0.7 reception modes: dedicated bilingual chat and voice pages share the booking draft, preserve the active scenario and language when switching, and release the microphone when the guest leaves. See [handoff and release checks](handoff.md#guest-reception-modes).
 
+- [x] 0.7 speaking animation: voice playback drives a lightweight sphere with distinct listening, processing, speaking and disconnected states. Browser speech uses playback events, and reduced motion keeps status visible without animation. See [handoff and release checks](handoff.md#voice-speaking-animation).
+
 ## Alpha
 
 - [x] 0.5 production routed speech configuration: validate the opt-in Compose overlay, the preserved booking volume, the private web and worker network, and the ARM64 worker budget. See [cutover configuration](speech-cutover-config.md) and [PR #71](https://github.com/michalfrackowiak/hotel-ai/pull/71).

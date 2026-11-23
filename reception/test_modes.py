@@ -33,6 +33,12 @@ class ReceptionModeTests(TestCase):
                 for marker in ("start-voice", "reception/voice.js", "chat-type-instead"):
                     self.assertNotContains(chat, marker)
                     self.assertContains(voice, marker)
+                self.assertNotContains(chat, 'id="voice-sphere"')
+                self.assertContains(
+                    voice,
+                    '<span id="voice-sphere" class="voice-sphere" data-state="disconnected" aria-hidden="true"></span>',
+                    html=True,
+                )
                 self.assertLess(voice.content.index(b"reception/voice.js"), voice.content.index(b"reception/chat.js"))
                 for page in (chat, voice):
                     self.assertContains(page, 'id="chat-log"')

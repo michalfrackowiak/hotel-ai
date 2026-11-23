@@ -6,9 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <title>{{ page_title }} · Neptun Resort</title>
-    <link rel="stylesheet" href="{% static 'reception/reception.css' %}">
+    <link rel="stylesheet" href="{% static 'reception/reception.css' %}?v=speaking-sphere">
     {% if mode != "chat" %}
-    <script src="{% static 'reception/voice.js' %}?v=welcome-voice-timeout" defer></script>
+    <script src="{% static 'reception/voice.js' %}?v=speaking-sphere" defer></script>
     {% endif %}
     <script src="{% static 'reception/chat.js' %}?v=reception-modes" defer></script>
 </head>
@@ -23,6 +23,7 @@
             {% include "reception/_modes.html" %}
             {% if mode != "chat" %}
             <div class="voice-controls">
+                <span id="voice-sphere" class="voice-sphere" data-state="disconnected" aria-hidden="true"></span>
                 <button id="start-voice" class="confirm-button" type="button"
                     {% if piper_enabled %}data-audio-url="{% url 'reception-audio' %}"{% endif %}
                     {% if asr_enabled %}data-transcribe-url="{% url 'reception-transcript' %}"
