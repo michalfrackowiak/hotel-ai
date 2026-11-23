@@ -12,7 +12,7 @@ from bookings.models import BookingConfirmation
 from bookings.services import RoomOffer
 from model_providers.extraction import validate_model_stay_value
 
-from .conversation import advance, new_conversation, selects_english
+from .conversation import WELCOME_PARTS, advance, new_conversation, selects_english
 from .parser_review import review_text_allowed
 from .parser_training import STAY_STAGES, apply_reviewed_correction, validate_correction
 from .parsing import StayDates, parse_stay_input
@@ -55,6 +55,7 @@ TIMEOUT_STEPS = {
 
 class BookingReplySimulationForm(forms.Form):
     stage = forms.ChoiceField(label="Booking step", choices=(
+        ("welcome", "Polish welcome reply"),
         ("check_in", "Arrival"), ("check_out", "Departure"), ("guests", "Guest count"),
         ("room", "Room selection"), ("confirm", "Quote decision"),
         ("delivery", "Delivery choice"), ("email", "Email entry"), ("phone", "Phone entry"),
@@ -89,11 +90,12 @@ class BookingReplySimulationForm(forms.Form):
         self.retry_limits = {}
         if language != "pl":
             field = self.fields["stage"]
-            field.choices = [(key, label) for key, label in field.choices if key != "welcome_timeout"]
+            field.choices = [(key, label) for key, label in field.choices if key not in ("welcome", "welcome_timeout")]
 
     def clean(self):
         values = super().clean()
         stage = values.get("stage")
+        parser_stage = "check_in" if stage == "welcome" else stage
         if stage in RECEIPT_METHODS and values.get("receipt_outcome") == "":
             self.add_error("receipt_outcome", "Choose a fictional receipt status.")
         elif stage and stage not in RECEIPT_METHODS and stage not in TIMEOUT_STEPS and values.get("reply") == "":
@@ -106,29 +108,29 @@ class BookingReplySimulationForm(forms.Form):
             elif prior_retries >= limit:
                 self.add_error("prior_retries", f"Enter a count below this step's retry limit of {limit}.")
         if (corrected := values.get("fictional_correction")) and (reply := values.get("reply")):
-            if stage not in STAY_STAGES:
-                self.add_error("fictional_correction", "Choose the arrival, departure, or guest-count step.")
+            if parser_stage not in STAY_STAGES:
+                self.add_error("fictional_correction", "Choose a welcome, arrival, departure, or guest-count reply.")
             elif not (review_text_allowed(reply) and review_text_allowed(corrected)):
                 self.add_error("fictional_correction", "Use fictional text without contact details.")
             else:
                 try:
                     values["fictional_correction"] = validate_correction(
-                        stage, reply, corrected, language=self.language, source=self.channel,
+                        parser_stage, reply, corrected, language=self.language, source=self.channel,
                     )
                 except ValidationError as error:
                     self.add_error("fictional_correction", error)
         elif values.get("fictional_correction"):
             self.add_error("fictional_correction", "Enter an example guest reply for the correction.")
         if model_value := values.get("fictional_model_value"):
-            if stage not in PARSER_FALLBACK_STEPS:
-                self.add_error("fictional_model_value", "Choose the arrival, departure, or guest-count step.")
+            if parser_stage not in PARSER_FALLBACK_STEPS:
+                self.add_error("fictional_model_value", "Choose a welcome, arrival, departure, or guest-count reply.")
             elif not values.get("reply") or not review_text_allowed(values["reply"]):
                 self.add_error("fictional_model_value", "Enter a fictional guest reply without contact details.")
             else:
-                if stage == "guests" and model_value.isascii() and model_value.isdecimal():
+                if parser_stage == "guests" and model_value.isascii() and model_value.isdecimal():
                     model_value = int(model_value)
                 try:
-                    validated = validate_model_stay_value(stage, model_value)
+                    validated = validate_model_stay_value(parser_stage, model_value)
                 except ValueError:
                     validated = None
                 if validated is None:
@@ -158,9 +160,6 @@ def simulate_booking_reply(
     language, channel, steps, transitions, *, stage, reply, prior_retries=None, receipt_outcome="",
     fictional_correction="", fictional_model_value="",
 ):
-    if stage == "check_in" and language == "pl" and selects_english(reply):
-        return {"unsupported": True}
-
     step_keys = {step.pk: step.key for step, _ in steps}
     edges = {(step_keys[source], event): step_keys[target] for source, event, target in transitions}
     configurations = {step.key: configuration for step, configuration in steps}
@@ -207,13 +206,16 @@ def simulate_booking_reply(
         }
 
     configuration = configurations[stage]
+    parser_stage = "check_in" if stage == "welcome" else stage
+    parser_configuration = configurations[parser_stage]
+    switch_to_english = parser_stage == "check_in" and language == "pl" and selects_english(reply)
     contact_entry = stage in {"email", "phone"}
     needs_delivery = stage == "delivery" or contact_entry or fictional_contact is not None
     needs_room_offer = stage in {"room", "confirm"} or needs_delivery
     state = new_conversation(language, "guests" if needs_room_offer else stage)
     state["stage"] = "guests" if needs_room_offer else stage
     check_in = check_out = None
-    if stage != "check_in":
+    if stage not in ("welcome", "check_in"):
         check_in = timezone.localdate() + timedelta(days=1)
         state["check_in"] = check_in.isoformat()
     if stage == "guests" or needs_room_offer:
@@ -231,22 +233,26 @@ def simulate_booking_reply(
         elif fictional_contact:
             method, candidate = fictional_contact
             state = advance(advance(state, method, None), candidate, None)
-    parsed = parse_stay_input(stage, reply, language, check_in=check_in)
+    parsed = None if switch_to_english else parse_stay_input(parser_stage, reply, language, check_in=check_in)
     model_outcome = None
     if fictional_model_value:
-        if parsed is not None:
+        if switch_to_english:
+            model_outcome = "Skipped: the guest selected English."
+        elif parsed is not None:
             model_outcome = "Skipped: the built-in parser found a value."
-        elif not allows_model_fallback(configuration):
+        elif not allows_model_fallback(parser_configuration):
             model_outcome = "Skipped: this step uses the built-in parser only."
         else:
             parsed = fictional_model_value
             model_outcome = "Used as the model fallback value."
-    correction = apply_reviewed_correction(
-        state, reply, parsed, fictional_correction, source=channel,
-    ) if fictional_correction else None
+    correction = None
+    if fictional_correction and not switch_to_english and (stage != "welcome" or parsed is not None):
+        correction = apply_reviewed_correction(
+            {**state, "stage": parser_stage}, reply, parsed, fictional_correction, source=channel,
+        )
     if correction is not None:
         parsed = correction
-    require_range = parsed is not None and configuration.get(ARRIVAL_INPUT_FIELD) == REQUIRE_ARRIVAL_RANGE
+    require_range = parsed is not None and parser_configuration.get(ARRIVAL_INPUT_FIELD) == REQUIRE_ARRIVAL_RANGE
     retry_limit = retry_limit_value(configuration)
     if prior_retries:
         state[RETRY_COUNT] = prior_retries
@@ -259,7 +265,7 @@ def simulate_booking_reply(
     if isinstance(parsed, StayDates):
         arrival, departure = parsed.check_in, parsed.check_out
     elif type(parsed) is date:
-        if stage == "check_in":
+        if parser_stage == "check_in":
             arrival = parsed
         else:
             departure = parsed
@@ -294,6 +300,10 @@ def simulate_booking_reply(
 
 
 def _render_result(language, channel, configurations, result, decisions):
+    if result["language"] != language:
+        # English arrival after a Polish language choice uses the built-in prompt.
+        language = result["language"]
+        configurations = {}
     bindings = browser_prompt_bindings(result, channel)
     overrides = browser_prompt_overrides(language, channel, bindings, (
         (key, configurations[key]) for key in bindings if key in configurations
@@ -301,9 +311,15 @@ def _render_result(language, channel, configurations, result, decisions):
     voice = []
     for part in voice_segments(result, overrides=overrides):
         voice.extend(split_voice_parts([part]) if len(part["text"]) > MAX_TEXT_CHARACTERS else [part])
+    if not voice and result["stage"] == "welcome":
+        voice = [
+            {"language": part_language, "text": text, "seconds": 0, "listen": False}
+            for part_language, text in WELCOME_PARTS
+        ]
     return {
         "decisions": decisions,
         "stage": result["stage"],
+        "language": language,
         "chat": render_chat(result, overrides=overrides),
         "voice": voice,
         "voice_fallback": result["reply"],
