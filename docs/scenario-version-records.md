@@ -34,9 +34,15 @@ When **Require arrival and departure together** is selected, a reply that yields
 
 On a saved browser scenario step, enter a limit from 1 to 10 to hand over to reception when that many consecutive answers trigger the step's retry outcome. Leave the setting blank to inherit the shared value or use the default behavior. Enter 0 to disable the limit explicitly. A positive limit requires a `retry_exhausted` transition from that step to `handover` in the effective graph.
 
+Typed and transcribed answers count against the same limit. Moving to another step resets the count. Timeouts and stale requests do not count as retries. The automatic handover opens a staff conversation without copying the rejected answer into it.
+
+## Browser voice silence windows
+
 Set **Voice silence window (seconds)** on a saved arrival, departure or guest-count step to wait 1–20 seconds for a guest to start speaking. The setting applies to each arrival segment marked **Listen** and to the listening window after the last spoken line when applicable. Ordinary playback pauses retain their segment timing. The built-in microphone capture waits for the configured interval. With browser-provided recognition, the setting controls the app timer and the browser may stop listening sooner. Leave the field blank to inherit the shared setting or keep the built-in timing. The combined browser reception uses its pinned chat version even when the microphone is active. A booking started with a voice version uses that version. Text reply timing and phone calls keep their existing behavior.
 
-Typed and transcribed answers count against the same limit. Moving to another step resets the count. Timeouts and stale requests do not count as retries. The automatic handover opens a staff conversation without copying the rejected answer into it.
+## Browser voice interruption
+
+At the arrival, departure or guest-count step, set **Voice interruption** to **Allow guests to skip the spoken prompt**. During browser voice playback the guest can choose **Skip prompt and speak** to read the current reply in chat and start speaking immediately. With a segmented reply, the button skips the remaining segments and uses the final listening window or the step default. The booking stays on the current step until the guest responds or the existing silence behavior applies. Leave the setting blank to inherit, or select **Play the prompt as usual** to turn off the button even when the shared template enables it. The setting applies to the pinned scenario during browser voice.
 
 ## Review publication or rollback
 

@@ -1,6 +1,7 @@
 (() => {
     const button = document.getElementById("start-voice");
     const status = document.getElementById("voice-status");
+    const skipPrompt = document.getElementById("skip-voice-prompt");
     const form = document.getElementById("chat-form");
     const input = document.getElementById("chat-message");
     const recognitionType = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -18,6 +19,7 @@
     const polishCopy = {
         start: "Włącz rozmowę głosową",
         stop: "Zakończ rozmowę głosową",
+        skipPrompt: "Pomiń komunikat i odpowiedz",
         unavailable: "Ta przeglądarka nie obsługuje rozmów głosowych. Skorzystaj z czatu.",
         listening: "Słucham…",
         waiting: "Czekam na odpowiedź…",
@@ -38,6 +40,7 @@
     const englishCopy = {
         start: "Start voice booking",
         stop: "End voice booking",
+        skipPrompt: "Skip prompt and speak",
         unavailable: "Voice booking is unavailable in this browser. You can still use chat.",
         listening: "Listening…",
         waiting: "Waiting for a reply…",
@@ -101,6 +104,11 @@
         }
     }
 
+    function hideSkipPrompt() {
+        if (document.activeElement === skipPrompt) button.focus();
+        skipPrompt.hidden = true;
+    }
+
     function pauseAudio() {
         clearTimeout(silenceTimer);
         silenceTimer = null;
@@ -119,6 +127,7 @@
 
     function stop(message) {
         active = false;
+        hideSkipPrompt();
         form.dispatchEvent(new CustomEvent("reception:voice-session", { detail: { active } }));
         pauseAudio();
         const stream = microphone?.stream;
@@ -354,6 +363,7 @@
     }
 
     function awaitGuest(defaultSilenceLimit = silenceLimits[stage]) {
+        hideSkipPrompt();
         const silenceLimit = lastReply?.voiceSilenceSeconds
             ? lastReply.voiceSilenceSeconds * 1000
             : defaultSilenceLimit;
@@ -436,6 +446,8 @@
     }
 
     async function speak(turn, prepared = null) {
+        if (active && !input.disabled && turn.voiceCanSkipPrompt) skipPrompt.hidden = false;
+        else hideSkipPrompt();
         const segment = currentSegment();
         const spokenTurn = segment
             ? { ...turn, reply: segment.text, language: segment.language || turn.language, welcomeParts: undefined }
@@ -505,6 +517,17 @@
         }
     }
 
+    skipPrompt.addEventListener("click", () => {
+        if (skipPrompt.hidden || !active || input.disabled || !lastReply?.voiceCanSkipPrompt) return;
+        pauseAudio();
+        voicePart = Math.max(0, (lastReply.voiceParts?.length ?? 0) - 1);
+        form.dispatchEvent(new CustomEvent("reception:voice-prompt-skipped", {
+            detail: { revision: lastReply.revision },
+        }));
+        const segment = currentSegment();
+        awaitGuest(segment?.listen ? segment.seconds * 1000 : undefined);
+    });
+
     button.addEventListener("click", () => {
         if (active) {
             stop(copy.finished);
@@ -534,6 +557,7 @@
             button.disabled = true;
             return;
         }
+        hideSkipPrompt();
         pauseAudio();
         status.textContent = copy.waiting;
     });
@@ -546,6 +570,8 @@
         copy = locale === "pl-PL" ? polishCopy : englishCopy;
         button.textContent = active ? copy.stop : copy.start;
         button.lang = event.detail.language;
+        skipPrompt.textContent = copy.skipPrompt;
+        skipPrompt.lang = event.detail.language;
         status.lang = event.detail.language;
         button.disabled = !active && !canStart();
         if (active && (!canRecord || microphone?.ready)) {

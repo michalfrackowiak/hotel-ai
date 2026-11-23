@@ -7,8 +7,8 @@
     <meta name="color-scheme" content="light">
     <title>{% if language == "pl" %}Rezerwacja pokoju{% else %}Book a room{% endif %} · Hotel-ai</title>
     <link rel="stylesheet" href="{% static 'reception/reception.css' %}">
-    <script src="{% static 'reception/chat.js' %}?v=voice-silence-window" defer></script>
-    <script src="{% static 'reception/voice.js' %}?v=voice-silence-window" defer></script>
+    <script src="{% static 'reception/chat.js' %}?v=voice-interruption" defer></script>
+    <script src="{% static 'reception/voice.js' %}?v=voice-interruption" defer></script>
 </head>
 <body>
     {% include "reception/_header.html" with active_page="reception" %}
@@ -22,6 +22,7 @@
                     {% if asr_enabled %}data-transcribe-url="{% url 'reception-transcript' %}"
                     data-microphone-module="{% static 'reception/microphone.js' %}?v=neptun-opening"{% endif %}
                     aria-pressed="false" aria-describedby="voice-status{% if asr_enabled %} voice-privacy{% endif %}" disabled>{% if language == "pl" %}Włącz rozmowę głosową{% else %}Start voice booking{% endif %}</button>
+                <button id="skip-voice-prompt" class="quiet-button" type="button" hidden></button>
                 <p id="voice-status" role="status"></p>
                 {% if asr_enabled %}
                 <p id="voice-privacy" hidden>{% if language == "pl" %}Odpowiedzi głosowe są wysyłane na serwer hotelu w celu zamiany na tekst.{% else %}Spoken replies are sent to the hotel server for transcription.{% endif %}</p>

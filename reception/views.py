@@ -33,7 +33,8 @@ from .scenario_pinning import (
     carry_web_scenario, pin_web_scenario, pinned_scenario_version_id, published_pinned_steps, web_scenario_channel,
 )
 from .scenario_step_settings import (
-    ARRIVAL_INPUT_FIELD, REQUIRE_ARRIVAL_RANGE, SILENCE_WINDOW_STEPS, silence_window_seconds,
+    ALLOW_VOICE_SKIP, ARRIVAL_INPUT_FIELD, REQUIRE_ARRIVAL_RANGE, SILENCE_WINDOW_STEPS, VOICE_INTERRUPTION_STEPS,
+    silence_window_seconds, voice_interruption_mode,
 )
 from .speech import (
     MAX_PCM_BYTES, MAX_TEXT_CHARACTERS, SpeechBusy, SpeechUnavailable, synthesize, synthesize_welcome, transcribe,
@@ -103,6 +104,8 @@ def _result(state, *, stale=False, cursor=0):
     step_configuration = _pinned_step_configuration(state, state["stage"])
     if state["stage"] in SILENCE_WINDOW_STEPS and (seconds := silence_window_seconds(step_configuration)):
         payload["voice_silence_seconds"] = seconds
+    if state["stage"] in VOICE_INTERRUPTION_STEPS and voice_interruption_mode(step_configuration) == ALLOW_VOICE_SKIP:
+        payload["voice_can_skip_prompt"] = True
     answer_labels = _pinned_answer_labels(state, step_configuration)
     if not (state["stage"] == "check_in" and _requires_arrival_range(step_configuration)) and (
         suggested := suggestions(state, answer_labels)
@@ -133,7 +136,7 @@ def _result(state, *, stale=False, cursor=0):
 def _pinned_step_configuration(state, stage):
     if pinned_scenario_version_id(state) is None:
         return {}
-    if stage not in SILENCE_WINDOW_STEPS and not answer_label_fields(
+    if stage not in (SILENCE_WINDOW_STEPS | VOICE_INTERRUPTION_STEPS) and not answer_label_fields(
         state["language"], web_scenario_channel(state), stage,
     ):
         return {}

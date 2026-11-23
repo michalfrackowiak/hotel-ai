@@ -13,6 +13,14 @@ RETRY_LIMIT_FIELD = "retry_limit"
 SILENCE_WINDOW_FIELD = "voice_silence_seconds"
 SILENCE_WINDOW_STEPS = frozenset({"check_in", "check_out", "guests"})
 MAX_SILENCE_SECONDS = 20
+VOICE_INTERRUPTION_FIELD = "voice_interruption"
+VOICE_INTERRUPTION_STEPS = frozenset({"check_in", "check_out", "guests"})
+ALLOW_VOICE_SKIP = "allow_skip"
+VOICE_INTERRUPTION_CHOICES = (
+    ("wait", "Play the prompt as usual"),
+    (ALLOW_VOICE_SKIP, "Allow guests to skip the spoken prompt"),
+)
+VOICE_INTERRUPTION_LABELS = dict(VOICE_INTERRUPTION_CHOICES)
 RETRY_LIMIT_STEPS = frozenset({
     "check_in", "check_out", "guests", "room", "confirm", "delivery", "email", "phone", "contact_confirm",
 })
@@ -73,7 +81,10 @@ def prompt_fields(language, channel, step_key):
     parser = (ARRIVAL_INPUT_FIELD,) if step_key == "check_in" and channel in CHANNEL_FIELDS else ()
     retry = (RETRY_LIMIT_FIELD,) if step_key in RETRY_LIMIT_STEPS and channel in CHANNEL_FIELDS else ()
     silence = (SILENCE_WINDOW_FIELD,) if step_key in SILENCE_WINDOW_STEPS and channel in CHANNEL_FIELDS else ()
-    return (*primary, *outcomes, *answer_label_fields(language, channel, step_key), *parser, *retry, *silence)
+    interruption = (
+        (VOICE_INTERRUPTION_FIELD,) if step_key in VOICE_INTERRUPTION_STEPS and channel in CHANNEL_FIELDS else ()
+    )
+    return (*primary, *outcomes, *answer_label_fields(language, channel, step_key), *parser, *retry, *silence, *interruption)
 
 
 def prompt_bindings(language, channel, step_key):
@@ -105,6 +116,8 @@ def validate_step_configuration(language, channel, key, configuration):
         raise ValidationError("Enter a whole number from 1 to %(maximum)s for the voice silence window.", params={
             "maximum": MAX_SILENCE_SECONDS,
         })
+    if VOICE_INTERRUPTION_FIELD in configuration and voice_interruption_mode(configuration) is None:
+        raise ValidationError("Choose a supported voice interruption policy.")
     if ARRIVAL_INPUT_FIELD in configuration:
         mode = configuration[ARRIVAL_INPUT_FIELD]
         if not isinstance(mode, str) or mode not in dict(ARRIVAL_INPUT_CHOICES):
@@ -137,3 +150,10 @@ def silence_window_seconds(configuration):
         return None
     value = configuration.get(SILENCE_WINDOW_FIELD)
     return value if type(value) is int and 1 <= value <= MAX_SILENCE_SECONDS else None
+
+
+def voice_interruption_mode(configuration):
+    if not isinstance(configuration, dict):
+        return None
+    value = configuration.get(VOICE_INTERRUPTION_FIELD)
+    return value if isinstance(value, str) and value in VOICE_INTERRUPTION_LABELS else None

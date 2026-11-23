@@ -265,6 +265,7 @@
             voiceWelcome, welcomeParts: result.welcome_parts,
             voiceParts: result.voice_parts, voiceKey: result.voice_key, voiceReply: result.voice_reply,
             voiceSilenceSeconds: result.voice_silence_seconds,
+            voiceCanSkipPrompt: result.voice_can_skip_prompt === true,
         } }));
     }
 
@@ -391,6 +392,11 @@
         trackSilence();
     });
     form.addEventListener("reception:voice-silence", replyTimeout);
+    form.addEventListener("reception:voice-prompt-skipped", (event) => {
+        if (displayedTurn?.revision !== event.detail.revision) return;
+        displayedTurn.item.querySelector("p").textContent = displayedTurn.result.reply;
+        log.scrollTop = log.scrollHeight;
+    });
     form.addEventListener("reception:spoken", (event) => {
         const spoken = event.detail;
         if (!displayedTurn || spoken.revision !== displayedTurn.revision) return;
