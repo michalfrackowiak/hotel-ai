@@ -68,6 +68,7 @@
     <p>Contact review accepts the same yes and no examples as the quote decision. Approval uses a fictional booking reference and previews the initial receipt without creating a booking or sending a message.</p>
     <p>For an email or SMS receipt, choose a fictional delivery status. Leave the reply blank. The preview uses a fictional reference and does not contact a delivery provider.</p>
     <p>For an arrival timeout, choose chat inactivity or the final voice listening window. The final voice window uses this version's timeout setting, including when the combined reception uses a chat version with the microphone active. Leave the reply blank for timeouts.</p>
+    <p>For a reply step with a retry limit, the prior count represents fictional consecutive retries at that same step. If the next reply reaches the limit, the simulator previews the reception handover without opening a staff conversation.</p>
     <p>The reply preview uses built-in parsing and the current date settings. It skips staff corrections, model fallback, and language switching.</p>
     <form method="post">
       {% csrf_token %}
@@ -106,6 +107,15 @@
         {% else %}
           <dt>Extracted arrival</dt><dd>{{ simulation.arrival|default:"—" }}</dd>
           <dt>Extracted departure</dt><dd>{{ simulation.departure|default:"—" }}</dd>
+        {% endif %}
+        {% if simulation.retry_limit %}
+          <dt>Configured retry limit</dt><dd>{{ simulation.retry_limit }}</dd>
+          <dt>Prior consecutive retries</dt><dd>{{ simulation.prior_retries }}</dd>
+          {% if simulation.retry_handover %}
+            <dt>Retry outcome</dt><dd>Limit reached. Handover to reception.</dd>
+          {% else %}
+            <dt>Resulting consecutive retries</dt><dd>{{ simulation.resulting_retry_count }}</dd>
+          {% endif %}
         {% endif %}
         <dt>Resulting step</dt><dd><code>{{ simulation.stage }}</code></dd>
       </dl>

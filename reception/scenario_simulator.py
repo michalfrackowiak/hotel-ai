@@ -14,10 +14,11 @@ from .conversation import advance, new_conversation, selects_english
 from .parsing import StayDates, parse_stay_input
 from .receipt import DELIVERY_PENDING, apply_receipt_outcome, start_receipt
 from .scenario import default_chat_text, render_chat, set_prompt, split_voice_parts, voice_segments
-from .scenario_dispatch import advance_counted_turn
+from .scenario_dispatch import RETRY_COUNT, RETRY_HANDOVER, advance_counted_turn
 from .scenario_pinned_prompts import browser_prompt_bindings, browser_prompt_overrides
 from .scenario_step_settings import (
-    ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, REQUIRE_ARRIVAL_RANGE, retry_limit_value, voice_timeout_mode,
+    ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, MAX_RETRY_LIMIT, REQUIRE_ARRIVAL_RANGE, retry_limit_value,
+    voice_timeout_mode,
 )
 from .scenario_validation import approved_destination
 from .speech import MAX_TEXT_CHARACTERS
@@ -60,6 +61,10 @@ class BookingReplySimulationForm(forms.Form):
         ("welcome_timeout", "Welcome timeout"),
     ))
     reply = forms.CharField(label="Example guest reply", max_length=500, required=False)
+    prior_retries = forms.IntegerField(
+        label="Prior consecutive retries", min_value=0, max_value=MAX_RETRY_LIMIT - 1, required=False,
+        help_text="Optional. For a reply step with a positive retry limit, enter a count below that limit.",
+    )
     receipt_outcome = forms.ChoiceField(label="Fictional receipt status", required=False, choices=(
         ("", "Choose a status for a receipt preview"),
         *((key, label) for key, (_, _, label) in RECEIPT_OUTCOMES.items()),
@@ -67,6 +72,7 @@ class BookingReplySimulationForm(forms.Form):
 
     def __init__(self, *args, language, **kwargs):
         super().__init__(*args, **kwargs)
+        self.retry_limits = {}
         if language != "pl":
             field = self.fields["stage"]
             field.choices = [(key, label) for key, label in field.choices if key != "welcome_timeout"]
@@ -78,6 +84,13 @@ class BookingReplySimulationForm(forms.Form):
             self.add_error("receipt_outcome", "Choose a fictional receipt status.")
         elif stage and stage not in RECEIPT_METHODS and stage not in TIMEOUT_STEPS and values.get("reply") == "":
             self.add_error("reply", "Enter an example guest reply.")
+        if stage and (prior_retries := values.get("prior_retries")):
+            retry_step = "contact_confirm" if stage in FICTIONAL_CONTACTS else stage
+            limit = self.retry_limits.get(retry_step)
+            if not limit:
+                self.add_error("prior_retries", "Choose a reply step with a positive retry limit.")
+            elif prior_retries >= limit:
+                self.add_error("prior_retries", f"Enter a count below this step's retry limit of {limit}.")
         return values
 
 
@@ -94,7 +107,7 @@ def _fictional_booking(**_booking_details):
     return SimpleNamespace(reference="DEMO-REFERENCE"), True
 
 
-def simulate_booking_reply(language, channel, steps, transitions, *, stage, reply, receipt_outcome=""):
+def simulate_booking_reply(language, channel, steps, transitions, *, stage, reply, prior_retries=None, receipt_outcome=""):
     if stage == "check_in" and language == "pl" and selects_english(reply):
         return {"unsupported": True}
 
@@ -170,8 +183,11 @@ def simulate_booking_reply(language, channel, steps, transitions, *, stage, repl
             state = advance(advance(state, method, None), candidate, None)
     parsed = parse_stay_input(stage, reply, language, check_in=check_in)
     require_range = parsed is not None and configuration.get(ARRIVAL_INPUT_FIELD) == REQUIRE_ARRIVAL_RANGE
+    retry_limit = retry_limit_value(configuration)
+    if prior_retries:
+        state[RETRY_COUNT] = prior_retries
     result = advance_counted_turn(
-        state, reply, parsed, resolve, lambda: retry_limit_value(configuration),
+        state, reply, parsed, resolve, lambda: retry_limit,
         voice=channel == "voice", require_arrival_range=require_range, room_search=_fictional_room_search,
         booking_writer=_fictional_booking,
     )
@@ -189,6 +205,10 @@ def simulate_booking_reply(language, channel, steps, transitions, *, stage, repl
         "context_arrival": check_in.isoformat() if check_in else None,
         "context_departure": check_out.isoformat() if check_out else None,
         "input_stage": stage,
+        "retry_limit": retry_limit,
+        "prior_retries": prior_retries or 0,
+        "resulting_retry_count": result.get(RETRY_COUNT, 0),
+        "retry_handover": result.get(RETRY_HANDOVER, False),
         "room_options": [offer["room"] for offer in state.get("choices", [])],
         "quoted_room": state.get("room"),
         "selected_room": result.get("room") if stage == "room" else None,

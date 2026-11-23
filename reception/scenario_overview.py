@@ -5,6 +5,7 @@ from collections import defaultdict
 from django.core.exceptions import ValidationError
 
 from .scenario_materialization import plan_scenario_defaults
+from .scenario_step_settings import RETRY_LIMIT_STEPS, retry_limit_value
 from .scenario_validation import (
     APPROVED_STEPS, TERMINAL_STEPS, scenario_entry_step, stored_scenario_transitions, validate_scenario_rows,
 )
@@ -50,10 +51,14 @@ def scenario_flow_overview(version, *, simulation_form):
     for source, event, target in transitions:
         outgoing[source].append((event, step_keys.get(target, "Outside this version")))
     simulation = None
-    if not errors and require_outcomes and simulation_form.is_valid():
+    if not errors and require_outcomes:
         from .scenario_simulator import simulate_booking_reply
 
-        simulation = simulate_booking_reply(language, channel, steps, transitions, **simulation_form.cleaned_data)
+        simulation_form.retry_limits = {
+            step.key: retry_limit_value(configuration) for step, configuration in steps if step.key in RETRY_LIMIT_STEPS
+        }
+        if simulation_form.is_valid():
+            simulation = simulate_booking_reply(language, channel, steps, transitions, **simulation_form.cleaned_data)
     return {
         "simulation_form": simulation_form if not errors and require_outcomes else None,
         "arrival_examples": {
