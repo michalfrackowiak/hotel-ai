@@ -80,6 +80,10 @@ body {
     border-top: 1px solid var(--field-border);
 }
 
+#request-receptionist {
+    min-height: 44px;
+}
+
 .voice-sphere {
     --sphere-tone: #63788c;
     display: grid;

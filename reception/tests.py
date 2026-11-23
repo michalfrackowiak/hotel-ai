@@ -417,6 +417,57 @@ class ReceptionHandoverTests(TestCase):
     def post(self, **payload):
         return self.client.post(reverse("reception-message"), {"language": "en", **payload}, content_type="application/json")
 
+    def test_requested_voice_handover_is_bilingual_revision_guarded_and_resumable(self):
+        for language, reply in (
+            ("en", "You can leave a message for reception staff here."),
+            ("pl", "Możesz tutaj zostawić wiadomość dla pracownika recepcji."),
+        ):
+            with self.subTest(language=language):
+                self.client = Client()
+                opening = self.post(start=True, voice=True, language=language).json()
+                request = {"revision": opening["revision"], "handover": True, "voice": True, "language": language}
+                self.assertTrue(opening["can_request_handover"])
+                self.assertEqual(self.post(**{**request, "voice": False}).status_code, 400)
+                self.assertEqual(self.post(**request, message="Unsent voice answer").status_code, 400)
+                current = self.post(**request).json()
+                self.assertEqual(current["stage"], "handover")
+                self.assertEqual(current["reply"], reply)
+                self.assertFalse(current["voice_welcome"])
+                self.assertNotIn("can_request_handover", current)
+                self.assertEqual(current["handover_messages"], [])
+                self.assertEqual(self.post(**request).status_code, 409)
+                request["revision"] = current["revision"]
+                self.assertEqual(self.post(**request).status_code, 409)
+                self.assertEqual(self.post(start=True, resume=True, language=language).json(), current)
+                legacy = self.post(voice_start=True, revision=current["revision"], language=language).json()
+                self.assertEqual(legacy, current)
+                conversation = Conversation.objects.get(session_id=self.client.session.session_key)
+                handover = StaffHandover.objects.get(conversation=conversation, language=language, closed=False)
+                self.assertEqual(conversation.state["scenario_pin"]["channel"], "voice")
+                followup = self.post(revision=current["revision"], language=language, message="Please help.")
+                self.assertEqual(followup.status_code, 200)
+                self.assertEqual(list(handover.messages.values_list("text", flat=True)), ["Please help."])
+
+    def test_request_voice_handover_is_unavailable_for_protected_stages(self):
+        for stage in ("delivery_pending", "completed", "cancelled"):
+            with self.subTest(stage=stage):
+                self.client = Client()
+                opening = self.post(start=True, voice=True).json()
+                conversation = Conversation.objects.get(session_id=self.client.session.session_key)
+                conversation.state.update(stage=stage, reference="SAMPLE-REFERENCE")
+                conversation.save(update_fields=["state"])
+                response = self.post(revision=opening["revision"], handover=True, voice=True)
+                self.assertEqual(response.status_code, 409)
+                self.assertEqual(response.json()["stage"], stage)
+                self.assertNotIn("can_request_handover", response.json())
+                self.assertFalse(StaffHandover.objects.filter(conversation=conversation).exists())
+
+    def test_only_dedicated_voice_shows_receptionist_control(self):
+        self.assertContains(self.client.get("/voice/?lang=en"), "Message reception")
+        self.assertContains(self.client.get("/voice/?lang=pl"), "Napisz do recepcji")
+        for path in ("/", "/chat/"):
+            self.assertNotContains(self.client.get(path), 'id="request-receptionist"')
+
     def test_non_booking_inquiry_routes_to_staff_and_back_to_its_guest(self):
         opening = self.post(start=True).json()
         arrival = self.post(revision=opening["revision"], timeout=True).json()

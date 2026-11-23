@@ -9,6 +9,7 @@
     const contactValue = document.getElementById("chat-contact-value");
     const changeDelivery = document.getElementById("chat-change-delivery");
     const typeInstead = document.getElementById("chat-type-instead");
+    const receptionist = document.getElementById("request-receptionist");
     const voiceReview = document.getElementById("voice-answer-review");
     const voiceReviewHelp = document.getElementById("voice-answer-help");
     const voiceReviewRetry = document.getElementById("voice-answer-retry");
@@ -49,6 +50,7 @@
             handoverConnected: "You’re chatting with reception staff.",
             handoverClosed: "Reception staff closed this chat.",
             handoverOffline: "Staff chat is disconnected. Trying again…",
+            messageReception: "Message reception",
             placeholder: "Type a message…",
             input: "Your message",
             send: "Send",
@@ -84,6 +86,7 @@
             handoverConnected: "Rozmawiasz z pracownikiem recepcji.",
             handoverClosed: "Recepcja zakończyła tę rozmowę.",
             handoverOffline: "Połączenie z recepcją zostało przerwane. Ponawiam próbę…",
+            messageReception: "Napisz do recepcji",
             placeholder: "Napisz wiadomość…",
             input: "Twoja wiadomość",
             send: "Wyślij",
@@ -118,6 +121,7 @@
     let voiceWelcome = false;
     let pollTimer = null;
     let handoverClosed = false;
+    let canRequestHandover = false;
     let staffReplied = false;
     let cursor = 0;
     let suggestedAnswers = [];
@@ -193,6 +197,12 @@
         const copy = labels[language];
         const ready = connected && !pending;
         const canSend = ready && !terminalStages.has(stage) && !handoverClosed;
+        if (receptionist) {
+            receptionist.hidden = !canRequestHandover;
+            receptionist.disabled = !ready;
+            receptionist.lang = language;
+            receptionist.textContent = copy.messageReception;
+        }
         footer.lang = language;
         resetButton.lang = language;
         resetButton.disabled = pending;
@@ -393,16 +403,18 @@
         clearTimeout(idleTimer);
         const previousFocus = document.activeElement;
         const focusBooking = calendar?.contains(previousFocus) || staySummary?.contains(previousFocus);
-        const focusComposer = focusBooking || form.contains(previousFocus) ||
+        const focusComposer = focusBooking || previousFocus === receptionist || form.contains(previousFocus) ||
             quickReplies.some((group) => group.contains(previousFocus));
         let reply = null;
         let failure = null;
         let focusDates = false;
+        let focusHandover = false;
 
         if (payload.reset) discardVoiceDraft();
         pending = true;
         retryButton.hidden = true;
-        status.textContent = payload.message || payload.dates || payload.edit ? labels[language].waiting : labels[language].connecting;
+        status.textContent = payload.message || payload.dates || payload.edit || payload.handover
+            ? labels[language].waiting : labels[language].connecting;
         updateControls();
         form.dispatchEvent(new CustomEvent("reception:request", { detail: { reset: payload.reset === true } }));
 
@@ -418,7 +430,7 @@
                 focusDates = Boolean(picker);
                 return;
             }
-            if (voiceDraft && (payload.message || payload.dates || payload.edit || result.stale ||
+            if (voiceDraft && (payload.message || payload.dates || payload.edit || payload.handover || result.stale ||
                 result.revision !== voiceDraft.revision)) {
                 discardVoiceDraft();
             }
@@ -461,6 +473,8 @@
             lastReply = result.reply;
             if (!voiceDraft && !preserveLog && !result.stale && !payload.timeout && !payload.voice_start) messageInput.value = "";
             stage = result.stage;
+            canRequestHandover = result.can_request_handover === true;
+            focusHandover = payload.handover && stage === "handover" && !result.handover_closed;
             if (calendar && result.revision !== revision) dateForm.reset();
             revision = result.revision;
             stay = result.booking_summary || null;
@@ -484,7 +498,9 @@
             }
             pending = false;
             updateControls();
-            if (focusDates && calendar) {
+            if (focusHandover) {
+                messageInput.focus();
+            } else if (focusDates && calendar) {
                 calendar.open = true;
                 (picker.arrival_min ? arrival : departure).focus();
             } else if (focusComposer && document.activeElement === document.body) {
@@ -613,6 +629,11 @@
     typeInstead?.addEventListener("click", () => {
         form.dispatchEvent(new CustomEvent("reception:type-instead"));
         messageInput.focus();
+    });
+    receptionist?.addEventListener("click", () => {
+        if (!connected || pending || !canRequestHandover) return;
+        form.dispatchEvent(new CustomEvent("reception:type-instead"));
+        requestChat({ handover: true, revision, voice: true });
     });
     editButtons.forEach((button) => {
         button.addEventListener("click", () => {

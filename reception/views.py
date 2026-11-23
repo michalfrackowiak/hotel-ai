@@ -89,6 +89,19 @@ def index(request, mode="combined"):
     })
 
 
+VOICE_HANDOVER_STAGES = frozenset({
+    "welcome", "check_in", "check_out", "guests", "room", "confirm", "delivery", "email", "phone", "contact_confirm",
+})
+VOICE_HANDOVER_REPLY = {
+    "en": "You can leave a message for reception staff here.",
+    "pl": "Możesz tutaj zostawić wiadomość dla pracownika recepcji.",
+}
+
+
+def _can_request_voice_handover(state):
+    return state["stage"] in VOICE_HANDOVER_STAGES
+
+
 def _result(state, *, stale=False, cursor=0, date_error=False):
     payload = {field: state[field] for field in ("language", "stage", "revision", "reply")}
     pinned = pinned_overrides(state)
@@ -144,11 +157,14 @@ def _result(state, *, stale=False, cursor=0, date_error=False):
         payload["quick_reply_labels"] = quick_replies
     if state["stage"] == "check_in" and state["language"] == "pl" and state.get("voice_welcome"):
         payload["voice_welcome"] = True
+    if _can_request_voice_handover(state):
+        payload["can_request_handover"] = True
     if state["stage"] == "handover":
         handover = StaffHandover.objects.get(pk=state["handover_id"])
         payload["handover_closed"] = handover.closed
         payload["voice_welcome"] = (
-            not state.get(RETRY_HANDOVER) and not handover.closed and not handover.messages.exists()
+            not state.get(RETRY_HANDOVER) and not state.get("requested_handover")
+            and not handover.closed and not handover.messages.exists()
         )
         payload["handover_messages"] = list(
             handover.messages.filter(id__gt=cursor).order_by("id").values("id", "staff", "text")[:HANDOVER_PAGE_SIZE]
@@ -279,6 +295,7 @@ def message(request):
     revision = payload.get("revision")
     required_turn_fields = {"language", "message", "revision"}
     structured_fields = opening_keys | {"revision"}
+    request_handover = voice and payload.get("handover") is True and payload.keys() == structured_fields | {"handover"}
     dates = payload.keys() == structured_fields | {"dates"}
     edit = payload.keys() == structured_fields | {"edit"}
     selection = parse_selection(payload["dates"]) if dates else None
@@ -295,7 +312,7 @@ def message(request):
             if not isinstance(text, str) or not 1 <= len(text.strip()) <= MAX_MESSAGE_LENGTH:
                 return _invalid()
             text = text.strip()
-        elif not (poll or timeout or voice_start or (dates and selection) or (
+        elif not (poll or timeout or voice_start or request_handover or (dates and selection) or (
             edit and action in ("dates", "guests", "room")
         )):
             return _invalid()
@@ -361,6 +378,14 @@ def message(request):
             state = _new_web_conversation(language)
         elif state["revision"] != revision or state["language"] != language:
             return _result(state, stale=True)
+        elif request_handover:
+            if not _can_request_voice_handover(state):
+                return _result(state, stale=True)
+            handover = StaffHandover.objects.create(conversation=conversation, language=language)
+            state = {
+                "stage": "handover", "language": language, "revision": uuid4().hex, "flow": "neptun",
+                "reply": VOICE_HANDOVER_REPLY[language], "handover_id": handover.pk, "requested_handover": True,
+            }
         elif edit:
             if action not in edit_actions(state):
                 return _result(state, stale=True)
@@ -376,7 +401,7 @@ def message(request):
         elif voice_start:
             if language == "pl" and state["stage"] == "check_in" and state.get("voice_welcome"):
                 state = _new_web_conversation(language)
-            elif state["stage"] == "handover" and not state.get(RETRY_HANDOVER):
+            elif state["stage"] == "handover" and not state.get(RETRY_HANDOVER) and not state.get("requested_handover"):
                 handover = StaffHandover.objects.get(pk=state["handover_id"])
                 if not handover.closed and not handover.messages.exists():
                     handover.closed = True
