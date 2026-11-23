@@ -6,11 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <title>{{ page_title }} · Neptun Resort</title>
-    <link rel="stylesheet" href="{% static 'reception/reception.css' %}?v=voice-handover">
+    <link rel="stylesheet" href="{% static 'reception/reception.css' %}?v=guest-sign-in">
     {% if mode != "chat" %}
-    <script src="{% static 'reception/voice.js' %}?v=voice-answer-review" defer></script>
+    <script src="{% static 'reception/voice.js' %}?v=guest-sign-in" defer></script>
     {% endif %}
-    <script src="{% static 'reception/chat.js' %}?v=voice-handover" defer></script>
+    <script src="{% static 'reception/chat.js' %}?v=guest-sign-in" defer></script>
+    {% if guest_enabled %}
+    <script src="{% static 'reception/guest-sign-in.js' %}?v=guest-sign-in" defer></script>
+    {% endif %}
 </head>
 <body>
     {% include "reception/_header.html" with active_page="reception" %}
@@ -39,6 +42,7 @@
                 {% endif %}
             </div>
             {% endif %}
+            {% if guest_enabled %}{% include "reception/_guest_account.html" %}{% endif %}
         </section>
         <section class="chat-panel" aria-labelledby="reception-title">
             <header class="chat-header">

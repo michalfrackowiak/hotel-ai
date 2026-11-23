@@ -14,6 +14,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST, require_safe
 
+from guest_accounts.views import google_client_id, guest_signed_in
 from model_providers.extraction import extract_stay_value
 
 from .booking_draft import DATE_STAGES, date_picker, edit_actions, parse_selection, rewind, selected_dates, summary
@@ -69,7 +70,11 @@ OLD_ARRIVAL_PROMPTS = (
 def index(request, mode="combined"):
     language = request.GET.get("lang")
     valid_language = language in ("en", "pl")
-    resume = mode != "combined" and (request.GET.get("continue") == "1" or not valid_language)
+    guest_enabled = bool(google_client_id()) and not request.user.is_authenticated
+    resume = (
+        (mode != "combined" and not valid_language)
+        or ((mode != "combined" or guest_enabled) and request.GET.get("continue") == "1")
+    )
     if resume or not valid_language:
         language = language if valid_language else "pl"
         locator = conversation_id(request.session)
@@ -79,7 +84,7 @@ def index(request, mode="combined"):
                 language = state["language"]
     request.session.setdefault("reception", True)
     page_title, heading = RECEPTION_TITLES[mode][language]
-    return render(request, "reception/index.html", {
+    response = render(request, "reception/index.html", {
         "language": language,
         "mode": mode,
         "page_title": page_title,
@@ -88,7 +93,16 @@ def index(request, mode="combined"):
         "piper_enabled": bool(settings.HOTEL_PIPER_URL or settings.HOTEL_SPEECH_ROUTE_TARGETS),
         "asr_enabled": bool(settings.HOTEL_ASR_URL or settings.HOTEL_SPEECH_ROUTE_TARGETS),
         "parser_training_enabled": settings.HOTEL_PARSER_TRAINING_ENABLED,
+        "guest_enabled": guest_enabled,
+        "guest_signed_in": guest_enabled and guest_signed_in(request.session),
     })
+    if guest_enabled:
+        response["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
+        response["Referrer-Policy"] = (
+            "no-referrer-when-downgrade" if settings.DEBUG and not request.is_secure()
+            else "strict-origin-when-cross-origin"
+        )
+    return response
 
 
 VOICE_HANDOVER_STAGES = frozenset({
