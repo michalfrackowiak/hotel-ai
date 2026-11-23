@@ -141,6 +141,8 @@ The current admin edits prompt text and voice segments; conversation transitions
 
 ## 0.8 — Google accounts and guest continuity
 
+- [x] Add bilingual Google sign-in and sign-out controls behind the guest sign-in flag. See [browser checks and pilot setup](handoff.md#google-guest-sign-in-controls).
+
 - [x] Add the opt-in Google credential backend and guest session lifecycle. Verify with fictional credentials before exposing public sign-in. See [backend checks](handoff.md#google-guest-sign-in-backend).
 
 - [x] Preserve reception state across browser session rotation. Verify draft, pending receipt and staff handover continuity and deny access from the old cookie. See [verification](handoff.md#reception-session-continuity).

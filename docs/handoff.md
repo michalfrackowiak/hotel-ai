@@ -90,6 +90,22 @@ Next increment is an explicit bilingual Google button and browser pilot with the
 and Google project. The production Nginx route list, public account UI and booking ownership are separate
 increments. Follow the [Google readiness report](google-guest-signin-readiness.md) for rollout.
 
+## Google guest sign-in controls
+
+The reception pages offer an optional Google button and sign-out control in English and Polish when
+guest sign-in is enabled and a web client ID is configured. The browser uses the Google Identity Services
+popup and sends its credential to Django with the current CSRF token. On successful sign-in it reloads
+the current reception view with the rotated token and resumes a preserved draft. Sign-out starts a
+fresh anonymous session.
+
+All 31 focused Django tests passed, with no migration drift. JavaScript syntax and whitespace checks passed.
+
+Before a live pilot, register the exact HTTPS origin in the Google web client, publish the agreed
+privacy information and expose only the required guest paths with request limits. Verify actual Google
+popup behavior in the supported browsers, including browser privacy settings and the page's CSP and
+opener policy. Keep anonymous voice and chat available throughout. See [Google setup](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid)
+and the [readiness report](google-guest-signin-readiness.md).
+
 ## Google guest sign-in readiness
 
 The production TLS certificate identifies the public IP. A read-only check confirmed the IP in the certificate's

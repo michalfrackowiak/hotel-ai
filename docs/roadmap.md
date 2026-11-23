@@ -28,6 +28,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 - [x] 0.8 Google guest sign-in backend: opt-in credential verification, guest sessions and booking draft continuity. See [configuration and verification](handoff.md#google-guest-sign-in-backend).
 
+- [x] 0.8 Google guest sign-in controls: optional English and Polish sign-in and sign-out with reception draft continuity. See [browser checks and pilot setup](handoff.md#google-guest-sign-in-controls).
+
 ## Alpha
 
 - [x] 0.5 production routed speech configuration: validate the opt-in Compose overlay, the preserved booking volume, the private web and worker network, and the ARM64 worker budget. See [cutover configuration](speech-cutover-config.md) and [PR #71](https://github.com/michalfrackowiak/hotel-ai/pull/71).
