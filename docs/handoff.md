@@ -1,5 +1,15 @@
 # Session handoff
 
+## Voice answer review
+
+The dedicated voice page puts recognized speech in the existing composer for review before it sends a booking reply. Guests can correct the text, send it unchanged or choose **Say it again** to listen for a fresh answer. Corrections are classified as typed text for parser training. The combined reception keeps its immediate transcription submission, and the chat-only page keeps its typed flow.
+
+The mobile layout keeps the start and stop control prominent and uses a touch-sized repeat button. Instructions and status are available in English and Polish. A draft stays local to the current prompt. It can recover after a failed request and a verified same-prompt reconnect. Switching pages or resetting clears the draft.
+
+The local reception suite passed 132 tests, and JavaScript syntax, Django system and migration checks passed.
+
+Next reception increment: show an editable booking summary and a date picker where the conversation accepts dates.
+
 ## Voice speaking animation
 
 The voice and combined reception pages show a decorative sphere alongside the localized live status. Piper playback reads a short window of the decoded reply at the current playback position to drive its scale. Browser speech uses utterance start, pause, resume and end events. Waiting and listening have static treatments. Ending voice, switching pages or hiding the tab stops the indicator and releases the microphone. The motion preference can change during playback, and guests who request reduced motion still see the state and captions.
@@ -8,7 +18,7 @@ The 131 reception tests passed on Windows. Django system and migration checks pa
 
 Production deployed revision `88c54ba` on 23 November 2026. The candidate passed five ARM64 reception tests before activation. The SQLite backup checksum, integrity, foreign keys, fictional booking and idempotent replay passed. The previous image read the disposable restore. Live English and Polish Piper synthesis and Vosk microphone-format and silence checks passed, and both speech workers retained their container IDs and start times. Public HTTPS confirmed the voice indicator and versioned assets on the voice and combined pages, chat-only markup on chat in both languages, health and admin login. The Nginx guest snippet retained its approved checksum. [PR #87](https://github.com/michalfrackowiak/hotel-ai/pull/87)
 
-Next reception increment: improve the mobile voice controls and add an explicit retry or edit action for the last answer.
+The [voice answer review](#voice-answer-review) followed this release.
 
 ## Guest reception modes
 

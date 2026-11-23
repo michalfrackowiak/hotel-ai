@@ -34,6 +34,9 @@ class ReceptionModeTests(TestCase):
                     self.assertNotContains(chat, marker)
                     self.assertContains(voice, marker)
                 self.assertNotContains(chat, 'id="voice-sphere"')
+                self.assertNotContains(chat, 'id="voice-answer-review"')
+                self.assertContains(voice, '<div id="voice-answer-review" class="voice-answer-review" hidden>')
+                self.assertContains(voice, 'id="voice-answer-retry"')
                 self.assertContains(
                     voice,
                     '<span id="voice-sphere" class="voice-sphere" data-state="disconnected" aria-hidden="true"></span>',
@@ -44,6 +47,11 @@ class ReceptionModeTests(TestCase):
                     self.assertContains(page, 'id="chat-log"')
                     self.assertContains(page, 'id="chat-form"')
         self.assertFalse(Conversation.objects.exists())
+
+    def test_combined_reception_does_not_show_voice_answer_review(self):
+        combined = self.client.get("/", {"lang": "en"})
+        self.assertContains(combined, 'id="start-voice"')
+        self.assertNotContains(combined, 'id="voice-answer-review"')
 
     def test_new_drafts_capture_channel_and_switches_keep_stay_and_revision(self):
         for language, message in (("en", "tomorrow for three nights"), ("pl", "od jutra na trzy noce")):

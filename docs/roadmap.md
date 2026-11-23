@@ -16,6 +16,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 - [x] 0.7 speaking animation: voice playback drives a lightweight sphere with distinct listening, processing, speaking and disconnected states. Browser speech uses playback events, and reduced motion keeps status visible without animation. See [handoff and release checks](handoff.md#voice-speaking-animation).
 
+- [x] 0.7 voice answer review: the dedicated voice page lets guests edit, send or repeat a recognized reply before submission, with mobile controls and bilingual status. See [handoff and release checks](handoff.md#voice-answer-review).
+
 ## Alpha
 
 - [x] 0.5 production routed speech configuration: validate the opt-in Compose overlay, the preserved booking volume, the private web and worker network, and the ARM64 worker budget. See [cutover configuration](speech-cutover-config.md) and [PR #71](https://github.com/michalfrackowiak/hotel-ai/pull/71).
