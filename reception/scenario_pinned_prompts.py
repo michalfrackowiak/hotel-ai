@@ -30,6 +30,19 @@ def pinned_overrides(state):
 
     language = state["language"]
     channel = web_scenario_channel(state)
+    bindings = browser_prompt_bindings(state, channel)
+    if not bindings:
+        return {}
+    steps = (
+        published_pinned_steps(state).filter(key__in=bindings)
+        .values_list("key", "configuration")[:len(bindings)]
+    )
+    return browser_prompt_overrides(language, channel, bindings, steps)
+
+
+def browser_prompt_bindings(state, channel):
+    """Select prompt bindings relevant to the current reply."""
+    language = state["language"]
     specs = set(_specs(state))
     if (language, "rooms") in specs:
         specs.add((language, "option"))
@@ -41,13 +54,11 @@ def pinned_overrides(state):
         }
         if relevant:
             bindings[step] = relevant
-    if not bindings:
-        return {}
+    return bindings
 
-    steps = (
-        published_pinned_steps(state).filter(key__in=bindings)
-        .values_list("key", "configuration")[:len(bindings)]
-    )
+
+def browser_prompt_overrides(language, channel, bindings, steps):
+    """Render the same configuration mapping for live and preview graphs."""
     overrides = {}
     for step, configuration in steps:
         try:

@@ -43,24 +43,32 @@ def advance_web_turn(state, text, parsed, **options):
     if stage not in RETRY_LIMIT_STEPS or pinned_scenario_version_id(state) is None:
         return advance(state, text, parsed, resolve_transition=resolve_web_transition, **options)
 
+    def get_retry_limit():
+        configuration = published_pinned_steps(state).filter(key=stage).values_list("configuration", flat=True).first()
+        return retry_limit_value(configuration)
+
+    return advance_counted_turn(state, text, parsed, resolve_web_transition, get_retry_limit, **options)
+
+
+def advance_counted_turn(state, text, parsed, resolve_transition, get_retry_limit, **options):
+    stage = state["stage"]
     retried = False
 
     def resolve(current, event):
         nonlocal retried
-        destination = resolve_web_transition(current, event)
+        destination = resolve_transition(current, event)
         if event == "retry" and current["stage"] == stage and destination == stage:
             retried = True
         return destination
 
     result = advance(state, text, parsed, resolve_transition=resolve, **options)
     if retried and result["stage"] == stage:
-        configuration = published_pinned_steps(state).filter(key=stage).values_list("configuration", flat=True).first()
-        if limit := retry_limit_value(configuration):
+        if limit := get_retry_limit():
             previous_count = state.get(RETRY_COUNT, 0)
             if type(previous_count) is not int or not 0 <= previous_count <= limit:
                 previous_count = 0
             count = min(previous_count + 1, limit)
-            if count == limit and resolve_web_transition(state, RETRY_EXHAUSTED_EVENT) == "handover":
+            if count == limit and resolve_transition(state, RETRY_EXHAUSTED_EVENT) == "handover":
                 return {**_terminal(result, "handover"), RETRY_HANDOVER: True}
             return {**result, RETRY_COUNT: count}
     if RETRY_COUNT in result:

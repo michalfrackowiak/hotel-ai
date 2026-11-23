@@ -59,4 +59,50 @@
       {% endfor %}
     </tbody>
   </table>
+
+  {% if arrival_form %}
+    <h3>Simulate an arrival reply</h3>
+    <p>Preview one typed or transcribed reply at the arrival step. Use fictional details in the example.</p>
+    <p>Examples {% for example in arrival_examples %}<code>{{ example }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}.</p>
+    <p>The preview uses built-in parsing and the current date settings. It skips staff corrections, model fallback, and language switching.</p>
+    <form method="post">
+      {% csrf_token %}
+      {{ arrival_form.as_p }}
+      <button type="submit">Simulate reply</button>
+    </form>
+
+    {% if arrival_simulation.unsupported %}
+      <p>Enter a date reply to simulate this step. Language changes are outside this preview.</p>
+    {% elif arrival_simulation %}
+      <h4>Arrival reply result</h4>
+      <dl>
+        <dt>Extracted arrival</dt><dd>{{ arrival_simulation.arrival|default:"—" }}</dd>
+        <dt>Extracted departure</dt><dd>{{ arrival_simulation.departure|default:"—" }}</dd>
+        <dt>Resulting step</dt><dd><code>{{ arrival_simulation.stage }}</code></dd>
+      </dl>
+      <h4>Transition decisions</h4>
+      <ul>
+        {% for source, event, target in arrival_simulation.decisions %}
+          <li><code>{{ source }}</code> &middot; <code>{{ event }}</code> &rarr; <code>{{ target|default:"Unavailable" }}</code></li>
+        {% endfor %}
+      </ul>
+      <h4>Chat reply</h4>
+      <p>{{ arrival_simulation.chat }}</p>
+      <h4>Spoken reply</h4>
+      <p>Segment durations come from the script. Playback and microphone timing are outside this preview.</p>
+      {% if arrival_simulation.voice %}
+        <ol>
+          {% for part in arrival_simulation.voice %}
+            <li lang="{{ part.language }}">
+              {{ part.text }}
+              {% if part.listen %}<span>(Listen for {{ part.seconds }} s)</span>
+              {% elif part.seconds %}<span>(Pause for {{ part.seconds }} s)</span>{% endif %}
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <p>{{ arrival_simulation.voice_fallback }}</p>
+      {% endif %}
+    {% endif %}
+  {% endif %}
 {% endblock %}

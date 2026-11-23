@@ -131,9 +131,10 @@ class ScenarioVersionAdmin(ScenarioDraftAdmin):
             context["scenario_selection_label"] = "Selection history" if active else f"Review {action}"
         return super().render_change_form(request, context, add, change, form_url, obj)
 
-    @method_decorator(require_http_methods(["GET"]))
+    @method_decorator(require_http_methods(["GET", "POST"]))
     def flow_overview(self, request, object_id):
         from .scenario_overview import scenario_flow_overview
+        from .scenario_simulator import ArrivalSimulationForm
 
         if not self._can_view_flow(request):
             raise PermissionDenied
@@ -146,7 +147,9 @@ class ScenarioVersionAdmin(ScenarioDraftAdmin):
         request.current_app = self.admin_site.name
         return TemplateResponse(request, "admin/reception/scenarioversion/flow_overview.html", {
             **self.admin_site.each_context(request),
-            **scenario_flow_overview(version),
+            **scenario_flow_overview(
+                version, arrival_form=ArrivalSimulationForm(request.POST if request.method == "POST" else None),
+            ),
             "title": "Scenario flow overview",
             "opts": self.model._meta,
             "version": version,
