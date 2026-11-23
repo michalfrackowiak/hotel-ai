@@ -24,6 +24,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 - [x] 0.8 Google sign-in readiness: assessed the live IP certificate, owned hostname and Google OAuth setup. See [readiness and launch checks](google-guest-signin-readiness.md).
 
+- [x] 0.8 reception session continuity: booking drafts, pending receipts and staff threads can follow browser session rotation. See [migration and verification](handoff.md#reception-session-continuity).
+
 ## Alpha
 
 - [x] 0.5 production routed speech configuration: validate the opt-in Compose overlay, the preserved booking volume, the private web and worker network, and the ARM64 worker budget. See [cutover configuration](speech-cutover-config.md) and [PR #71](https://github.com/michalfrackowiak/hotel-ai/pull/71).

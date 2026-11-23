@@ -141,6 +141,8 @@ The current admin edits prompt text and voice segments; conversation transitions
 
 ## 0.8 — Google accounts and guest continuity
 
+- [x] Preserve reception state across browser session rotation. Verify draft, pending receipt and staff handover continuity and deny access from the old cookie. See [verification](handoff.md#reception-session-continuity).
+
 - [ ] Add public registration/login using Google Identity Services or a maintained Django OIDC integration. First successful Google sign-in creates a guest account; later sign-ins return to it. Password registration is a separate optional scope decision. Guest booking remains available.
 - [ ] Configure a stable public hostname, HTTPS and approved Google origins/redirects before launch. Provide logout, session expiry and a clear account creation/privacy explanation.
 - [ ] Validate Google tokens on the server, including issuer, audience, expiry and signature; use Google's subject identifier for identity. Protect login state/CSRF and account linking. Google documents server validation and using `sub` as the unique identifier. [Google verification guide](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token)
