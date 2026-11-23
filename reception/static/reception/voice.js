@@ -34,7 +34,7 @@
         recognition: "Rozpoznawanie mowy jest niedostępne. Spróbuj ponownie lub skorzystaj z czatu.",
         busy: "Obsługa głosu jest teraz zajęta. Włącz rozmowę głosową ponownie za chwilę lub wpisz odpowiedź na czacie.",
         silence: "Nie usłyszano odpowiedzi. Spróbuj ponownie lub skorzystaj z czatu.",
-        continueInChat: "Nie usłyszano odpowiedzi. Wpisz daty pobytu na czacie.",
+        continueInChat: "Nie usłyszano odpowiedzi. Wpisz odpowiedź na czacie.",
         error: "Rozmowa głosowa została przerwana. Spróbuj ponownie lub skorzystaj z czatu.",
         finished: "Rozmowa głosowa zakończona.",
     };
@@ -56,7 +56,7 @@
         recognition: "Speech recognition is unavailable. Try again or use chat.",
         busy: "Voice service is busy. Start voice booking again in a moment, or type your answer in chat.",
         silence: "No response was heard. Try again or use chat.",
-        continueInChat: "No response was heard. Type your stay dates in chat.",
+        continueInChat: "No response was heard. Type your reply in chat.",
         error: "Voice booking was interrupted. Try again or use chat.",
         finished: "Voice booking ended.",
     };
@@ -155,7 +155,7 @@
 
     function handleSilence() {
         if (!active || playNextSegment()) return;
-        if (stage === "check_in" && !input.disabled && lastReply?.voiceTimeoutContinueInChat) {
+        if (!input.disabled && lastReply?.voiceTimeoutContinueInChat) {
             stop(copy.continueInChat, { continueInChat: true });
         } else if (stage in silenceLimits && !input.disabled) {
             form.dispatchEvent(new CustomEvent("reception:voice-silence"));

@@ -339,7 +339,7 @@ class ScenarioStepDraftForm(forms.ModelForm):
     voice_timeout = forms.ChoiceField(
         required=False, label="Voice timeout action",
         choices=(("", "Use shared or built-in setting"), *VOICE_TIMEOUT_CHOICES),
-        help_text="What happens if the guest stays silent through the final arrival listening window.",
+        help_text="What happens if the guest stays silent through the final voice listening window at this step.",
     )
     parser_fallback = forms.ChoiceField(
         required=False, label="Parser fallback",

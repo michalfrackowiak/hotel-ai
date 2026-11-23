@@ -34,6 +34,7 @@ VOICE_INTERRUPTION_CHOICES = (
 )
 VOICE_INTERRUPTION_LABELS = dict(VOICE_INTERRUPTION_CHOICES)
 VOICE_TIMEOUT_FIELD = "voice_timeout"
+VOICE_TIMEOUT_STEPS = frozenset({"welcome", "check_in"})
 CONTINUE_IN_CHAT = "continue_in_chat"
 VOICE_TIMEOUT_CHOICES = (
     ("default", "Follow the usual timeout route"),
@@ -106,7 +107,9 @@ def prompt_fields(language, channel, step_key):
     interruption = (VOICE_INTERRUPTION_FIELD,) if (
         step_key in VOICE_INTERRUPTION_STEPS and kinds and (step_key != "welcome" or language == "pl")
     ) else ()
-    timeout = (VOICE_TIMEOUT_FIELD,) if step_key == "check_in" and channel in CHANNEL_FIELDS else ()
+    timeout = (VOICE_TIMEOUT_FIELD,) if (
+        step_key in VOICE_TIMEOUT_STEPS and kinds and (step_key != "welcome" or language == "pl")
+    ) else ()
     return (
         *primary, *outcomes, *answer_label_fields(language, channel, step_key),
         *parser, *fallback, *retry, *silence, *interruption, *timeout,

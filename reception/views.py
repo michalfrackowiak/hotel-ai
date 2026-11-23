@@ -34,7 +34,7 @@ from .scenario_pinning import (
 )
 from .scenario_step_settings import (
     ALLOW_VOICE_SKIP, ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, PARSER_FALLBACK_STEPS,
-    REQUIRE_ARRIVAL_RANGE, SILENCE_WINDOW_STEPS, VOICE_INTERRUPTION_STEPS, allows_model_fallback,
+    REQUIRE_ARRIVAL_RANGE, SILENCE_WINDOW_STEPS, VOICE_INTERRUPTION_STEPS, VOICE_TIMEOUT_STEPS, allows_model_fallback,
     silence_window_seconds, voice_interruption_mode, voice_timeout_mode,
 )
 from .speech import (
@@ -106,7 +106,7 @@ def _result(state, *, stale=False, cursor=0):
         payload["voice_silence_seconds"] = seconds
     if state["stage"] in VOICE_INTERRUPTION_STEPS and voice_interruption_mode(step_configuration) == ALLOW_VOICE_SKIP:
         payload["voice_can_skip_prompt"] = True
-    if state["stage"] == "check_in" and voice_timeout_mode(step_configuration) == CONTINUE_IN_CHAT:
+    if state["stage"] in VOICE_TIMEOUT_STEPS and voice_timeout_mode(step_configuration) == CONTINUE_IN_CHAT:
         payload["voice_timeout_continue_in_chat"] = True
     answer_labels = _pinned_answer_labels(state, step_configuration)
     if not (state["stage"] == "check_in" and _requires_arrival_range(step_configuration)) and (
@@ -138,7 +138,7 @@ def _result(state, *, stale=False, cursor=0):
 def _pinned_step_configuration(state, stage):
     if pinned_scenario_version_id(state) is None:
         return {}
-    configured_stages = SILENCE_WINDOW_STEPS | VOICE_INTERRUPTION_STEPS | PARSER_FALLBACK_STEPS
+    configured_stages = SILENCE_WINDOW_STEPS | VOICE_INTERRUPTION_STEPS | VOICE_TIMEOUT_STEPS | PARSER_FALLBACK_STEPS
     if stage not in configured_stages and not answer_label_fields(
         state["language"], web_scenario_channel(state), stage,
     ):

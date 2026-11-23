@@ -7,8 +7,8 @@
     <meta name="color-scheme" content="light">
     <title>{% if language == "pl" %}Rezerwacja pokoju{% else %}Book a room{% endif %} · Hotel-ai</title>
     <link rel="stylesheet" href="{% static 'reception/reception.css' %}">
-    <script src="{% static 'reception/chat.js' %}?v=voice-timeout" defer></script>
-    <script src="{% static 'reception/voice.js' %}?v=voice-timeout" defer></script>
+    <script src="{% static 'reception/chat.js' %}?v=welcome-voice-timeout" defer></script>
+    <script src="{% static 'reception/voice.js' %}?v=welcome-voice-timeout" defer></script>
 </head>
 <body>
     {% include "reception/_header.html" with active_page="reception" %}

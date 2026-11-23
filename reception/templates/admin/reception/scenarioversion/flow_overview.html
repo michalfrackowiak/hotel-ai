@@ -67,7 +67,7 @@
     <p>Delivery examples <code>email</code>, <code>sms</code>. Email example <code>guest@example.com</code>. Phone example <code>+1 202 555 0142</code>.</p>
     <p>Contact review accepts the same yes and no examples as the quote decision. Approval uses a fictional booking reference and previews the initial receipt without creating a booking or sending a message.</p>
     <p>For an email or SMS receipt, choose a fictional delivery status. Leave the reply blank. The preview uses a fictional reference and does not contact a delivery provider.</p>
-    <p>For an arrival timeout, choose chat inactivity or the final voice listening window. The final voice window uses this version's timeout setting, including when the combined reception uses a chat version with the microphone active. Leave the reply blank for timeouts.</p>
+    <p>For an arrival or Polish welcome timeout, choose chat inactivity or the final voice listening window. The final voice window uses this version's timeout setting, including when the combined reception uses a chat version with the microphone active. Leave the reply blank for timeouts.</p>
     <p>For a reply step with a retry limit, the prior count represents fictional consecutive retries at that same step. If the next reply reaches the limit, the simulator previews the reception handover without opening a staff conversation.</p>
     <p>The reply preview uses built-in parsing and the current date settings. For welcome, arrival, departure, or guest count, you can enter a fictional model result or parser correction. The preview applies the scenario's model fallback setting without contacting a model provider or reading saved corrections.</p>
     {% if simulation_form.language == "pl" %}
@@ -141,7 +141,7 @@
       <h4>Chat reply</h4>
       <p>{{ simulation.chat }}</p>
       {% if simulation.continue_in_chat %}
-        <p>The browser ends the voice session and keeps the arrival step open in chat. This action sends no server timeout request.</p>
+        <p>The browser ends the voice session and keeps the current step open in chat. This action sends no server timeout request.</p>
       {% else %}
         <h4>Spoken reply</h4>
         <p>Segment durations come from the script. Playback and microphone timing are outside this preview.</p>

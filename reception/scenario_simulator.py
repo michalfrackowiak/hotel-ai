@@ -50,7 +50,9 @@ TIMEOUT_STEPS = {
     "arrival_chat_timeout": "check_in",
     "arrival_voice_timeout": "check_in",
     "welcome_timeout": "welcome",
+    "welcome_voice_timeout": "welcome",
 }
+VOICE_TIMEOUT_PREVIEWS = {"arrival_voice_timeout", "welcome_voice_timeout"}
 
 
 class BookingReplySimulationForm(forms.Form):
@@ -63,7 +65,8 @@ class BookingReplySimulationForm(forms.Form):
         ("receipt_email", "Delivery receipt (email)"), ("receipt_sms", "Delivery receipt (SMS)"),
         ("arrival_chat_timeout", "Arrival timeout (chat)"),
         ("arrival_voice_timeout", "Arrival timeout (final voice listening window)"),
-        ("welcome_timeout", "Welcome timeout"),
+        ("welcome_timeout", "Welcome timeout (chat)"),
+        ("welcome_voice_timeout", "Welcome timeout (final voice listening window)"),
     ))
     reply = forms.CharField(label="Example guest reply", max_length=500, required=False)
     fictional_correction = forms.CharField(
@@ -90,7 +93,9 @@ class BookingReplySimulationForm(forms.Form):
         self.retry_limits = {}
         if language != "pl":
             field = self.fields["stage"]
-            field.choices = [(key, label) for key, label in field.choices if key not in ("welcome", "welcome_timeout")]
+            field.choices = [
+                (key, label) for key, label in field.choices if TIMEOUT_STEPS.get(key, key) != "welcome"
+            ]
 
     def clean(self):
         values = super().clean()
@@ -177,13 +182,11 @@ def simulate_booking_reply(
 
     if stage in TIMEOUT_STEPS:
         source = TIMEOUT_STEPS[stage]
-        voice = stage == "arrival_voice_timeout" or (source == "welcome" and channel == "voice")
+        voice = stage in VOICE_TIMEOUT_PREVIEWS
         state = new_conversation(language, source)
         if source == "check_in" and language == "en":
             set_prompt(state, "web_check_in", reply=default_chat_text(language, "web_check_in"))
-        continue_in_chat = stage == "arrival_voice_timeout" and (
-            voice_timeout_mode(configurations[source]) == CONTINUE_IN_CHAT
-        )
+        continue_in_chat = voice and voice_timeout_mode(configurations[source]) == CONTINUE_IN_CHAT
         if continue_in_chat:
             preview = _render_result(language, channel, configurations, state, decisions)
             preview["voice"] = []

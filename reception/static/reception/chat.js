@@ -370,9 +370,9 @@
 
     function trackSilence() {
         clearTimeout(idleTimer);
-        if (voiceActive || document.hidden || !connected || pending) return;
+        if (voiceActive || document.hidden || !connected || pending || revision === voiceTimeoutChatRevision) return;
         if (stage === "welcome") idleTimer = setTimeout(replyTimeout, 2000);
-        if (stage === "check_in" && revision !== voiceTimeoutChatRevision && !messageInput.value.trim()) {
+        if (stage === "check_in" && !messageInput.value.trim()) {
             idleTimer = setTimeout(replyTimeout, 10000);
         }
     }
