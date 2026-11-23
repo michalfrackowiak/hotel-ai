@@ -61,12 +61,13 @@
   </table>
 
   {% if simulation_form %}
-    <h3>Simulate a booking reply or receipt</h3>
+    <h3>Simulate a booking reply, timeout or receipt</h3>
     <p>Preview one typed or transcribed booking reply. Use fictional details. Departure assumes arrival tomorrow. Later steps assume a two-night stay from tomorrow and fictional rooms for up to two or six guests. Room selection offers both rooms to two guests. Quote decisions and later steps use the first room.</p>
     <p>Arrival examples {% for example in arrival_examples %}<code>{{ example }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}. Departure example <code>{{ departure_example }}</code>. Guest-count example <code>{{ guest_count_example }}</code>. Room example <code>{{ room_example }}</code>. Quote examples {% for example in quote_examples %}<code>{{ example }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}.</p>
     <p>Delivery examples <code>email</code>, <code>sms</code>. Email example <code>guest@example.com</code>. Phone example <code>+1 202 555 0142</code>.</p>
     <p>Contact review accepts the same yes and no examples as the quote decision. Approval uses a fictional booking reference and previews the initial receipt without creating a booking or sending a message.</p>
     <p>For an email or SMS receipt, choose a fictional delivery status. Leave the reply blank. The preview uses a fictional reference and does not contact a delivery provider.</p>
+    <p>For an arrival timeout, choose chat inactivity or the final voice listening window. The final voice window uses this version's timeout setting, including when the combined reception uses a chat version with the microphone active. Leave the reply blank for timeouts.</p>
     <p>The reply preview uses built-in parsing and the current date settings. It skips staff corrections, model fallback, and language switching.</p>
     <form method="post">
       {% csrf_token %}
@@ -84,6 +85,8 @@
         {% if simulation.receipt_scenario %}
           <dt>Fictional receipt status</dt><dd>{{ simulation.receipt_scenario }}</dd>
           <dt>Fictional reference</dt><dd>{{ simulation.fictional_reference }}</dd>
+        {% elif simulation.timeout %}
+          {% if simulation.continue_in_chat %}<dt>Voice timeout action</dt><dd>Continue in chat</dd>{% endif %}
         {% elif simulation.input_stage == "guests" %}
           <dt>Extracted guest count</dt><dd>{{ simulation.guests|default_if_none:"—" }}</dd>
         {% elif simulation.input_stage == "room" %}
@@ -106,28 +109,34 @@
         {% endif %}
         <dt>Resulting step</dt><dd><code>{{ simulation.stage }}</code></dd>
       </dl>
-      <h4>Transition decisions</h4>
-      <ul>
-        {% for source, event, target in simulation.decisions %}
-          <li><code>{{ source }}</code> &middot; <code>{{ event }}</code> &rarr; <code>{{ target|default:"Unavailable" }}</code></li>
-        {% endfor %}
-      </ul>
+      {% if simulation.decisions %}
+        <h4>Transition decisions</h4>
+        <ul>
+          {% for source, event, target in simulation.decisions %}
+            <li><code>{{ source }}</code> &middot; <code>{{ event }}</code> &rarr; <code>{{ target|default:"Unavailable" }}</code></li>
+          {% endfor %}
+        </ul>
+      {% endif %}
       <h4>Chat reply</h4>
       <p>{{ simulation.chat }}</p>
-      <h4>Spoken reply</h4>
-      <p>Segment durations come from the script. Playback and microphone timing are outside this preview.</p>
-      {% if simulation.voice %}
-        <ol>
-          {% for part in simulation.voice %}
-            <li lang="{{ part.language }}">
-              {{ part.text }}
-              {% if part.listen %}<span>(Listen for {{ part.seconds }} s)</span>
-              {% elif part.seconds %}<span>(Pause for {{ part.seconds }} s)</span>{% endif %}
-            </li>
-          {% endfor %}
-        </ol>
+      {% if simulation.continue_in_chat %}
+        <p>The browser ends the voice session and keeps the arrival step open in chat. This action sends no server timeout request.</p>
       {% else %}
-        <p>{{ simulation.voice_fallback }}</p>
+        <h4>Spoken reply</h4>
+        <p>Segment durations come from the script. Playback and microphone timing are outside this preview.</p>
+        {% if simulation.voice %}
+          <ol>
+            {% for part in simulation.voice %}
+              <li lang="{{ part.language }}">
+                {{ part.text }}
+                {% if part.listen %}<span>(Listen for {{ part.seconds }} s)</span>
+                {% elif part.seconds %}<span>(Pause for {{ part.seconds }} s)</span>{% endif %}
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <p>{{ simulation.voice_fallback }}</p>
+        {% endif %}
       {% endif %}
     {% endif %}
   {% endif %}

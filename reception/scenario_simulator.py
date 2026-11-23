@@ -13,10 +13,12 @@ from bookings.services import RoomOffer
 from .conversation import advance, new_conversation, selects_english
 from .parsing import StayDates, parse_stay_input
 from .receipt import DELIVERY_PENDING, apply_receipt_outcome, start_receipt
-from .scenario import render_chat, split_voice_parts, voice_segments
+from .scenario import default_chat_text, render_chat, set_prompt, split_voice_parts, voice_segments
 from .scenario_dispatch import advance_counted_turn
 from .scenario_pinned_prompts import browser_prompt_bindings, browser_prompt_overrides
-from .scenario_step_settings import ARRIVAL_INPUT_FIELD, REQUIRE_ARRIVAL_RANGE, retry_limit_value
+from .scenario_step_settings import (
+    ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, REQUIRE_ARRIVAL_RANGE, retry_limit_value, voice_timeout_mode,
+)
 from .scenario_validation import approved_destination
 from .speech import MAX_TEXT_CHARACTERS
 
@@ -39,6 +41,11 @@ RECEIPT_OUTCOMES = {
     "unverified": (BookingConfirmation.Status.SENDING, True, "Sending at deadline, unverified"),
     "failed": (BookingConfirmation.Status.FAILED, False, "Submission failed"),
 }
+TIMEOUT_STEPS = {
+    "arrival_chat_timeout": "check_in",
+    "arrival_voice_timeout": "check_in",
+    "welcome_timeout": "welcome",
+}
 
 
 class BookingReplySimulationForm(forms.Form):
@@ -48,6 +55,9 @@ class BookingReplySimulationForm(forms.Form):
         ("delivery", "Delivery choice"), ("email", "Email entry"), ("phone", "Phone entry"),
         ("confirm_email", "Contact review (email)"), ("confirm_sms", "Contact review (SMS)"),
         ("receipt_email", "Delivery receipt (email)"), ("receipt_sms", "Delivery receipt (SMS)"),
+        ("arrival_chat_timeout", "Arrival timeout (chat)"),
+        ("arrival_voice_timeout", "Arrival timeout (final voice listening window)"),
+        ("welcome_timeout", "Welcome timeout"),
     ))
     reply = forms.CharField(label="Example guest reply", max_length=500, required=False)
     receipt_outcome = forms.ChoiceField(label="Fictional receipt status", required=False, choices=(
@@ -55,12 +65,18 @@ class BookingReplySimulationForm(forms.Form):
         *((key, label) for key, (_, _, label) in RECEIPT_OUTCOMES.items()),
     ))
 
+    def __init__(self, *args, language, **kwargs):
+        super().__init__(*args, **kwargs)
+        if language != "pl":
+            field = self.fields["stage"]
+            field.choices = [(key, label) for key, label in field.choices if key != "welcome_timeout"]
+
     def clean(self):
         values = super().clean()
         stage = values.get("stage")
         if stage in RECEIPT_METHODS and values.get("receipt_outcome") == "":
             self.add_error("receipt_outcome", "Choose a fictional receipt status.")
-        elif stage and stage not in RECEIPT_METHODS and values.get("reply") == "":
+        elif stage and stage not in RECEIPT_METHODS and stage not in TIMEOUT_STEPS and values.get("reply") == "":
             self.add_error("reply", "Enter an example guest reply.")
         return values
 
@@ -96,6 +112,24 @@ def simulate_booking_reply(language, channel, steps, transitions, *, stage, repl
         allowed = target is not None and target == approved_destination(source, event)
         decisions.append((source, event, target if allowed else None))
         return target if allowed else None
+
+    if stage in TIMEOUT_STEPS:
+        source = TIMEOUT_STEPS[stage]
+        voice = stage == "arrival_voice_timeout" or (source == "welcome" and channel == "voice")
+        state = new_conversation(language, source)
+        if source == "check_in" and language == "en":
+            set_prompt(state, "web_check_in", reply=default_chat_text(language, "web_check_in"))
+        continue_in_chat = stage == "arrival_voice_timeout" and (
+            voice_timeout_mode(configurations[source]) == CONTINUE_IN_CHAT
+        )
+        if continue_in_chat:
+            preview = _render_result(language, channel, configurations, state, decisions)
+            preview["voice"] = []
+            preview["voice_fallback"] = ""
+        else:
+            result = advance(state, "", None, voice=voice, timeout=True, resolve_transition=resolve)
+            preview = _render_result(language, channel, configurations, result, decisions)
+        return {"timeout": True, "continue_in_chat": continue_in_chat, **preview}
 
     if stage in RECEIPT_METHODS:
         method = RECEIPT_METHODS[stage]

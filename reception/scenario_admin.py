@@ -149,7 +149,9 @@ class ScenarioVersionAdmin(ScenarioDraftAdmin):
             **self.admin_site.each_context(request),
             **scenario_flow_overview(
                 version,
-                simulation_form=BookingReplySimulationForm(request.POST if request.method == "POST" else None),
+                simulation_form=BookingReplySimulationForm(
+                    request.POST if request.method == "POST" else None, language=version.scenario.language,
+                ),
             ),
             "title": "Scenario flow overview",
             "opts": self.model._meta,
