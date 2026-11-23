@@ -21,6 +21,15 @@
     const messages = document.getElementById("chat-messages");
     const status = document.getElementById("chat-status");
     const footer = form.closest(".chat-footer");
+    const staySummary = document.getElementById("booking-summary");
+    const editButtons = Array.from(staySummary?.querySelectorAll("[data-edit-booking]") || []);
+    const staySummaryValues = document.getElementById("booking-summary-values");
+    const staySummaryTitle = document.getElementById("booking-summary-title");
+    const calendar = document.getElementById("booking-date-picker");
+    const dateForm = document.getElementById("booking-date-form");
+    const arrival = document.getElementById("booking-check-in");
+    const departure = document.getElementById("booking-check-out");
+    const arrivalLabel = document.getElementById("booking-check-in-label");
     let language = app.dataset.language;
     const dedicatedVoice = app.dataset.mode === "voice";
     const legacyVoice = app.dataset.mode === "combined";
@@ -53,6 +62,13 @@
             typeInstead: "Type instead",
             reviewAnswer: "Review the captured answer. You can edit it before sending.",
             retryAnswer: "Say it again",
+            summary: "Your stay",
+            fields: { check_in: "Check-in", check_out: "Check-out", guests: "Guests", room: "Room", total_price: "Total" },
+            edits: { dates: "Change dates", guests: "Change guests", room: "Change room" },
+            calendar: "Choose dates",
+            optionalDeparture: "Check-out (optional)",
+            sendDates: "Send dates",
+            invalidDates: "Choose a future or current check-in and a later check-out where required.",
         },
         pl: {
             guest: "Ty",
@@ -81,6 +97,13 @@
             typeInstead: "Wpisz zamiast dyktować",
             reviewAnswer: "Sprawdź rozpoznaną odpowiedź. Możesz ją poprawić przed wysłaniem.",
             retryAnswer: "Powiedz ponownie",
+            summary: "Twój pobyt",
+            fields: { check_in: "Przyjazd", check_out: "Wyjazd", guests: "Goście", room: "Pokój", total_price: "Łącznie" },
+            edits: { dates: "Zmień daty", guests: "Zmień liczbę gości", room: "Zmień pokój" },
+            calendar: "Wybierz daty",
+            optionalDeparture: "Wyjazd (opcjonalnie)",
+            sendDates: "Wyślij daty",
+            invalidDates: "Wybierz datę przyjazdu od dzisiaj oraz późniejszą datę wyjazdu, jeśli jest wymagana.",
         },
     };
 
@@ -103,6 +126,68 @@
     let transcriptShown = false;
     let voiceDraft = null;
     let canChangeDelivery = false;
+    let stay = null;
+    let picker = null;
+
+    function displayDate(value) {
+        return new Intl.DateTimeFormat(language === "pl" ? "pl-PL" : "en-GB", {
+            dateStyle: "medium", timeZone: "UTC",
+        }).format(new Date(value + "T00:00:00Z"));
+    }
+
+    function displayStayValue(field, value) {
+        if (field === "check_in" || field === "check_out") return displayDate(value);
+        if (field === "total_price") {
+            return new Intl.NumberFormat(language, { style: "currency", currency: "PLN" }).format(value);
+        }
+        return value;
+    }
+
+    function updateDepartureMinimum() {
+        departure.min = picker?.departure_min || "";
+        if (!picker?.arrival_min || !arrival.value || !arrival.validity.valid) return;
+        const next = new Date(arrival.value + "T00:00:00Z");
+        next.setUTCDate(next.getUTCDate() + 1);
+        departure.min = next.toISOString().slice(0, 10);
+    }
+
+    function updateBookingControls(copy, canSend) {
+        if (!staySummary) return;
+        staySummary.hidden = !stay;
+        staySummaryTitle.textContent = copy.summary;
+        staySummaryValues.replaceChildren();
+        for (const [field, title] of Object.entries(copy.fields)) {
+            if (stay?.[field] === undefined) continue;
+            const term = document.createElement("dt");
+            term.textContent = title;
+            const value = document.createElement("dd");
+            value.textContent = displayStayValue(field, stay[field]);
+            const item = document.createElement("div");
+            item.append(term, value);
+            staySummaryValues.append(item);
+        }
+        editButtons.forEach((button) => {
+            const action = button.dataset.editBooking;
+            button.hidden = !stay?.edits.includes(action);
+            button.textContent = copy.edits[action];
+            button.disabled = !canSend;
+        });
+
+        calendar.hidden = !picker;
+        calendar.inert = !canSend;
+        if (!picker) calendar.open = false;
+        document.getElementById("booking-date-title").textContent = copy.calendar;
+        arrivalLabel.hidden = !picker?.arrival_min;
+        arrivalLabel.firstElementChild.textContent = copy.fields.check_in;
+        arrival.disabled = !picker?.arrival_min;
+        arrival.min = picker?.arrival_min || "";
+        departure.required = picker?.departure_required === true;
+        document.getElementById("booking-check-out-label").textContent =
+            departure.required ? copy.fields.check_out : copy.optionalDeparture;
+        document.getElementById("booking-date-send").textContent = copy.sendDates;
+        dateForm.querySelector("fieldset").disabled = !canSend;
+        updateDepartureMinimum();
+    }
 
     function updateControls() {
         const copy = labels[language];
@@ -160,6 +245,7 @@
             if (reviewing) messageInput.setAttribute("aria-describedby", voiceReviewHelp.id);
             else messageInput.removeAttribute("aria-describedby");
         }
+        updateBookingControls(copy, canSend);
         suggestions.replaceChildren(...suggestedAnswers.map((answer) => {
             const button = document.createElement("button");
             button.type = "button";
@@ -306,14 +392,17 @@
         if (pending) return;
         clearTimeout(idleTimer);
         const previousFocus = document.activeElement;
-        const focusComposer = form.contains(previousFocus) || quickReplies.some((group) => group.contains(previousFocus));
+        const focusBooking = calendar?.contains(previousFocus) || staySummary?.contains(previousFocus);
+        const focusComposer = focusBooking || form.contains(previousFocus) ||
+            quickReplies.some((group) => group.contains(previousFocus));
         let reply = null;
         let failure = null;
+        let focusDates = false;
 
         if (payload.reset) discardVoiceDraft();
         pending = true;
         retryButton.hidden = true;
-        status.textContent = payload.message ? labels[language].waiting : labels[language].connecting;
+        status.textContent = payload.message || payload.dates || payload.edit ? labels[language].waiting : labels[language].connecting;
         updateControls();
         form.dispatchEvent(new CustomEvent("reception:request", { detail: { reset: payload.reset === true } }));
 
@@ -323,7 +412,14 @@
                 failure = labels[language].reload;
                 return;
             }
-            if (voiceDraft && (payload.message || result.stale || result.revision !== voiceDraft.revision)) {
+            if (result.date_error) {
+                picker = result.date_picker || null;
+                status.textContent = labels[language].invalidDates;
+                focusDates = Boolean(picker);
+                return;
+            }
+            if (voiceDraft && (payload.message || payload.dates || payload.edit || result.stale ||
+                result.revision !== voiceDraft.revision)) {
                 discardVoiceDraft();
             }
             const preserveLog = payload.start && payload.resume && connected && result.revision === revision;
@@ -339,6 +435,9 @@
                 if (result.stage === "handover" && result.handover_messages.length) {
                     cursor = result.handover_messages[0].id;
                 }
+            }
+            if (payload.dates && !result.stale) {
+                appendMessage(Object.values(payload.dates).map(displayDate).join(" – "), "guest");
             }
             if (result.language !== language) {
                 language = result.language;
@@ -362,7 +461,11 @@
             lastReply = result.reply;
             if (!voiceDraft && !preserveLog && !result.stale && !payload.timeout && !payload.voice_start) messageInput.value = "";
             stage = result.stage;
+            if (calendar && result.revision !== revision) dateForm.reset();
             revision = result.revision;
+            stay = result.booking_summary || null;
+            picker = result.date_picker || null;
+            focusDates = !result.stale && Boolean(picker && (payload.edit === "dates" || (payload.dates && calendar?.open)));
             voiceWelcome = legacyVoice && Boolean(result.voice_welcome);
             suggestedAnswers = result.suggestions || [];
             quickReplyLabels = result.quick_reply_labels || {};
@@ -381,7 +484,10 @@
             }
             pending = false;
             updateControls();
-            if (focusComposer && document.activeElement === document.body) {
+            if (focusDates && calendar) {
+                calendar.open = true;
+                (picker.arrival_min ? arrival : departure).focus();
+            } else if (focusComposer && document.activeElement === document.body) {
                 (messageInput.disabled ? resetButton : messageInput).focus();
             }
             if (reply !== null) {
@@ -406,14 +512,16 @@
     }
 
     function replyTimeout() {
-        if (connected && !pending && ["welcome", "check_in"].includes(stage) && (voiceActive || !document.hidden)) {
+        if (!calendar?.open && connected && !pending && ["welcome", "check_in"].includes(stage) &&
+            (voiceActive || !document.hidden)) {
             requestChat({ timeout: true, revision, ...(voiceActive ? { voice: true } : {}) });
         }
     }
 
     function trackSilence() {
         clearTimeout(idleTimer);
-        if (dedicatedVoice || voiceActive || document.hidden || !connected || pending || revision === voiceTimeoutChatRevision) return;
+        if (calendar?.open || dedicatedVoice || voiceActive || document.hidden || !connected || pending ||
+            revision === voiceTimeoutChatRevision) return;
         if (stage === "welcome") idleTimer = setTimeout(replyTimeout, 2000);
         if (stage === "check_in" && !messageInput.value.trim()) {
             idleTimer = setTimeout(replyTimeout, 10000);
@@ -438,6 +546,7 @@
     form.addEventListener("reception:voice-session", (event) => {
         if (event.detail.continueInChat) voiceTimeoutChatRevision = revision;
         voiceActive = event.detail.active;
+        if (voiceActive && calendar) calendar.open = false;
         if (displayedTurn) {
             if (voiceActive) {
                 displayedTurn.spoken.clear();
@@ -504,6 +613,26 @@
     typeInstead?.addEventListener("click", () => {
         form.dispatchEvent(new CustomEvent("reception:type-instead"));
         messageInput.focus();
+    });
+    editButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            if (!connected || pending || !stay?.edits.includes(button.dataset.editBooking)) return;
+            form.dispatchEvent(new CustomEvent("reception:type-instead"));
+            requestChat({ edit: button.dataset.editBooking, revision, ...(dedicatedVoice ? { voice: true } : {}) });
+        });
+    });
+    calendar?.addEventListener("toggle", () => {
+        if (calendar.open && voiceActive) form.dispatchEvent(new CustomEvent("reception:type-instead"));
+        trackSilence();
+    });
+    arrival?.addEventListener("input", updateDepartureMinimum);
+    dateForm?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        if (!connected || pending || !picker || !calendar.open) return;
+        requestChat({
+            dates: Object.fromEntries([...new FormData(dateForm)].filter(([, value]) => value)),
+            revision, ...(dedicatedVoice ? { voice: true } : {}),
+        });
     });
     resetButton.addEventListener("click", () => requestChat({ reset: true, ...(dedicatedVoice ? { voice: true } : {}) }));
     retryButton.addEventListener("click", () => requestChat(openConversation({ resume: connected || revision !== null || app.hasAttribute("data-resume") })));

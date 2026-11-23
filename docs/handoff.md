@@ -1,5 +1,15 @@
 # Session handoff
 
+## Booking summary and date picker
+
+Dedicated chat and voice show the current dates, guest count, room and quoted total as the booking progresses. Guests can return to the relevant prompt to change a detail. Changing the room checks current availability. All edits clear the previous quote approval and contact confirmation and flow through the usual quote and booking steps. The summary excludes contact details and edit actions are limited to unconfirmed drafts.
+
+The native date picker submits explicit dates using the hotel calendar and the pinned scenario’s arrival rules. It pauses the idle booking timeout while open, and on voice it stops playback and microphone capture. Typed dates and spoken answers remain available.
+
+Thirteen focused Django tests passed, as did JavaScript syntax, Django system and migration checks. Independent Chromium completed one fictional booking per language after re-quoting an edit. It also verified mobile keyboard and accessibility behavior, idle timeout suspension, stale approvals, date retention after same-revision reconnect, date clearing after revision changes, and microphone release on the voice page. A Windows reception run passed 137 of 138 tests with the known intermittent speech-drain timing failure in unchanged code.
+
+Next reception increment: add an explicit receptionist handover action to the dedicated voice page.
+
 ## Voice answer review
 
 The dedicated voice page puts recognized speech in the existing composer for review before it sends a booking reply. Guests can correct the text, send it unchanged or choose **Say it again** to listen for a fresh answer. Corrections are classified as typed text for parser training. The combined reception keeps its immediate transcription submission, and the chat-only page keeps its typed flow.
@@ -8,7 +18,9 @@ The mobile layout keeps the start and stop control prominent and uses a touch-si
 
 The local reception suite passed 132 tests, and JavaScript syntax, Django system and migration checks passed.
 
-Next reception increment: show an editable booking summary and a date picker where the conversation accepts dates.
+Production deployed revision `ecfb48d` on 23 November 2026. Six isolated ARM64 reception tests passed. The booking backup passed checksum, integrity, foreign keys, fictional booking and idempotent replay checks, and the previous image read the disposable restore. Live English and Polish Piper and Vosk checks passed with both speech workers retaining their original container IDs and start times. External HTTPS verified review controls on the voice page in both languages, the combined and chat-only modes, versioned assets, health and admin login. The Nginx snippet retained its approved checksum. Independent Chromium review completed a fictional booking in each language after editing a transcribed date and verified recovery after a failed send. [PR #88](https://github.com/michalfrackowiak/hotel-ai/pull/88)
+
+The [booking summary and date picker](#booking-summary-and-date-picker) followed this release.
 
 ## Voice speaking animation
 

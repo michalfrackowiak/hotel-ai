@@ -6,11 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <title>{{ page_title }} · Neptun Resort</title>
-    <link rel="stylesheet" href="{% static 'reception/reception.css' %}?v=voice-answer-review">
+    <link rel="stylesheet" href="{% static 'reception/reception.css' %}?v=booking-summary">
     {% if mode != "chat" %}
     <script src="{% static 'reception/voice.js' %}?v=voice-answer-review" defer></script>
     {% endif %}
-    <script src="{% static 'reception/chat.js' %}?v=voice-answer-review" defer></script>
+    <script src="{% static 'reception/chat.js' %}?v=booking-summary" defer></script>
 </head>
 <body>
     {% include "reception/_header.html" with active_page="reception" %}
@@ -53,6 +53,33 @@
                     <p id="chat-status" role="status"></p>
                     <button id="chat-retry" class="quiet-button" type="button" hidden>{% if language == "pl" %}Połącz ponownie{% else %}Reconnect{% endif %}</button>
                 </div>
+                {% if mode != "combined" %}
+                <section id="booking-summary" class="booking-summary" aria-labelledby="booking-summary-title" hidden>
+                    <h3 id="booking-summary-title"></h3>
+                    <dl id="booking-summary-values"></dl>
+                    <div class="confirmation-actions">
+                        <button id="booking-edit-dates" class="quiet-button" type="button" data-edit-booking="dates" hidden></button>
+                        <button id="booking-edit-guests" class="quiet-button" type="button" data-edit-booking="guests" hidden></button>
+                        <button id="booking-edit-room" class="quiet-button" type="button" data-edit-booking="room" hidden></button>
+                    </div>
+                </section>
+                <details id="booking-date-picker" class="booking-date-picker" hidden>
+                    <summary id="booking-date-title"></summary>
+                    <form id="booking-date-form">
+                        <fieldset>
+                            <label id="booking-check-in-label" for="booking-check-in">
+                                <span></span>
+                                <input id="booking-check-in" type="date" name="check_in" max="9999-12-30" required>
+                            </label>
+                            <label for="booking-check-out">
+                                <span id="booking-check-out-label"></span>
+                                <input id="booking-check-out" type="date" name="check_out" max="9999-12-31">
+                            </label>
+                            <button id="booking-date-send" class="quiet-button" type="submit"></button>
+                        </fieldset>
+                    </form>
+                </details>
+                {% endif %}
                 <div id="chat-language" class="confirmation-actions" hidden>
                     <button class="quiet-button" type="button" data-answer="2" lang="en">English</button>
                 </div>
