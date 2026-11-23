@@ -18,6 +18,12 @@
             {% else %}
                 {% with page_url=availability_url %}{% include "reception/_languages.html" %}{% endwith %}
             {% endif %}
+        {% elif active_page == "reception" and mode == "chat" %}
+            {% url 'reception-chat' as chat_url %}
+            {% include "reception/_languages.html" with page_url=chat_url %}
+        {% elif active_page == "reception" and mode == "voice" %}
+            {% url 'reception-voice' as voice_url %}
+            {% include "reception/_languages.html" with page_url=voice_url %}
         {% else %}
             {% with page_url=reception_url %}{% include "reception/_languages.html" %}{% endwith %}
         {% endif %}

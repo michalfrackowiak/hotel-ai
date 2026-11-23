@@ -80,6 +80,34 @@ body {
     border-top: 1px solid var(--field-border);
 }
 
+.reception-modes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 18px;
+}
+
+.reception-modes a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 14px;
+    border: 1px solid var(--field-border);
+    border-radius: 8px;
+    color: var(--navy);
+    text-decoration: none;
+}
+
+.reception-modes a:hover {
+    text-decoration: underline;
+}
+
+.reception-modes a[aria-current="page"] {
+    background: var(--navy);
+    border-color: var(--navy);
+    color: white;
+}
+
 #voice-status,
 #voice-privacy {
     flex-basis: 100%;

@@ -1,0 +1,4 @@
+<nav class="reception-modes" aria-label="{% if language == 'pl' %}Tryb rozmowy{% else %}Conversation mode{% endif %}">
+    <a href="{% url 'reception-chat' %}?lang={{ language }}&amp;continue=1"{% if mode == "chat" %} aria-current="page"{% endif %}>{% if language == "pl" %}Czat{% else %}Chat{% endif %}</a>
+    <a href="{% url 'reception-voice' %}?lang={{ language }}&amp;continue=1"{% if mode == "voice" %} aria-current="page"{% endif %}>{% if language == "pl" %}Rozmowa głosowa{% else %}Voice{% endif %}</a>
+</nav>
