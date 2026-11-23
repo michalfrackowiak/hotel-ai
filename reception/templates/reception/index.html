@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
-    <title>{% if language == "pl" %}Rezerwacja pokoju{% else %}Book a room{% endif %} · Hotel-ai</title>
+    <title>{% if language == "pl" %}Rezerwacja pokoju{% else %}Book a room{% endif %} · Neptun Resort</title>
     <link rel="stylesheet" href="{% static 'reception/reception.css' %}">
     <script src="{% static 'reception/chat.js' %}?v=welcome-voice-timeout" defer></script>
     <script src="{% static 'reception/voice.js' %}?v=welcome-voice-timeout" defer></script>
@@ -14,6 +14,7 @@
     {% include "reception/_header.html" with active_page="reception" %}
     <main id="reception-app" data-language="{{ language }}" class="booking-layout">
         <section class="intro" aria-labelledby="booking-title">
+            <div class="property-location" lang="pl">Jastrzębia Góra</div>
             <h1 id="booking-title">{% if language == "pl" %}Zarezerwuj pokój{% else %}Book a room{% endif %}</h1>
             <p>{% if language == "pl" %}Podaj terminy i liczbę gości. Recepcja sprawdzi dostępność i poda cenę przed potwierdzeniem rezerwacji.{% else %}Share your dates and guest count. Reception will check availability and quote the price before you confirm.{% endif %}</p>
             <div class="voice-controls">
@@ -68,7 +69,7 @@
                     <button id="chat-send" class="send-button" type="submit" disabled><span>{% if language == "pl" %}Wyślij{% else %}Send{% endif %}</span><span aria-hidden="true"> →</span></button>
                 </form>
                 {% if parser_training_enabled %}
-                <p>{% if language == "pl" %}Recepcja może sprawdzać odpowiedzi rezerwacyjne, aby poprawiać rozpoznawanie danych. Odpowiedzi na pytania o dane kontaktowe są przechowywane do 30 dni.{% else %}Reception staff may review booking replies to improve parsing. Replies to contact questions are kept for up to 30 days.{% endif %}</p>
+                <p class="chat-notice">{% if language == "pl" %}Recepcja może sprawdzać odpowiedzi rezerwacyjne, aby poprawiać rozpoznawanie danych. Odpowiedzi na pytania o dane kontaktowe są przechowywane do 30 dni.{% else %}Reception staff may review booking replies to improve parsing. Replies to contact questions are kept for up to 30 days.{% endif %}</p>
                 {% endif %}
                 <noscript><p>{% if language == "pl" %}Włącz JavaScript, aby rozpocząć rozmowę.{% else %}Enable JavaScript to start the conversation.{% endif %}</p></noscript>
             </div>

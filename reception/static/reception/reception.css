@@ -30,17 +30,21 @@
 }
 
 :root {
-    --canvas: #f2f1e9;
+    --canvas: #f5f2eb;
     --paper: #fffefa;
-    --ink: #192b21;
-    --muted: #4d5c50;
-    --accent: #254d38;
-    --accent-hover: #193a2a;
-    --assistant: #f1f2ec;
-    --guest: #e0ebdf;
-    --line: #dce2d8;
-    --field-border: #a8b2a6;
-    --content-width: 1140px;
+    --ink: #142c46;
+    --muted: #485c71;
+    --navy: #10283f;
+    --accent: #24537a;
+    --accent-hover: #173d60;
+    --assistant: #eef3f7;
+    --guest: #dceaf6;
+    --line: #d4dfe8;
+    --field-border: #7c8ea1;
+    --sand: #e4cfa8;
+    --on-navy: #f8f4eb;
+    --panel-shadow: 0 20px 48px rgb(16 40 63 / 10%);
+    --content-width: 1200px;
 }
 
 *, *::before, *::after {
@@ -54,7 +58,7 @@
 body {
     margin: 0;
     min-height: 100vh;
-    background: radial-gradient(ellipse at top left, #e8ece0 0%, var(--canvas) 60%);
+    background: radial-gradient(ellipse at top right, #e8eff5, transparent 65%), var(--canvas);
     color: var(--ink);
     font-family: "DM Sans", system-ui, sans-serif;
     font-size: 1rem;
@@ -67,11 +71,19 @@ body {
 }
 
 .voice-controls {
-    margin-top: 24px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 26px;
+    padding-top: 18px;
+    border-top: 1px solid var(--field-border);
 }
 
-#voice-status {
-    margin: 8px 0 0;
+#voice-status,
+#voice-privacy {
+    flex-basis: 100%;
+    margin: 0;
     color: var(--muted);
     font-size: .875rem;
 }
@@ -95,7 +107,12 @@ button:disabled, input:disabled {
 }
 
 .site-header {
-    border-bottom: 1px solid #d6ddd0;
+    background: var(--navy);
+    color: var(--on-navy);
+}
+
+.site-header :focus-visible {
+    outline-color: var(--sand);
 }
 
 .site-bar,
@@ -106,10 +123,10 @@ button:disabled, input:disabled {
 
 .site-bar {
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr);
     align-items: center;
     gap: 10px 16px;
-    min-height: 78px;
+    min-height: 76px;
 }
 
 .site-tabs {
@@ -123,7 +140,7 @@ button:disabled, input:disabled {
     align-items: center;
     padding: 0 14px;
     border-block: 3px solid transparent;
-    color: var(--muted);
+    color: #d2deea;
     font-size: .875rem;
     font-weight: 650;
     text-decoration: none;
@@ -131,20 +148,19 @@ button:disabled, input:disabled {
 
 .site-tabs a:hover,
 .site-tabs a[aria-current="page"] {
-    color: var(--accent);
-    background: #e7ebdf;
+    color: var(--on-navy);
+    background: #1c3853;
 }
 
 .site-tabs a[aria-current="page"] {
-    border-bottom-color: var(--accent);
+    border-bottom-color: var(--sand);
 }
 
 .wordmark {
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 1.15rem;
-    font-weight: 700;
+    font: 400 clamp(1.4rem, 2.5vw, 1.85rem)/1 "Instrument Serif", Georgia, serif;
 }
 
 .brand-mark {
@@ -152,16 +168,17 @@ button:disabled, input:disabled {
     width: 29px;
     height: 29px;
     place-items: end center;
-    border-radius: 7px;
-    background: var(--accent);
+    flex: none;
+    border: 1px solid var(--sand);
+    border-radius: 50%;
 }
 
 .brand-mark::after {
     content: "";
     width: 13px;
-    height: 20px;
-    border: 2px solid #e2eddb;
-    border-bottom: 0;
+    height: 16px;
+    margin-bottom: 5px;
+    border: 1px solid var(--sand);
     border-radius: 12px 12px 0 0;
 }
 
@@ -170,39 +187,58 @@ button:disabled, input:disabled {
     justify-self: end;
     gap: 2px;
     padding: 3px;
-    border: 1px solid #d6ddd0;
+    border: 1px solid #7890a5;
     border-radius: 8px;
 }
 
 .languages a {
-    padding: 6px 12px;
+    display: grid;
+    min-height: 36px;
+    place-items: center;
+    padding: 5px 10px;
     border-radius: 5px;
-    color: var(--muted);
+    color: var(--on-navy);
     font-size: .875rem;
     font-weight: 600;
     text-decoration: none;
 }
 
 .languages a[aria-current] {
-    background: var(--accent);
-    color: white;
+    background: var(--on-navy);
+    color: var(--navy);
 }
 
 .languages a:not([aria-current]):hover {
-    background: #e1e6db;
-    color: var(--ink);
+    background: #284868;
 }
 
 .booking-layout {
     display: grid;
-    grid-template-columns: minmax(230px, .8fr) minmax(0, 1.55fr);
+    grid-template-columns: minmax(0, .8fr) minmax(0, 1.4fr);
     align-items: start;
-    gap: clamp(32px, 5vw, 74px);
+    gap: clamp(32px, 6vw, 92px);
     padding-block: clamp(44px, 8vh, 90px) 44px;
 }
 
 .intro {
-    padding-top: 22px;
+    min-width: 0;
+    padding-top: clamp(20px, 4vw, 54px);
+}
+
+.property-location {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    color: var(--accent);
+    font-size: .875rem;
+    font-weight: 700;
+}
+
+.property-location::before {
+    content: "";
+    flex: 0 0 22px;
+    border-top: 1px solid currentColor;
 }
 
 .intro h1 {
@@ -223,13 +259,11 @@ button:disabled, input:disabled {
 .chat-panel {
     display: flex;
     flex-direction: column;
-    min-height: 490px;
-    height: min(680px, calc(100dvh - 194px));
-    overflow: hidden;
+    min-width: 0;
     border: 1px solid var(--line);
     border-radius: 20px;
     background: var(--paper);
-    box-shadow: 0 18px 45px #192b2112;
+    box-shadow: var(--panel-shadow);
 }
 
 .booking-lookup {
@@ -238,7 +272,7 @@ button:disabled, input:disabled {
     border: 1px solid var(--line);
     border-radius: 20px;
     background: var(--paper);
-    box-shadow: 0 18px 45px #192b2112;
+    box-shadow: var(--panel-shadow);
 }
 
 .lookup-form {
@@ -384,7 +418,7 @@ button:disabled, input:disabled {
 .chat-header,
 .chat-footer {
     flex: none;
-    padding: 16px 22px;
+    padding: 16px 24px;
 }
 
 .chat-header {
@@ -392,7 +426,22 @@ button:disabled, input:disabled {
     justify-content: space-between;
     align-items: center;
     gap: 10px;
-    border-bottom: 1px solid var(--line);
+    border-radius: 19px 19px 0 0;
+    background: var(--navy);
+    color: var(--on-navy);
+}
+
+.chat-header :focus-visible {
+    outline-color: var(--sand);
+}
+
+.chat-header .quiet-button {
+    border-color: #7890a5;
+    color: inherit;
+}
+
+.chat-header .quiet-button:hover:enabled {
+    background: #284868;
 }
 
 .chat-heading {
@@ -403,8 +452,7 @@ button:disabled, input:disabled {
 
 .chat-heading h2 {
     margin: 0;
-    font-size: 1.02rem;
-    font-weight: 700;
+    font: 400 1.55rem/1.05 "Instrument Serif", Georgia, serif;
 }
 
 .reception-mark {
@@ -413,22 +461,22 @@ button:disabled, input:disabled {
     width: 38px;
     height: 38px;
     place-items: center;
-    border-radius: 12px;
-    background: var(--guest);
+    border-radius: 50%;
+    border: 1px solid var(--sand);
 }
 
 .reception-mark::after {
     content: "";
     width: 18px;
     height: 15px;
-    border: 2px solid var(--accent);
+    border: 1px solid var(--sand);
     border-radius: 11px 11px 3px 3px;
 }
 
 .quiet-button,
 .confirm-button,
 .send-button {
-    min-height: 42px;
+    min-height: 44px;
     border: 1px solid transparent;
     border-radius: 8px;
     padding: 7px 12px;
@@ -451,8 +499,9 @@ button:disabled, input:disabled {
     color: var(--accent);
 }
 
-.confirm-button:hover:enabled {
-    background: #cfdccc;
+.confirm-button:hover:enabled,
+.confirm-button.booking-link:hover {
+    background: #c6dcee;
 }
 
 .send-button {
@@ -460,18 +509,16 @@ button:disabled, input:disabled {
     padding-inline: 17px;
     background: var(--accent);
     color: white;
-    white-space: nowrap;
 }
 
-.send-button:hover:enabled {
+.send-button:hover:enabled,
+.send-button.booking-link:hover {
     background: var(--accent-hover);
 }
 
 .chat-log {
-    flex: 1;
-    min-height: 0;
+    height: clamp(290px, 48dvh, 490px);
     overflow-y: auto;
-    overscroll-behavior-y: contain;
 }
 
 .chat-log:focus-visible {
@@ -484,12 +531,12 @@ button:disabled, input:disabled {
     align-items: flex-start;
     gap: 12px;
     margin: 0;
-    padding: 22px;
+    padding: 22px 24px;
     list-style: none;
 }
 
 .message {
-    max-width: min(88%, 60ch);
+    max-width: min(92%, 60ch);
     padding: 11px 15px;
     border-radius: 14px;
     white-space: pre-wrap;
@@ -508,7 +555,8 @@ button:disabled, input:disabled {
 .message--guest {
     align-self: flex-end;
     border-bottom-right-radius: 4px;
-    background: var(--guest);
+    background: var(--accent);
+    color: white;
 }
 
 #chat-contact-value {
@@ -522,6 +570,12 @@ button:disabled, input:disabled {
 
 .chat-footer {
     border-top: 1px solid var(--line);
+}
+
+.chat-notice {
+    margin: 10px 0 0;
+    color: var(--muted);
+    font-size: .875rem;
 }
 
 .chat-feedback,
@@ -545,6 +599,10 @@ button:disabled, input:disabled {
 
 .confirmation-actions {
     flex-wrap: wrap;
+}
+
+.confirmation-actions .quiet-button {
+    border-color: var(--field-border);
 }
 
 .chat-form input[type="text"] {
@@ -580,7 +638,7 @@ button:disabled, input:disabled {
     }
 
     .site-bar {
-        grid-template-columns: 1fr auto;
+        grid-template-columns: minmax(0, 1fr) auto;
         min-height: 0;
         padding-top: 12px;
     }
@@ -588,27 +646,35 @@ button:disabled, input:disabled {
     .site-tabs {
         grid-column: 1 / -1;
         grid-row: 2;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 
     .site-tabs a {
         min-height: 44px;
-        padding-inline: clamp(5px, 2vw, 14px);
+        padding-inline: 4px;
+        font-size: .8125rem;
+        line-height: 1.2;
         text-align: center;
     }
 
     .booking-layout {
         grid-template-columns: minmax(0, 1fr);
-        gap: 20px;
-        padding-block: 28px 24px;
+        gap: 16px;
+        padding-block: 18px 24px;
     }
 
     .intro {
         padding-top: 0;
     }
 
+    .property-location {
+        margin-bottom: 8px;
+    }
+
     .intro h1 {
-        margin-bottom: 10px;
-        font-size: clamp(2.8rem, 8vw, 4rem);
+        margin-bottom: 8px;
+        font-size: clamp(2.5rem, 7vw, 3.5rem);
         text-wrap: unset;
     }
 
@@ -617,10 +683,21 @@ button:disabled, input:disabled {
         font-size: .95rem;
     }
 
+    .voice-controls {
+        margin-top: 12px;
+        padding-top: 8px;
+    }
+
     .chat-panel {
-        min-height: 400px;
-        height: min(650px, calc(100dvh - 265px));
         border-radius: 14px;
+    }
+
+    .chat-header {
+        border-radius: 13px 13px 0 0;
+    }
+
+    .chat-log {
+        height: clamp(210px, 36dvh, 340px);
     }
 
     .chat-header,
