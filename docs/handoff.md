@@ -125,6 +125,8 @@ and a 4,224-byte body cap. Django requires the configured pilot hostname before 
 Google controls or processing guest account requests. Existing IP virtual host configuration
 is untouched. The isolated Nginx Docker check passed host and path isolation, upstream
 forwarding, body size and rate-limit cases, and remained able to forward chat and voice.
+Independent review approved after 32 focused Django tests and a repeat of the Nginx check.
+Django system, migration drift, Compose configuration and whitespace checks passed.
 
 Next action is getting the hotel-approved HTTPS hostname and Google web client, then running
 the real bilingual browser pilot. See [pilot proxy configuration](google-guest-signin-readiness.md#pilot-proxy-configuration).
