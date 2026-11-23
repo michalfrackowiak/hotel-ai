@@ -157,15 +157,31 @@ def _validate_scenario(version, *, require_outcomes, materialized=False):
             raise ValidationError("The pinned base must be a sealed shared version in the same language.")
     if materialized:
         require_outcomes = channel != "shared"
-    if require_outcomes and (language not in ("en", "pl") or channel not in ("chat", "voice")):
-        raise ValidationError("Outcome validation requires an English or Polish web chat or browser voice scope.")
-
     steps = list(
         ScenarioStep.objects.using(version._state.db)
         .filter(version_id=version.pk)
         .order_by("pk")
         .values_list("pk", "key", "configuration")[:len(APPROVED_STEPS) + 1]
     )
+    transitions = stored_scenario_transitions(version, [pk for pk, _, _ in steps])
+    validate_scenario_rows(language, channel, steps, transitions, require_outcomes=require_outcomes)
+
+
+def stored_scenario_transitions(version, step_ids):
+    return ScenarioTransition.objects.using(version._state.db).filter(
+        Q(source_id__in=step_ids) | Q(target_id__in=step_ids),
+    ).order_by("pk").values_list("source_id", "event", "target_id")[:MAX_TRANSITIONS + 1]
+
+
+def scenario_entry_step(language, step_keys, *, require_outcomes):
+    return "welcome" if "welcome" in step_keys or (require_outcomes and language == "pl") else "check_in"
+
+
+def validate_scenario_rows(language, channel, steps, transitions, *, require_outcomes):
+    """Validate the same graph contract for persisted or effective preview rows."""
+    if require_outcomes and (language not in ("en", "pl") or channel not in ("chat", "voice")):
+        raise ValidationError("Outcome validation requires an English or Polish web chat or browser voice scope.")
+
     step_keys = {key for _, key, _ in steps}
     if len(step_keys) != len(steps) or not step_keys <= APPROVED_STEPS:
         raise ValidationError("Each step must have a unique approved booking step key.")
@@ -176,15 +192,12 @@ def _validate_scenario(version, *, require_outcomes, materialized=False):
             raise ValidationError([f"{key}: {message}" for message in error.messages]) from error
     if "welcome" in step_keys and language != "pl":
         raise ValidationError("Only Polish scenarios may use the bilingual welcome step.")
-    entry = "welcome" if "welcome" in step_keys or (require_outcomes and language == "pl") else "check_in"
+    entry = scenario_entry_step(language, step_keys, require_outcomes=require_outcomes)
     missing = {entry, "confirm", "contact_confirm", "completed"} - step_keys
     if missing:
         raise ValidationError("Missing required scenario steps: %(steps)s.", params={"steps": ", ".join(sorted(missing))})
 
     key_by_id = {pk: key for pk, key, _ in steps}
-    transitions = ScenarioTransition.objects.using(version._state.db).filter(
-        Q(source_id__in=key_by_id) | Q(target_id__in=key_by_id),
-    ).order_by("pk").values_list("source_id", "event", "target_id")[:MAX_TRANSITIONS + 1]
     outgoing = defaultdict(list)
     edges = set()
     for source_id, event, target_id in transitions:

@@ -99,8 +99,16 @@ class ScenarioVersionAdmin(ScenarioDraftAdmin):
             return tuple(field for field in self.fields if field not in {"graph_validation", "outcome_coverage"})
         return self.fields
 
+    def _can_view_flow(self, request, obj=None):
+        return self.has_view_or_change_permission(request, obj) and self._can_inspect_graph(request.user)
+
     def get_urls(self):
         return [
+            path(
+                "<int:object_id>/flow/",
+                self.admin_site.admin_view(self.flow_overview),
+                name="reception_scenarioversion_flow",
+            ),
             path(
                 "<int:object_id>/selection/<str:action>/",
                 self.admin_site.admin_view(self.selection_review),
@@ -110,6 +118,10 @@ class ScenarioVersionAdmin(ScenarioDraftAdmin):
         ]
 
     def render_change_form(self, request, context, add=False, change=False, form_url="", obj=None):
+        if obj is not None and self._can_view_flow(request, obj):
+            context["scenario_flow_url"] = reverse(
+                f"{self.admin_site.name}:reception_scenarioversion_flow", args=[obj.pk],
+            )
         if obj is not None and self._can_review_selection(request, obj):
             action = "rollback" if obj.published_at is not None else "publish"
             context["scenario_selection_url"] = reverse(
@@ -118,6 +130,28 @@ class ScenarioVersionAdmin(ScenarioDraftAdmin):
             active = obj.scenario.published_version_id == obj.pk
             context["scenario_selection_label"] = "Selection history" if active else f"Review {action}"
         return super().render_change_form(request, context, add, change, form_url, obj)
+
+    @method_decorator(require_http_methods(["GET"]))
+    def flow_overview(self, request, object_id):
+        from .scenario_overview import scenario_flow_overview
+
+        if not self._can_view_flow(request):
+            raise PermissionDenied
+        version = self.get_object(request, object_id)
+        if version is None:
+            raise Http404
+        if not self._can_view_flow(request, version):
+            raise PermissionDenied
+
+        request.current_app = self.admin_site.name
+        return TemplateResponse(request, "admin/reception/scenarioversion/flow_overview.html", {
+            **self.admin_site.each_context(request),
+            **scenario_flow_overview(version),
+            "title": "Scenario flow overview",
+            "opts": self.model._meta,
+            "version": version,
+            "change_url": reverse(f"{self.admin_site.name}:reception_scenarioversion_change", args=[version.pk]),
+        })
 
     @method_decorator(require_http_methods(["GET", "POST"]))
     def selection_review(self, request, object_id, action):
