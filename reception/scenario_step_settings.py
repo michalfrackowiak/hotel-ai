@@ -9,6 +9,14 @@ from .scenario_editor import validate_prompt
 CHAT_FIELD = "chat_text"
 VOICE_FIELD = "voice_parts"
 ARRIVAL_INPUT_FIELD = "arrival_input"
+PARSER_FALLBACK_FIELD = "parser_fallback"
+PARSER_FALLBACK_STEPS = frozenset({"check_in", "check_out", "guests"})
+BUILT_IN_PARSER_ONLY = "built_in_only"
+PARSER_FALLBACK_CHOICES = (
+    ("allow_configured", "Allow the configured model fallback"),
+    (BUILT_IN_PARSER_ONLY, "Use the built-in parser only"),
+)
+PARSER_FALLBACK_LABELS = dict(PARSER_FALLBACK_CHOICES)
 RETRY_LIMIT_FIELD = "retry_limit"
 SILENCE_WINDOW_FIELD = "voice_silence_seconds"
 SILENCE_WINDOW_STEPS = frozenset({"check_in", "check_out", "guests"})
@@ -86,6 +94,7 @@ def prompt_fields(language, channel, step_key):
     primary = kinds if step_key in STEP_PROMPTS else ()
     outcomes = (outcome_field(prompt, kind) for prompt in OUTCOME_PROMPTS.get(step_key, ()) for kind in kinds)
     parser = (ARRIVAL_INPUT_FIELD,) if step_key == "check_in" and channel in CHANNEL_FIELDS else ()
+    fallback = (PARSER_FALLBACK_FIELD,) if step_key in PARSER_FALLBACK_STEPS and channel in CHANNEL_FIELDS else ()
     retry = (RETRY_LIMIT_FIELD,) if step_key in RETRY_LIMIT_STEPS and channel in CHANNEL_FIELDS else ()
     silence = (SILENCE_WINDOW_FIELD,) if step_key in SILENCE_WINDOW_STEPS and channel in CHANNEL_FIELDS else ()
     interruption = (
@@ -94,7 +103,7 @@ def prompt_fields(language, channel, step_key):
     timeout = (VOICE_TIMEOUT_FIELD,) if step_key == "check_in" and channel in CHANNEL_FIELDS else ()
     return (
         *primary, *outcomes, *answer_label_fields(language, channel, step_key),
-        *parser, *retry, *silence, *interruption, *timeout,
+        *parser, *fallback, *retry, *silence, *interruption, *timeout,
     )
 
 
@@ -131,6 +140,8 @@ def validate_step_configuration(language, channel, key, configuration):
         raise ValidationError("Choose a supported voice interruption policy.")
     if VOICE_TIMEOUT_FIELD in configuration and voice_timeout_mode(configuration) is None:
         raise ValidationError("Choose a supported voice timeout action.")
+    if PARSER_FALLBACK_FIELD in configuration and parser_fallback_mode(configuration) is None:
+        raise ValidationError("Choose a supported parser fallback policy.")
     if ARRIVAL_INPUT_FIELD in configuration:
         mode = configuration[ARRIVAL_INPUT_FIELD]
         if not isinstance(mode, str) or mode not in dict(ARRIVAL_INPUT_CHOICES):
@@ -170,6 +181,13 @@ def voice_interruption_mode(configuration):
         return None
     value = configuration.get(VOICE_INTERRUPTION_FIELD)
     return value if isinstance(value, str) and value in VOICE_INTERRUPTION_LABELS else None
+
+
+def parser_fallback_mode(configuration):
+    if not isinstance(configuration, dict):
+        return None
+    value = configuration.get(PARSER_FALLBACK_FIELD)
+    return value if isinstance(value, str) and value in PARSER_FALLBACK_LABELS else None
 
 
 def voice_timeout_mode(configuration):

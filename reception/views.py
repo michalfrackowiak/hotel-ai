@@ -33,8 +33,9 @@ from .scenario_pinning import (
     carry_web_scenario, pin_web_scenario, pinned_scenario_version_id, published_pinned_steps, web_scenario_channel,
 )
 from .scenario_step_settings import (
-    ALLOW_VOICE_SKIP, ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, REQUIRE_ARRIVAL_RANGE, SILENCE_WINDOW_STEPS,
-    VOICE_INTERRUPTION_STEPS, silence_window_seconds, voice_interruption_mode, voice_timeout_mode,
+    ALLOW_VOICE_SKIP, ARRIVAL_INPUT_FIELD, BUILT_IN_PARSER_ONLY, CONTINUE_IN_CHAT, PARSER_FALLBACK_STEPS,
+    REQUIRE_ARRIVAL_RANGE, SILENCE_WINDOW_STEPS, VOICE_INTERRUPTION_STEPS, parser_fallback_mode,
+    silence_window_seconds, voice_interruption_mode, voice_timeout_mode,
 )
 from .speech import (
     MAX_PCM_BYTES, MAX_TEXT_CHARACTERS, SpeechBusy, SpeechUnavailable, synthesize, synthesize_welcome, transcribe,
@@ -45,7 +46,6 @@ from .speech import (
 MAX_BODY_BYTES = 4096
 MAX_AUDIO_REQUEST_BYTES = 128
 MAX_MESSAGE_LENGTH = 500
-STAY_STAGES = ("check_in", "check_out", "guests")
 HANDOVER_PAGE_SIZE = 25
 OLD_ARRIVAL_PROMPTS = (
     "Dzień dobry, Resort Neptun Jastrzębia Góra.",
@@ -138,7 +138,8 @@ def _result(state, *, stale=False, cursor=0):
 def _pinned_step_configuration(state, stage):
     if pinned_scenario_version_id(state) is None:
         return {}
-    if stage not in (SILENCE_WINDOW_STEPS | VOICE_INTERRUPTION_STEPS) and not answer_label_fields(
+    configured_stages = SILENCE_WINDOW_STEPS | VOICE_INTERRUPTION_STEPS | PARSER_FALLBACK_STEPS
+    if stage not in configured_stages and not answer_label_fields(
         state["language"], web_scenario_channel(state), stage,
     ):
         return {}
@@ -283,14 +284,16 @@ def message(request):
     parsed = None
     if (
         turn and preview and preview["revision"] == revision and preview["language"] == language
-        and preview["stage"] in (*STAY_STAGES, "welcome")
+        and preview["stage"] in (PARSER_FALLBACK_STEPS | {"welcome"})
     ):
         stage = "check_in" if preview["stage"] == "welcome" else preview["stage"]
         check_in = date.fromisoformat(preview["check_in"]) if stage == "check_out" else None
         if not (stage == "check_in" and language == "pl" and selects_english(text)):
             parsed = parse_stay_input(stage, text, language, check_in=check_in)
             if parsed is None:
-                parsed = extract_stay_value(stage, text, language)
+                configuration = _pinned_step_configuration(preview, stage)
+                if parser_fallback_mode(configuration) != BUILT_IN_PARSER_ONLY:
+                    parsed = extract_stay_value(stage, text, language)
 
     # Recheck the revision under SQLite's write lock after parsing. Booking and
     # conversation updates commit together, including a retried confirmation.

@@ -14,9 +14,9 @@ from .scenario_answers import MAX_ANSWER_LABEL, ROOM_ANSWER_LABEL, answer_label_
 from .scenario_editor import ARRIVAL_KEYS, VoicePartsField, _fields, _placeholder_help
 from .scenario_step_settings import (
     ARRIVAL_INPUT_CHOICES, ARRIVAL_INPUT_FIELD, CHAT_FIELD, MAX_CHAT_TEXT, MAX_RETRY_LIMIT, MAX_SILENCE_SECONDS,
-    OUTCOME_PROMPTS, RETRY_LIMIT_FIELD, SILENCE_WINDOW_FIELD, VOICE_FIELD, VOICE_INTERRUPTION_CHOICES,
+    OUTCOME_PROMPTS, PARSER_FALLBACK_CHOICES, PARSER_FALLBACK_FIELD, PARSER_FALLBACK_LABELS, RETRY_LIMIT_FIELD, SILENCE_WINDOW_FIELD, VOICE_FIELD, VOICE_INTERRUPTION_CHOICES,
     VOICE_INTERRUPTION_FIELD, VOICE_INTERRUPTION_LABELS, VOICE_TIMEOUT_CHOICES, VOICE_TIMEOUT_FIELD,
-    VOICE_TIMEOUT_LABELS, outcome_field, prompt_bindings, prompt_fields,
+    VOICE_TIMEOUT_LABELS, outcome_field, parser_fallback_mode, prompt_bindings, prompt_fields,
     silence_window_seconds, validate_step_configuration, voice_interruption_mode, voice_timeout_mode,
 )
 
@@ -299,6 +299,11 @@ class ScenarioStepDraftForm(forms.ModelForm):
         choices=(("", "Use shared or built-in setting"), *VOICE_TIMEOUT_CHOICES),
         help_text="What happens if the guest stays silent through the final arrival listening window.",
     )
+    parser_fallback = forms.ChoiceField(
+        required=False, label="Parser fallback",
+        choices=(("", "Use shared or built-in setting"), *PARSER_FALLBACK_CHOICES),
+        help_text="Choose whether an unrecognized answer may be passed to the configured model provider.",
+    )
     arrival_input = forms.ChoiceField(
         required=False, label="Expected arrival input",
         choices=(("", "Use shared or built-in setting"), *ARRIVAL_INPUT_CHOICES),
@@ -324,7 +329,7 @@ class ScenarioStepDraftForm(forms.ModelForm):
         applicable_fields = prompt_fields(scenario.language, scenario.channel, step.key) if scenario else ()
         settings = (
             ARRIVAL_INPUT_FIELD, RETRY_LIMIT_FIELD, SILENCE_WINDOW_FIELD, VOICE_INTERRUPTION_FIELD,
-            VOICE_TIMEOUT_FIELD,
+            VOICE_TIMEOUT_FIELD, PARSER_FALLBACK_FIELD,
         )
         for name in (CHAT_FIELD, VOICE_FIELD, *settings):
             if name not in applicable_fields:
@@ -419,11 +424,14 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
             summary = ("outcome_wording",) if obj.key in OUTCOME_PROMPTS else ()
             labels = ("answer_button_labels",) if answer_label_fields(scenario.language, scenario.channel, obj.key) else ()
             parser = ("arrival_input_setting",) if ARRIVAL_INPUT_FIELD in prompts else ()
+            fallback = ("parser_fallback_setting",) if PARSER_FALLBACK_FIELD in prompts else ()
             retry = ("retry_limit_setting",) if RETRY_LIMIT_FIELD in prompts else ()
             silence = ("voice_silence_setting",) if SILENCE_WINDOW_FIELD in prompts else ()
             interruption = ("voice_interruption_setting",) if VOICE_INTERRUPTION_FIELD in prompts else ()
             timeout = ("voice_timeout_setting",) if VOICE_TIMEOUT_FIELD in prompts else ()
-            return (*self.fields, *primary, *summary, *labels, *parser, *retry, *silence, *interruption, *timeout)
+            return (
+                *self.fields, *primary, *summary, *labels, *parser, *fallback, *retry, *silence, *interruption, *timeout,
+            )
         fields = (*self.fields, *prompts)
         if obj.configuration != {}:
             return (*fields, "clear_overrides")
@@ -484,6 +492,10 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
         from .scenario_publication import describe_arrival_input
 
         return describe_arrival_input(obj.configuration) or "Shared or built-in setting"
+
+    @admin.display(description="Parser fallback")
+    def parser_fallback_setting(self, obj):
+        return PARSER_FALLBACK_LABELS.get(parser_fallback_mode(obj.configuration), "Shared or built-in setting")
 
     @admin.display(description="Retry limit")
     def retry_limit_setting(self, obj):

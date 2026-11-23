@@ -30,6 +30,12 @@ On the arrival step of a saved chat, voice, or shared draft, choose whether to a
 
 When **Require arrival and departure together** is selected, a reply that yields only one date prompts the guest for both dates without saving a partial stay. A recognized arrival date and stay length can also supply both dates. The rule applies to typed and transcribed replies, including dates entered during the Polish welcome. Single-date suggestions are hidden in this mode. Update the arrival wording to ask for both dates when enabling the setting. The booking engine still requires an arrival date today or later and a departure date after arrival.
 
+## Booking parser fallback
+
+Set **Parser fallback** on an arrival, departure, or guest-count step to choose whether the configured model can interpret an answer that the built-in parser could not recognize. **Use the built-in parser only** skips that model request. **Allow the configured model fallback** overrides a shared built-in-only setting and still requires a configured provider. Leave the field blank to inherit or keep the usual fallback.
+
+The setting follows the pinned browser scenario for typed and transcribed replies in English and Polish. An arrival answer entered during the Polish welcome uses the arrival step's policy. Staff parser corrections still apply when parser training is enabled. Phone bookings keep their existing parser behavior.
+
 ## Retry limits
 
 On a saved browser scenario step, enter a limit from 1 to 10 to hand over to reception when that many consecutive answers trigger the step's retry outcome. Leave the setting blank to inherit the shared value or use the default behavior. Enter 0 to disable the limit explicitly. A positive limit requires a `retry_exhausted` transition from that step to `handover` in the effective graph.
