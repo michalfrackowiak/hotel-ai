@@ -34,6 +34,10 @@ its guest and staff messages survive migration and rotation. The previous applic
 conversations under their original sessions. A later rollout that rotates production sessions for sign-in
 needs its own rollback plan.
 
+All 174 reception and telephony tests passed, together with the Django system, migration drift and whitespace
+checks. The tests cover credential-session rotation with a fictional account and a speech response that reaches
+its expiry while synthesis is in progress. [PR #92](https://github.com/michalfrackowiak/hotel-ai/pull/92)
+
 The next implementation increment is optional Google credential verification and new or returning guest
 sessions with a test verifier. Bind any active legacy draft before rotating its session, including when
 the guest signs in before the reception page starts its conversation. The approved hostname and Google web client remain pending for live sign-in.
