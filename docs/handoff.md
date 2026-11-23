@@ -8,6 +8,8 @@ The mobile layout keeps the start and stop control prominent and uses a touch-si
 
 The local reception suite passed 132 tests, and JavaScript syntax, Django system and migration checks passed.
 
+Production deployed revision `ecfb48d` on 23 November 2026. Six isolated ARM64 reception tests passed. The booking backup passed checksum, integrity, foreign keys, fictional booking and idempotent replay checks, and the previous image read the disposable restore. Live English and Polish Piper and Vosk checks passed with both speech workers retaining their original container IDs and start times. External HTTPS verified review controls on the voice page in both languages, the combined and chat-only modes, versioned assets, health and admin login. The Nginx snippet retained its approved checksum. Independent Chromium review completed a fictional booking in each language after editing a transcribed date and verified recovery after a failed send. [PR #88](https://github.com/michalfrackowiak/hotel-ai/pull/88)
+
 Next reception increment: show an editable booking summary and a date picker where the conversation accepts dates.
 
 ## Voice speaking animation
