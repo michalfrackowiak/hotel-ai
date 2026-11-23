@@ -134,7 +134,7 @@ class ScenarioVersionAdmin(ScenarioDraftAdmin):
     @method_decorator(require_http_methods(["GET", "POST"]))
     def flow_overview(self, request, object_id):
         from .scenario_overview import scenario_flow_overview
-        from .scenario_simulator import StaySimulationForm
+        from .scenario_simulator import BookingReplySimulationForm
 
         if not self._can_view_flow(request):
             raise PermissionDenied
@@ -148,7 +148,8 @@ class ScenarioVersionAdmin(ScenarioDraftAdmin):
         return TemplateResponse(request, "admin/reception/scenarioversion/flow_overview.html", {
             **self.admin_site.each_context(request),
             **scenario_flow_overview(
-                version, simulation_form=StaySimulationForm(request.POST if request.method == "POST" else None),
+                version,
+                simulation_form=BookingReplySimulationForm(request.POST if request.method == "POST" else None),
             ),
             "title": "Scenario flow overview",
             "opts": self.model._meta,

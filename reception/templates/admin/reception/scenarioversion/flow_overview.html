@@ -61,9 +61,9 @@
   </table>
 
   {% if simulation_form %}
-    <h3>Simulate a stay-date reply</h3>
-    <p>Preview one typed or transcribed reply at the arrival or departure step. Use fictional details in the example. The departure step assumes arrival tomorrow.</p>
-    <p>Arrival examples {% for example in arrival_examples %}<code>{{ example }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}. Departure example <code>{{ departure_example }}</code>.</p>
+    <h3>Simulate a booking reply</h3>
+    <p>Preview one typed or transcribed reply at the arrival, departure, or guest-count step. Use fictional details in the example. Departure assumes arrival tomorrow. Guest count assumes a two-night stay from tomorrow and uses fictional rooms for up to two or six guests.</p>
+    <p>Arrival examples {% for example in arrival_examples %}<code>{{ example }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}. Departure example <code>{{ departure_example }}</code>. Guest-count example <code>{{ guest_count_example }}</code>.</p>
     <p>The preview uses built-in parsing and the current date settings. It skips staff corrections, model fallback, and language switching.</p>
     <form method="post">
       {% csrf_token %}
@@ -74,11 +74,16 @@
     {% if simulation.unsupported %}
       <p>Enter a date reply to simulate this step. Language changes are outside this preview.</p>
     {% elif simulation %}
-      <h4>Stay-date reply result</h4>
+      <h4>Booking reply result</h4>
       <dl>
         {% if simulation.context_arrival %}<dt>Fictional arrival</dt><dd>{{ simulation.context_arrival }}</dd>{% endif %}
-        <dt>Extracted arrival</dt><dd>{{ simulation.arrival|default:"—" }}</dd>
-        <dt>Extracted departure</dt><dd>{{ simulation.departure|default:"—" }}</dd>
+        {% if simulation.context_departure %}<dt>Fictional departure</dt><dd>{{ simulation.context_departure }}</dd>{% endif %}
+        {% if simulation.show_guests %}
+          <dt>Extracted guest count</dt><dd>{{ simulation.guests|default_if_none:"—" }}</dd>
+        {% else %}
+          <dt>Extracted arrival</dt><dd>{{ simulation.arrival|default:"—" }}</dd>
+          <dt>Extracted departure</dt><dd>{{ simulation.departure|default:"—" }}</dd>
+        {% endif %}
         <dt>Resulting step</dt><dd><code>{{ simulation.stage }}</code></dd>
       </dl>
       <h4>Transition decisions</h4>

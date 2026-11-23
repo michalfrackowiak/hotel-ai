@@ -157,7 +157,7 @@ def _allows_transition(state, event, destination, resolve_transition):
 
 def advance(
     state, message, parsed, *, voice=False, input_parsed=False, resolve_transition=None, timeout=False,
-    require_arrival_range=False,
+    require_arrival_range=False, room_search=None,
 ):
     stage = state["stage"]
     if stage in TERMINAL_STAGES or stage == DELIVERY_PENDING:
@@ -234,7 +234,7 @@ def advance(
             set_prompt(state, "check_out_retry")
     elif stage == "guests":
         if type(parsed) is int and 1 <= parsed <= 32767:
-            return _offer_rooms(state, parsed, voice, resolve_transition)
+            return _offer_rooms(state, parsed, voice, resolve_transition, room_search)
         _allows_transition(state, "retry", "guests", resolve_transition)
         set_prompt(state, "guests_retry")
     elif stage == "room":
@@ -339,11 +339,12 @@ def _route_contact_entry(state, event, entry, resolve_transition):
     return state
 
 
-def _offer_rooms(state, guests, voice, resolve_transition):
+def _offer_rooms(state, guests, voice, resolve_transition, room_search):
     language = state["language"]
     check_in, check_out = _stay_dates(state)
+    search = available_rooms if room_search is None else room_search
     try:
-        offers = available_rooms(check_in=check_in, check_out=check_out, guests=guests)
+        offers = search(check_in=check_in, check_out=check_out, guests=guests)
     except BookingError:
         if _allows_transition(state, "offer_changed", "check_in", resolve_transition):
             return new_conversation(language, "offer_changed")

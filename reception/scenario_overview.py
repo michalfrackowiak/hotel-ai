@@ -51,9 +51,9 @@ def scenario_flow_overview(version, *, simulation_form):
         outgoing[source].append((event, step_keys.get(target, "Outside this version")))
     simulation = None
     if not errors and require_outcomes and simulation_form.is_valid():
-        from .scenario_simulator import simulate_stay_reply
+        from .scenario_simulator import simulate_booking_reply
 
-        simulation = simulate_stay_reply(language, channel, steps, transitions, **simulation_form.cleaned_data)
+        simulation = simulate_booking_reply(language, channel, steps, transitions, **simulation_form.cleaned_data)
     return {
         "simulation_form": simulation_form if not errors and require_outcomes else None,
         "arrival_examples": {
@@ -61,6 +61,7 @@ def scenario_flow_overview(version, *, simulation_form):
             "pl": ("jutro", "od jutra na trzy noce"),
         }.get(language, ()),
         "departure_example": {"en": "for three nights", "pl": "na trzy noce"}.get(language),
+        "guest_count_example": {"en": "two guests", "pl": "dwie osoby"}.get(language),
         "simulation": simulation,
         "flow_entry": entry,
         "flow_errors": errors,
