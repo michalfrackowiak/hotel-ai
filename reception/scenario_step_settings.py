@@ -24,7 +24,9 @@ SILENCE_WINDOW_STEPS = frozenset({
 })
 MAX_SILENCE_SECONDS = 20
 VOICE_INTERRUPTION_FIELD = "voice_interruption"
-VOICE_INTERRUPTION_STEPS = frozenset({"check_in", "check_out", "guests"})
+VOICE_INTERRUPTION_STEPS = frozenset({
+    "welcome", "check_in", "check_out", "guests", "room", "delivery", "email", "phone",
+})
 ALLOW_VOICE_SKIP = "allow_skip"
 VOICE_INTERRUPTION_CHOICES = (
     ("wait", "Play the prompt as usual"),
@@ -101,9 +103,9 @@ def prompt_fields(language, channel, step_key):
     silence = (SILENCE_WINDOW_FIELD,) if (
         step_key in SILENCE_WINDOW_STEPS and kinds and (step_key != "welcome" or language == "pl")
     ) else ()
-    interruption = (
-        (VOICE_INTERRUPTION_FIELD,) if step_key in VOICE_INTERRUPTION_STEPS and channel in CHANNEL_FIELDS else ()
-    )
+    interruption = (VOICE_INTERRUPTION_FIELD,) if (
+        step_key in VOICE_INTERRUPTION_STEPS and kinds and (step_key != "welcome" or language == "pl")
+    ) else ()
     timeout = (VOICE_TIMEOUT_FIELD,) if step_key == "check_in" and channel in CHANNEL_FIELDS else ()
     return (
         *primary, *outcomes, *answer_label_fields(language, channel, step_key),

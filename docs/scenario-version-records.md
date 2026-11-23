@@ -50,7 +50,7 @@ The Polish bilingual welcome has the same field. Leave it blank to use the inher
 
 ## Browser voice interruption
 
-At the arrival, departure or guest-count step, set **Voice interruption** to **Allow guests to skip the spoken prompt**. During browser voice playback the guest can choose **Skip prompt and speak** to read the current reply in chat and start speaking immediately. With a segmented reply, the button skips the remaining segments and uses the final listening window or the step default. The booking stays on the current step until the guest responds or the existing silence behavior applies. Leave the setting blank to inherit, or select **Play the prompt as usual** to turn off the button even when the shared template enables it. The setting applies to the pinned scenario during browser voice.
+At the Polish welcome, arrival, departure, guest count, room selection, delivery choice, email or phone entry step, set **Voice interruption** to **Allow guests to skip the spoken prompt**. During browser voice playback the guest can choose **Skip prompt and speak** to read the current reply in chat and start speaking immediately. With a segmented reply, the button skips the remaining segments and uses the final listening window or the step default. The booking stays on the current step until the guest responds or the existing silence behavior applies. Leave the setting blank to inherit, or select **Play the prompt as usual** to turn off the button even when the shared template enables it. The setting applies to the pinned scenario during browser voice.
 
 ## Browser voice timeout at arrival
 
