@@ -33,8 +33,8 @@ from .scenario_pinning import (
     carry_web_scenario, pin_web_scenario, pinned_scenario_version_id, published_pinned_steps, web_scenario_channel,
 )
 from .scenario_step_settings import (
-    ALLOW_VOICE_SKIP, ARRIVAL_INPUT_FIELD, BUILT_IN_PARSER_ONLY, CONTINUE_IN_CHAT, PARSER_FALLBACK_STEPS,
-    REQUIRE_ARRIVAL_RANGE, SILENCE_WINDOW_STEPS, VOICE_INTERRUPTION_STEPS, parser_fallback_mode,
+    ALLOW_VOICE_SKIP, ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, PARSER_FALLBACK_STEPS,
+    REQUIRE_ARRIVAL_RANGE, SILENCE_WINDOW_STEPS, VOICE_INTERRUPTION_STEPS, allows_model_fallback,
     silence_window_seconds, voice_interruption_mode, voice_timeout_mode,
 )
 from .speech import (
@@ -292,7 +292,7 @@ def message(request):
             parsed = parse_stay_input(stage, text, language, check_in=check_in)
             if parsed is None:
                 configuration = _pinned_step_configuration(preview, stage)
-                if parser_fallback_mode(configuration) != BUILT_IN_PARSER_ONLY:
+                if allows_model_fallback(configuration):
                     parsed = extract_stay_value(stage, text, language)
 
     # Recheck the revision under SQLite's write lock after parsing. Booking and

@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from bookings.models import BookingConfirmation
 from bookings.services import RoomOffer
+from model_providers.extraction import validate_model_stay_value
 
 from .conversation import advance, new_conversation, selects_english
 from .parser_review import review_text_allowed
@@ -20,8 +21,8 @@ from .scenario import default_chat_text, render_chat, set_prompt, split_voice_pa
 from .scenario_dispatch import RETRY_COUNT, RETRY_HANDOVER, advance_counted_turn
 from .scenario_pinned_prompts import browser_prompt_bindings, browser_prompt_overrides
 from .scenario_step_settings import (
-    ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, MAX_RETRY_LIMIT, REQUIRE_ARRIVAL_RANGE, retry_limit_value,
-    voice_timeout_mode,
+    ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, MAX_RETRY_LIMIT, PARSER_FALLBACK_STEPS, REQUIRE_ARRIVAL_RANGE,
+    allows_model_fallback, retry_limit_value, voice_timeout_mode,
 )
 from .scenario_validation import approved_destination
 from .speech import MAX_TEXT_CHARACTERS
@@ -67,6 +68,10 @@ class BookingReplySimulationForm(forms.Form):
     fictional_correction = forms.CharField(
         label="Fictional parser correction", max_length=500, required=False,
         help_text="Optional. Use a fictional arrival date, departure date, stay length, or guest count.",
+    )
+    fictional_model_value = forms.CharField(
+        label="Fictional model result", max_length=10, required=False,
+        help_text="Optional. Enter a date as YYYY-MM-DD or a whole-number guest count.",
     )
     prior_retries = forms.IntegerField(
         label="Prior consecutive retries", min_value=0, max_value=MAX_RETRY_LIMIT - 1, required=False,
@@ -114,6 +119,25 @@ class BookingReplySimulationForm(forms.Form):
                     self.add_error("fictional_correction", error)
         elif values.get("fictional_correction"):
             self.add_error("fictional_correction", "Enter an example guest reply for the correction.")
+        if model_value := values.get("fictional_model_value"):
+            if stage not in PARSER_FALLBACK_STEPS:
+                self.add_error("fictional_model_value", "Choose the arrival, departure, or guest-count step.")
+            elif not values.get("reply") or not review_text_allowed(values["reply"]):
+                self.add_error("fictional_model_value", "Enter a fictional guest reply without contact details.")
+            else:
+                if stage == "guests" and model_value.isascii() and model_value.isdecimal():
+                    model_value = int(model_value)
+                try:
+                    validated = validate_model_stay_value(stage, model_value)
+                except ValueError:
+                    validated = None
+                if validated is None:
+                    self.add_error(
+                        "fictional_model_value",
+                        "Enter a valid YYYY-MM-DD date or a count from 1 to 32767 for the selected step.",
+                    )
+                else:
+                    values["fictional_model_value"] = validated
         return values
 
 
@@ -132,7 +156,7 @@ def _fictional_booking(**_booking_details):
 
 def simulate_booking_reply(
     language, channel, steps, transitions, *, stage, reply, prior_retries=None, receipt_outcome="",
-    fictional_correction="",
+    fictional_correction="", fictional_model_value="",
 ):
     if stage == "check_in" and language == "pl" and selects_english(reply):
         return {"unsupported": True}
@@ -208,6 +232,15 @@ def simulate_booking_reply(
             method, candidate = fictional_contact
             state = advance(advance(state, method, None), candidate, None)
     parsed = parse_stay_input(stage, reply, language, check_in=check_in)
+    model_outcome = None
+    if fictional_model_value:
+        if parsed is not None:
+            model_outcome = "Skipped: the built-in parser found a value."
+        elif not allows_model_fallback(configuration):
+            model_outcome = "Skipped: this step uses the built-in parser only."
+        else:
+            parsed = fictional_model_value
+            model_outcome = "Used as the model fallback value."
     correction = apply_reviewed_correction(
         state, reply, parsed, fictional_correction, source=channel,
     ) if fictional_correction else None
@@ -237,6 +270,7 @@ def simulate_booking_reply(
         "context_departure": check_out.isoformat() if check_out else None,
         "input_stage": stage,
         "fictional_correction": fictional_correction,
+        "model_outcome": model_outcome,
         "correction_applied": correction is not None,
         "retry_limit": retry_limit,
         "prior_retries": prior_retries or 0,

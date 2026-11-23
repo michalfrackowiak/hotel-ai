@@ -190,6 +190,10 @@ def parser_fallback_mode(configuration):
     return value if isinstance(value, str) and value in PARSER_FALLBACK_LABELS else None
 
 
+def allows_model_fallback(configuration):
+    return parser_fallback_mode(configuration) != BUILT_IN_PARSER_ONLY
+
+
 def voice_timeout_mode(configuration):
     if not isinstance(configuration, dict):
         return None

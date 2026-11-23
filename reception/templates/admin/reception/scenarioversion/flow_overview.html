@@ -69,7 +69,7 @@
     <p>For an email or SMS receipt, choose a fictional delivery status. Leave the reply blank. The preview uses a fictional reference and does not contact a delivery provider.</p>
     <p>For an arrival timeout, choose chat inactivity or the final voice listening window. The final voice window uses this version's timeout setting, including when the combined reception uses a chat version with the microphone active. Leave the reply blank for timeouts.</p>
     <p>For a reply step with a retry limit, the prior count represents fictional consecutive retries at that same step. If the next reply reaches the limit, the simulator previews the reception handover without opening a staff conversation.</p>
-    <p>The reply preview uses built-in parsing and the current date settings. For arrival, departure, or guest count, you can enter a fictional parser correction to preview how a reviewed correction would work on this channel. Saved corrections, model fallback, and language switching are outside this preview.</p>
+    <p>The reply preview uses built-in parsing and the current date settings. For arrival, departure, or guest count, you can enter a fictional model result or parser correction. The preview applies the scenario's model fallback setting without contacting a model provider. It leaves saved corrections and language switching outside the preview.</p>
     <form method="post">
       {% csrf_token %}
       {{ simulation_form.as_p }}
@@ -107,6 +107,9 @@
         {% else %}
           <dt>Extracted arrival</dt><dd>{{ simulation.arrival|default:"—" }}</dd>
           <dt>Extracted departure</dt><dd>{{ simulation.departure|default:"—" }}</dd>
+        {% endif %}
+        {% if simulation.model_outcome %}
+          <dt>Fictional model result</dt><dd>{{ simulation.model_outcome }}</dd>
         {% endif %}
         {% if simulation.fictional_correction %}
           <dt>Fictional parser correction</dt>

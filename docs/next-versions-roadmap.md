@@ -110,6 +110,7 @@ The current admin edits prompt text and voice segments; conversation transitions
 - [x] Simulate Polish welcome timeout and bilingual arrival timeout, including the final voice window and **Continue in chat**.
 - [x] Simulate a reply with prior consecutive retries and preview retry-limit handover without opening a staff conversation.
 - [x] Preview fictional reviewed parser corrections for arrival, departure and guest count without accessing saved samples.
+- [x] Preview fictional model results for arrival, departure and guest count using the scenario's fallback settings without calling a model provider.
 - [ ] Extend the simulator to additional steps and live parser parity. Validate missing placeholders, unreachable states, loops, required contact/consent paths and terminal states before publishing.
 - [x] Record the selected scenario version and entry channel on new web conversations. Preserve the pin across same-language turns, retries, and later publication or rollback. See [web conversation pinning](scenario-version-records.md#web-conversation-pinning).
 - [x] Render supported web prompts from the pinned version, with built-in fallbacks and compatibility for unpinned conversations. See [pinned web prompts](scenario-version-records.md#pinned-web-prompts).
