@@ -17,7 +17,7 @@ CONTACT_DIGITS = re.compile(r"(?<![\w/.-])\+?\d(?:[\s().-]*\d){7,14}(?![\w/.-])"
 CALENDAR_DIGITS = re.compile(r"\b(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})\b")
 
 
-def _review_text_allowed(text):
+def review_text_allowed(text):
     if not isinstance(text, str) or len(text) > 500 or not text.isprintable():
         return False
     if "@" in text or parse_email(text):
@@ -76,7 +76,7 @@ def review_booking_input(state, text, parsed, *, source):
     if stage == "check_in" and language == "pl" and selects_english(text):
         return parsed, False
     original = _extracted_value(state, text, parsed)
-    if stage not in CONTACT_STAGES and not _review_text_allowed(text):
+    if stage not in CONTACT_STAGES and not review_text_allowed(text):
         return original, True
     corrected = learned_result(state, text, original, source=source)
     result, succeeded = _result_text(state, original)

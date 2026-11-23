@@ -5,12 +5,15 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from django import forms
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from bookings.models import BookingConfirmation
 from bookings.services import RoomOffer
 
 from .conversation import advance, new_conversation, selects_english
+from .parser_review import review_text_allowed
+from .parser_training import STAY_STAGES, apply_reviewed_correction, validate_correction
 from .parsing import StayDates, parse_stay_input
 from .receipt import DELIVERY_PENDING, apply_receipt_outcome, start_receipt
 from .scenario import default_chat_text, render_chat, set_prompt, split_voice_parts, voice_segments
@@ -61,6 +64,10 @@ class BookingReplySimulationForm(forms.Form):
         ("welcome_timeout", "Welcome timeout"),
     ))
     reply = forms.CharField(label="Example guest reply", max_length=500, required=False)
+    fictional_correction = forms.CharField(
+        label="Fictional parser correction", max_length=500, required=False,
+        help_text="Optional. Use a fictional arrival date, departure date, stay length, or guest count.",
+    )
     prior_retries = forms.IntegerField(
         label="Prior consecutive retries", min_value=0, max_value=MAX_RETRY_LIMIT - 1, required=False,
         help_text="Optional. For a reply step with a positive retry limit, enter a count below that limit.",
@@ -70,8 +77,10 @@ class BookingReplySimulationForm(forms.Form):
         *((key, label) for key, (_, _, label) in RECEIPT_OUTCOMES.items()),
     ))
 
-    def __init__(self, *args, language, **kwargs):
+    def __init__(self, *args, language, channel="chat", **kwargs):
         super().__init__(*args, **kwargs)
+        self.language = language
+        self.channel = channel
         self.retry_limits = {}
         if language != "pl":
             field = self.fields["stage"]
@@ -91,6 +100,20 @@ class BookingReplySimulationForm(forms.Form):
                 self.add_error("prior_retries", "Choose a reply step with a positive retry limit.")
             elif prior_retries >= limit:
                 self.add_error("prior_retries", f"Enter a count below this step's retry limit of {limit}.")
+        if (corrected := values.get("fictional_correction")) and (reply := values.get("reply")):
+            if stage not in STAY_STAGES:
+                self.add_error("fictional_correction", "Choose the arrival, departure, or guest-count step.")
+            elif not (review_text_allowed(reply) and review_text_allowed(corrected)):
+                self.add_error("fictional_correction", "Use fictional text without contact details.")
+            else:
+                try:
+                    values["fictional_correction"] = validate_correction(
+                        stage, reply, corrected, language=self.language, source=self.channel,
+                    )
+                except ValidationError as error:
+                    self.add_error("fictional_correction", error)
+        elif values.get("fictional_correction"):
+            self.add_error("fictional_correction", "Enter an example guest reply for the correction.")
         return values
 
 
@@ -107,7 +130,10 @@ def _fictional_booking(**_booking_details):
     return SimpleNamespace(reference="DEMO-REFERENCE"), True
 
 
-def simulate_booking_reply(language, channel, steps, transitions, *, stage, reply, prior_retries=None, receipt_outcome=""):
+def simulate_booking_reply(
+    language, channel, steps, transitions, *, stage, reply, prior_retries=None, receipt_outcome="",
+    fictional_correction="",
+):
     if stage == "check_in" and language == "pl" and selects_english(reply):
         return {"unsupported": True}
 
@@ -182,6 +208,11 @@ def simulate_booking_reply(language, channel, steps, transitions, *, stage, repl
             method, candidate = fictional_contact
             state = advance(advance(state, method, None), candidate, None)
     parsed = parse_stay_input(stage, reply, language, check_in=check_in)
+    correction = apply_reviewed_correction(
+        state, reply, parsed, fictional_correction, source=channel,
+    ) if fictional_correction else None
+    if correction is not None:
+        parsed = correction
     require_range = parsed is not None and configuration.get(ARRIVAL_INPUT_FIELD) == REQUIRE_ARRIVAL_RANGE
     retry_limit = retry_limit_value(configuration)
     if prior_retries:
@@ -205,6 +236,8 @@ def simulate_booking_reply(language, channel, steps, transitions, *, stage, repl
         "context_arrival": check_in.isoformat() if check_in else None,
         "context_departure": check_out.isoformat() if check_out else None,
         "input_stage": stage,
+        "fictional_correction": fictional_correction,
+        "correction_applied": correction is not None,
         "retry_limit": retry_limit,
         "prior_retries": prior_retries or 0,
         "resulting_retry_count": result.get(RETRY_COUNT, 0),

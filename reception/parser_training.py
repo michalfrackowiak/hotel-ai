@@ -163,11 +163,17 @@ def learned_result(state, text, parsed, *, source):
         .exclude(corrected_result="")
         .order_by().values_list("corrected_result", flat=True).distinct()[:2]
     )
-    if len(corrections) != 1 or not _text_ok(corrections[0]):
+    if len(corrections) != 1:
         return None
-    if _protected_literal(stage, text, language, source):
+    return apply_reviewed_correction(state, text, parsed, corrections[0], source=source)
+
+
+def apply_reviewed_correction(state, text, parsed, corrected, *, source):
+    """Apply one reviewed rule against the current stay and offer context."""
+    stage, language = state["stage"], state["language"]
+    if not _text_ok(corrected) or _protected_literal(stage, text, language, source):
         return None
-    corrected = corrections[0].strip()
+    corrected = corrected.strip()
     if stage in CONTACT_STAGES:
         learned = _contact_correction(stage, text, corrected)
     elif stage == "room":

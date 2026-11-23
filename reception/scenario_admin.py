@@ -150,7 +150,9 @@ class ScenarioVersionAdmin(ScenarioDraftAdmin):
             **scenario_flow_overview(
                 version,
                 simulation_form=BookingReplySimulationForm(
-                    request.POST if request.method == "POST" else None, language=version.scenario.language,
+                    request.POST if request.method == "POST" else None,
+                    language=version.scenario.language,
+                    channel=version.scenario.channel,
                 ),
             ),
             "title": "Scenario flow overview",
