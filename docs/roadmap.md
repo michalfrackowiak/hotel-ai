@@ -123,6 +123,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 - [x] Flexible stay dates. Extract arrival and departure from one English or Polish message, including a spoken arrival date and stay duration amid extra words.
 - [x] Retire browser speech training. Remove opt-in audio capture, sample storage, and the admin transcription/export view while keeping live voice transcription.
 - [x] Voice arrival prompts. Give English callers the address and a two-second pause, then offer two five-second listening windows in English and Polish.
+- [x] Admin workflows. Add permission-aware shortcuts, reservation timing filters, a room-level switch for accepting new bookings, and a bilingual preview of saved date parser settings.
+
 - [x] Booking scenario editor. Edit bilingual chat text, voice scripts, and pauses in the private admin.
 - [x] Parser training. Review bilingual chat and voice inputs and their parsed values, then reuse validated staff corrections.
 - [x] Synchronize voice and chat. Display spoken segments as playback begins, show guest transcripts, and offer contextual reply buttons.

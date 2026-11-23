@@ -1,8 +1,11 @@
 from django import forms
 from django.contrib import admin
+from django.urls import path, reverse
+from django.utils.html import format_html
 
 from . import scenario_admin
 from .models import HandoverMessage, ParserConfiguration, ParserSample, ScenarioPrompt, StaffHandover
+from .parser_admin_preview import date_preview
 from .scenario_editor import ScenarioPromptForm
 
 
@@ -162,12 +165,15 @@ class ParserConfigurationAdmin(admin.ModelAdmin):
     readonly_fields = ("language",)
     list_display = (
         "language", "numeric_date_order", "allow_iso_dates", "allow_slash_dates", "allow_dot_dates",
-        "allow_dash_dates", "allow_yearless_dates", "allow_two_digit_years",
+        "allow_dash_dates", "allow_yearless_dates", "allow_two_digit_years", "preview_link",
     )
     list_display_links = ("language",)
     ordering = ("language",)
     fieldsets = (
-        ("Language", {"fields": ("language",)}),
+        ("Language", {
+            "fields": ("language",),
+            "description": "These saved date settings apply to both chat and voice in this language.",
+        }),
         ("Numeric date interpretation", {
             "fields": ("numeric_date_order",),
             "description": "Sets how ambiguous numeric dates such as 04/05/2027 are interpreted.",
@@ -177,9 +183,30 @@ class ParserConfigurationAdmin(admin.ModelAdmin):
                 "allow_iso_dates", "allow_slash_dates", "allow_dot_dates", "allow_dash_dates",
                 "allow_yearless_dates", "allow_two_digit_years",
             ),
-            "description": "Two-digit years use a 00–68 → 2000–2068, 69–99 → 1969–1999 cutoff.",
+            "description": "The ISO switch enables year-first dates such as 2027-04-05. "
+            "Year-first dates with slashes or dots also require the corresponding separator switch. "
+            "The hyphen switch controls dates that begin with a day or month. "
+            "Two-digit years use a 00–68 → 2000–2068, 69–99 → 1969–1999 cutoff.",
         }),
     )
+
+    def get_urls(self):
+        return [
+            path(
+                "<int:object_id>/preview-dates/",
+                self.admin_site.admin_view(self.preview_dates),
+                name="reception_parserconfiguration_preview_dates",
+            ),
+            *super().get_urls(),
+        ]
+
+    def preview_dates(self, request, object_id):
+        return date_preview(request, self, object_id)
+
+    @admin.display(description="Try saved settings")
+    def preview_link(self, configuration):
+        url = reverse("admin:reception_parserconfiguration_preview_dates", args=[configuration.pk])
+        return format_html('<a href="{}">Preview {} dates</a>', url, configuration.get_language_display())
 
     def has_add_permission(self, request):
         return False

@@ -25,6 +25,8 @@ To accept reservations from a dedicated mobile number, follow the [phone booking
 
 Open [Django admin](http://127.0.0.1:8080/admin/) to manage the room inventory and nightly prices and inspect confirmed bookings. The seed creates `ROOM-2` for up to two guests at PLN 120.00 per night and `ROOM-6` for up to six guests at PLN 200.00 per night. Re-running the seed preserves existing prices and administrator credentials. A Docker volume persists the SQLite database.
 
+The admin homepage links to workflows available to your staff account. Use **Room inventory** to pause new reservations for a room, **Reservations** to filter arrivals and departures by the hotel’s local date, and **Date parser settings → Preview dates** to try a fictional Polish or English reply using saved settings.
+
 See the [booking API reference](docs/booking-api.md) for availability and confirmation requests. Compose runs the Django development server on `127.0.0.1`, with `DJANGO_DEBUG=1` by default to serve the admin assets. Set `HOTEL_PORT` in `.env` if port 8080 is in use.
 
 ```sh
