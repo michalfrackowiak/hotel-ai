@@ -28,6 +28,7 @@ class BookingReplySimulationForm(forms.Form):
     stage = forms.ChoiceField(label="Booking step", choices=(
         ("check_in", "Arrival"), ("check_out", "Departure"), ("guests", "Guest count"),
         ("room", "Room selection"), ("confirm", "Quote decision"),
+        ("delivery", "Delivery choice"), ("email", "Email entry"), ("phone", "Phone entry"),
     ))
     reply = forms.CharField(label="Example guest reply", max_length=500)
 
@@ -58,21 +59,27 @@ def simulate_booking_reply(language, channel, steps, transitions, *, stage, repl
         decisions.append((source, event, target if allowed else None))
         return target if allowed else None
 
-    needs_room_offer = stage in {"room", "confirm"}
+    contact_entry = stage in {"email", "phone"}
+    needs_delivery = stage == "delivery" or contact_entry
+    needs_room_offer = stage in {"room", "confirm"} or needs_delivery
     state = new_conversation(language, "guests" if needs_room_offer else stage)
     state["stage"] = "guests" if needs_room_offer else stage
     check_in = check_out = None
     if stage != "check_in":
         check_in = timezone.localdate() + timedelta(days=1)
         state["check_in"] = check_in.isoformat()
-    if stage in {"guests", "room", "confirm"}:
+    if stage == "guests" or needs_room_offer:
         check_out = check_in + timedelta(days=2)
         state["check_out"] = check_out.isoformat()
     if needs_room_offer:
         # Prepare a two-guest example independently of the edge for the turn being simulated.
         state = advance(state, "", 2, voice=channel == "voice", room_search=_fictional_room_search)
-        if stage == "confirm":
+        if stage != "room":
             state = advance(state, "1", None)
+        if needs_delivery:
+            state = advance(state, "tak" if language == "pl" else "yes", None)
+        if contact_entry:
+            state = advance(state, "email" if stage == "email" else "sms", None)
     parsed = parse_stay_input(stage, reply, language, check_in=check_in)
     require_range = parsed is not None and configuration.get(ARRIVAL_INPUT_FIELD) == REQUIRE_ARRIVAL_RANGE
     result = advance_counted_turn(
@@ -107,6 +114,8 @@ def simulate_booking_reply(language, channel, steps, transitions, *, stage, repl
         "quote_decision": next(
             (event for _, event, target in decisions if target and event in {"approve_quote", "decline_quote"}), None,
         ),
+        "delivery_choice": {"email": "Email", "phone": "SMS"}.get(result["stage"]) if stage == "delivery" else None,
+        "contact_candidate": result.get("contact_candidate") if contact_entry else None,
         "guests": parsed if type(parsed) is int else None,
         "decisions": decisions,
         "stage": result["stage"],
