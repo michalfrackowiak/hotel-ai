@@ -8,7 +8,9 @@ A new draft selects the scenario for its entry mode and language. Changing modes
 
 Five focused Django tests passed. The full Windows run passed 263 of 264 tests and reproduced the existing recovery-client deadline error. The hosted Linux Django and route smoke steps passed. Nginx syntax validation passed in a disposable container. Independent Chromium review checked English and Polish at 320, 390 and 1440 pixels, including a deliberately delayed voice script, mode switching, microphone cleanup, overflow and axe WCAG A/AA. The reviewer completed a fictional booking in each language after switching modes and confirmed the reference survived another switch. A deliberate resume-guard bypass failed the four language and entry-mode regression cases. See [PR #86 and release checks](https://github.com/michalfrackowiak/hotel-ai/pull/86/checks).
 
-The next reception increment is the playback-driven speaking animation with reduced-motion support. Public deployment of the new routes requires the updated [Nginx guest snippet](../deploy/nginx/hotel-ai-reception.inc) with the application image.
+Production deployed revision `1528de1` on 23 November 2026 with the matching Nginx guest snippet. Public HTTPS checks from outside the server passed both languages on both new routes, the combined reception, health, admin login and static scripts. The SQLite backup passed its checksum, integrity and foreign-key checks. The disposable restore passed bilingual chat, a fictional booking and idempotent replay, and the previous image read the restored database. Live English and Polish Piper synthesis and Vosk microphone-format and silence checks passed. The routed workers kept their original container IDs and start times. The independent reviewer approved the rollout and rollback ordering.
+
+Next reception increment: playback-driven speaking animation with reduced-motion support.
 
 ## Admin workflows
 
