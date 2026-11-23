@@ -20,6 +20,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 - [x] 0.7 booking summary and date picker: dedicated chat and voice pages show the draft stay and quote. Guests can pick dates and return to the date, guest or room prompt to make a change before booking. See [handoff and release checks](handoff.md#booking-summary-and-date-picker).
 
+- [x] 0.7 receptionist handover: a bilingual button on the dedicated voice page stops audio and opens the existing staff text thread. See [handoff and release checks](handoff.md#voice-receptionist-handover).
+
 ## Alpha
 
 - [x] 0.5 production routed speech configuration: validate the opt-in Compose overlay, the preserved booking volume, the private web and worker network, and the ARM64 worker budget. See [cutover configuration](speech-cutover-config.md) and [PR #71](https://github.com/michalfrackowiak/hotel-ai/pull/71).
