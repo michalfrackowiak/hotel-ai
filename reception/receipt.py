@@ -59,11 +59,16 @@ def start_receipt(state, reference, method, *, wait=None):
 
 
 def refresh_receipt(state, *, resolve_transition=None):
-    status = BookingConfirmation.Status
     outcome = BookingConfirmation.objects.filter(booking__reference=state["reference"]).values_list(
         "status", flat=True,
     ).first()
-    if outcome in (status.PENDING, status.SENDING) and timezone.now().timestamp() < state["delivery_deadline"]:
+    return apply_receipt_outcome(state, outcome, now=timezone.now().timestamp(), resolve_transition=resolve_transition)
+
+
+def apply_receipt_outcome(state, outcome, *, now, resolve_transition=None):
+    """Apply an observed or fictional delivery status without accessing storage."""
+    status = BookingConfirmation.Status
+    if outcome in (status.PENDING, status.SENDING) and now < state["delivery_deadline"]:
         if resolve_transition is not None:
             resolve_transition(state, "retry")
         return state

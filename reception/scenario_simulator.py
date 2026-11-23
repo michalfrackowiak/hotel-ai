@@ -7,10 +7,12 @@ from types import SimpleNamespace
 from django import forms
 from django.utils import timezone
 
+from bookings.models import BookingConfirmation
 from bookings.services import RoomOffer
 
 from .conversation import advance, new_conversation, selects_english
 from .parsing import StayDates, parse_stay_input
+from .receipt import DELIVERY_PENDING, apply_receipt_outcome, start_receipt
 from .scenario import render_chat, split_voice_parts, voice_segments
 from .scenario_dispatch import advance_counted_turn
 from .scenario_pinned_prompts import browser_prompt_bindings, browser_prompt_overrides
@@ -29,14 +31,38 @@ FICTIONAL_CONTACTS = {
 }
 
 
+RECEIPT_METHODS = {"receipt_email": "email", "receipt_sms": "sms"}
+RECEIPT_OUTCOMES = {
+    "waiting": (BookingConfirmation.Status.SENDING, False, "Sending before deadline"),
+    "accepted": (BookingConfirmation.Status.ACCEPTED, False, "Accepted by provider"),
+    "pending": (BookingConfirmation.Status.PENDING, True, "Pending at deadline"),
+    "unverified": (BookingConfirmation.Status.SENDING, True, "Sending at deadline, unverified"),
+    "failed": (BookingConfirmation.Status.FAILED, False, "Submission failed"),
+}
+
+
 class BookingReplySimulationForm(forms.Form):
     stage = forms.ChoiceField(label="Booking step", choices=(
         ("check_in", "Arrival"), ("check_out", "Departure"), ("guests", "Guest count"),
         ("room", "Room selection"), ("confirm", "Quote decision"),
         ("delivery", "Delivery choice"), ("email", "Email entry"), ("phone", "Phone entry"),
         ("confirm_email", "Contact review (email)"), ("confirm_sms", "Contact review (SMS)"),
+        ("receipt_email", "Delivery receipt (email)"), ("receipt_sms", "Delivery receipt (SMS)"),
     ))
-    reply = forms.CharField(label="Example guest reply", max_length=500)
+    reply = forms.CharField(label="Example guest reply", max_length=500, required=False)
+    receipt_outcome = forms.ChoiceField(label="Fictional receipt status", required=False, choices=(
+        ("", "Choose a status for a receipt preview"),
+        *((key, label) for key, (_, _, label) in RECEIPT_OUTCOMES.items()),
+    ))
+
+    def clean(self):
+        values = super().clean()
+        stage = values.get("stage")
+        if stage in RECEIPT_METHODS and values.get("receipt_outcome") == "":
+            self.add_error("receipt_outcome", "Choose a fictional receipt status.")
+        elif stage and stage not in RECEIPT_METHODS and values.get("reply") == "":
+            self.add_error("reply", "Enter an example guest reply.")
+        return values
 
 
 def _fictional_room_search(*, check_in, check_out, guests):
@@ -52,7 +78,7 @@ def _fictional_booking(**_booking_details):
     return SimpleNamespace(reference="DEMO-REFERENCE"), True
 
 
-def simulate_booking_reply(language, channel, steps, transitions, *, stage, reply):
+def simulate_booking_reply(language, channel, steps, transitions, *, stage, reply, receipt_outcome=""):
     if stage == "check_in" and language == "pl" and selects_english(reply):
         return {"unsupported": True}
 
@@ -62,7 +88,6 @@ def simulate_booking_reply(language, channel, steps, transitions, *, stage, repl
     fictional_contact = FICTIONAL_CONTACTS.get(stage)
     if fictional_contact:
         stage = "contact_confirm"
-    configuration = configurations[stage]
     decisions = []
 
     def resolve(state, event):
@@ -72,6 +97,19 @@ def simulate_booking_reply(language, channel, steps, transitions, *, stage, repl
         decisions.append((source, event, target if allowed else None))
         return target if allowed else None
 
+    if stage in RECEIPT_METHODS:
+        method = RECEIPT_METHODS[stage]
+        status, expired, label = RECEIPT_OUTCOMES[receipt_outcome]
+        state = start_receipt(new_conversation(language, "check_in"), "DEMO-REFERENCE", method, wait=True)
+        deadline = state["delivery_deadline"]
+        now = deadline if expired else deadline - 1
+        result = apply_receipt_outcome(state, status, now=now, resolve_transition=resolve)
+        return {
+            "input_stage": DELIVERY_PENDING, "receipt_scenario": label, "fictional_reference": state["reference"],
+            **_render_result(language, channel, configurations, result, decisions),
+        }
+
+    configuration = configurations[stage]
     contact_entry = stage in {"email", "phone"}
     needs_delivery = stage == "delivery" or contact_entry or fictional_contact is not None
     needs_room_offer = stage in {"room", "confirm"} or needs_delivery
@@ -103,14 +141,6 @@ def simulate_booking_reply(language, channel, steps, transitions, *, stage, repl
         voice=channel == "voice", require_arrival_range=require_range, room_search=_fictional_room_search,
         booking_writer=_fictional_booking,
     )
-    bindings = browser_prompt_bindings(result, channel)
-    overrides = browser_prompt_overrides(language, channel, bindings, (
-        (key, configurations[key]) for key in bindings if key in configurations
-    ))
-    voice = []
-    for part in voice_segments(result, overrides=overrides):
-        voice.extend(split_voice_parts([part]) if len(part["text"]) > MAX_TEXT_CHARACTERS else [part])
-
     arrival = departure = None
     if isinstance(parsed, StayDates):
         arrival, departure = parsed.check_in, parsed.check_out
@@ -138,6 +168,19 @@ def simulate_booking_reply(language, channel, steps, transitions, *, stage, repl
         "reviewed_contact": state.get("contact_candidate") if fictional_contact else None,
         "fictional_reference": result.get("reference"),
         "guests": parsed if type(parsed) is int else None,
+        **_render_result(language, channel, configurations, result, decisions),
+    }
+
+
+def _render_result(language, channel, configurations, result, decisions):
+    bindings = browser_prompt_bindings(result, channel)
+    overrides = browser_prompt_overrides(language, channel, bindings, (
+        (key, configurations[key]) for key in bindings if key in configurations
+    ))
+    voice = []
+    for part in voice_segments(result, overrides=overrides):
+        voice.extend(split_voice_parts([part]) if len(part["text"]) > MAX_TEXT_CHARACTERS else [part])
+    return {
         "decisions": decisions,
         "stage": result["stage"],
         "chat": render_chat(result, overrides=overrides),
