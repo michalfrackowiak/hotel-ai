@@ -62,6 +62,8 @@ def scenario_flow_overview(version, *, simulation_form):
         }.get(language, ()),
         "departure_example": {"en": "for three nights", "pl": "na trzy noce"}.get(language),
         "guest_count_example": {"en": "two guests", "pl": "dwie osoby"}.get(language),
+        "room_example": {"en": "option two", "pl": "opcja druga"}.get(language),
+        "quote_examples": {"en": ("yes", "no"), "pl": ("tak", "nie")}.get(language, ()),
         "simulation": simulation,
         "flow_entry": entry,
         "flow_errors": errors,

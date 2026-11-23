@@ -103,6 +103,7 @@ The current admin edits prompt text and voice segments; conversation transitions
 - [x] Preview one bilingual browser arrival reply in the flow overview using built-in parsing, effective transitions and rendered chat/voice wording.
 - [x] Simulate a bilingual departure reply using a fictional arrival date, including stay durations and departure retries.
 - [x] Simulate bilingual guest-count replies and room-offer outcomes with fictional inventory.
+- [x] Simulate bilingual room selection and quote decisions using fictional offers.
 - [ ] Extend the simulator to additional steps and live parser parity. Validate missing placeholders, unreachable states, loops, required contact/consent paths and terminal states before publishing.
 - [x] Record the selected scenario version and entry channel on new web conversations. Preserve the pin across same-language turns, retries, and later publication or rollback. See [web conversation pinning](scenario-version-records.md#web-conversation-pinning).
 - [x] Render supported web prompts from the pinned version, with built-in fallbacks and compatibility for unpinned conversations. See [pinned web prompts](scenario-version-records.md#pinned-web-prompts).

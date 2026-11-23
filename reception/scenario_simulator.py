@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from bookings.services import RoomOffer
 
-from .conversation import new_conversation, selects_english
+from .conversation import advance, new_conversation, selects_english
 from .parsing import StayDates, parse_stay_input
 from .scenario import render_chat, split_voice_parts, voice_segments
 from .scenario_dispatch import advance_counted_turn
@@ -27,6 +27,7 @@ FICTIONAL_ROOMS = (
 class BookingReplySimulationForm(forms.Form):
     stage = forms.ChoiceField(label="Booking step", choices=(
         ("check_in", "Arrival"), ("check_out", "Departure"), ("guests", "Guest count"),
+        ("room", "Room selection"), ("confirm", "Quote decision"),
     ))
     reply = forms.CharField(label="Example guest reply", max_length=500)
 
@@ -57,15 +58,21 @@ def simulate_booking_reply(language, channel, steps, transitions, *, stage, repl
         decisions.append((source, event, target if allowed else None))
         return target if allowed else None
 
-    state = new_conversation(language, stage)
-    state["stage"] = stage
+    needs_room_offer = stage in {"room", "confirm"}
+    state = new_conversation(language, "guests" if needs_room_offer else stage)
+    state["stage"] = "guests" if needs_room_offer else stage
     check_in = check_out = None
-    if stage in {"check_out", "guests"}:
+    if stage != "check_in":
         check_in = timezone.localdate() + timedelta(days=1)
         state["check_in"] = check_in.isoformat()
-    if stage == "guests":
+    if stage in {"guests", "room", "confirm"}:
         check_out = check_in + timedelta(days=2)
         state["check_out"] = check_out.isoformat()
+    if needs_room_offer:
+        # Prepare a two-guest example independently of the edge for the turn being simulated.
+        state = advance(state, "", 2, voice=channel == "voice", room_search=_fictional_room_search)
+        if stage == "confirm":
+            state = advance(state, "1", None)
     parsed = parse_stay_input(stage, reply, language, check_in=check_in)
     require_range = parsed is not None and configuration.get(ARRIVAL_INPUT_FIELD) == REQUIRE_ARRIVAL_RANGE
     result = advance_counted_turn(
@@ -93,7 +100,13 @@ def simulate_booking_reply(language, channel, steps, transitions, *, stage, repl
         "departure": departure.isoformat() if departure else None,
         "context_arrival": check_in.isoformat() if check_in else None,
         "context_departure": check_out.isoformat() if check_out else None,
-        "show_guests": stage == "guests",
+        "input_stage": stage,
+        "room_options": [offer["room"] for offer in state.get("choices", [])],
+        "quoted_room": state.get("room"),
+        "selected_room": result.get("room") if stage == "room" else None,
+        "quote_decision": next(
+            (event for _, event, target in decisions if target and event in {"approve_quote", "decline_quote"}), None,
+        ),
         "guests": parsed if type(parsed) is int else None,
         "decisions": decisions,
         "stage": result["stage"],
