@@ -1,5 +1,13 @@
 # Session handoff
 
+## Voice speaking animation
+
+The voice and combined reception pages show a decorative sphere alongside the localized live status. Piper playback reads a short window of the decoded reply at the current playback position to drive its scale. Browser speech uses utterance start, pause, resume and end events. Waiting and listening have static treatments. Ending voice, switching pages or hiding the tab stops the indicator and releases the microphone. The motion preference can change during playback, and guests who request reduced motion still see the state and captions.
+
+The 131 reception tests passed on Windows. Django system and migration checks passed. Independent Chromium tests used a real WAV with quiet and loud sections to check the waveform response, captions, waiting and listening states, booking-mode cancellation, and reduced motion changes without interrupting playback. Browser speech events were controlled by the fixture. Physical microphone and performance checks on the 2019 MacBook remain open.
+
+Next reception increment: improve the mobile voice controls and add an explicit retry or edit action for the last answer.
+
 ## Guest reception modes
 
 The dedicated `/chat/` and `/voice/` pages use the same session-backed booking draft. Chat offers typed replies and suggestions. Voice retains captions, transcribed replies and typed fallback, and requests microphone access only after the guest starts voice. Leaving the voice page stops playback and releases microphone tracks. The original `/` page retains its combined controls.
