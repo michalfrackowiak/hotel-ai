@@ -34,7 +34,11 @@ When **Require arrival and departure together** is selected, a reply that yields
 
 Set **Parser fallback** on an arrival, departure, or guest-count step to choose whether the configured model can interpret an answer that the built-in parser could not recognize. **Use the built-in parser only** skips that model request. **Allow the configured model fallback** overrides a shared built-in-only setting and still requires a configured provider. Leave the field blank to inherit or keep the usual fallback.
 
-The setting follows the pinned browser scenario for typed and transcribed replies in English and Polish. An arrival answer entered during the Polish welcome uses the arrival step's policy. Staff parser corrections still apply when parser training is enabled. Phone bookings keep their existing parser behavior.
+The setting follows the pinned browser scenario for typed and transcribed replies in English and Polish. An arrival answer entered during the Polish welcome uses the arrival step's policy. Phone bookings keep their existing parser behavior.
+
+## Reviewed parser corrections
+
+Use **Reviewed parser corrections** on arrival, departure, or guest count to control whether the pinned scenario applies staff-reviewed corrections. The Polish welcome uses the arrival setting when it reaches parser review. Choose **Skip reviewed corrections** to ignore saved rules, or **Apply reviewed corrections when enabled** to override a shared skip setting. Leave it blank to inherit or keep the existing behavior. Model fallback and sample recording keep their own controls.
 
 ## Retry limits
 

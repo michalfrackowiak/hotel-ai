@@ -10,13 +10,20 @@ CHAT_FIELD = "chat_text"
 VOICE_FIELD = "voice_parts"
 ARRIVAL_INPUT_FIELD = "arrival_input"
 PARSER_FALLBACK_FIELD = "parser_fallback"
-PARSER_FALLBACK_STEPS = frozenset({"check_in", "check_out", "guests"})
+STAY_PARSER_STEPS = frozenset({"check_in", "check_out", "guests"})
 BUILT_IN_PARSER_ONLY = "built_in_only"
 PARSER_FALLBACK_CHOICES = (
     ("allow_configured", "Allow the configured model fallback"),
     (BUILT_IN_PARSER_ONLY, "Use the built-in parser only"),
 )
 PARSER_FALLBACK_LABELS = dict(PARSER_FALLBACK_CHOICES)
+PARSER_CORRECTIONS_FIELD = "parser_corrections"
+SKIP_PARSER_CORRECTIONS = "skip"
+PARSER_CORRECTIONS_CHOICES = (
+    ("apply", "Apply reviewed corrections when enabled"),
+    (SKIP_PARSER_CORRECTIONS, "Skip reviewed corrections"),
+)
+PARSER_CORRECTIONS_LABELS = dict(PARSER_CORRECTIONS_CHOICES)
 RETRY_LIMIT_FIELD = "retry_limit"
 SILENCE_WINDOW_FIELD = "voice_silence_seconds"
 SILENCE_WINDOW_STEPS = frozenset({
@@ -99,7 +106,10 @@ def prompt_fields(language, channel, step_key):
     primary = kinds if step_key in STEP_PROMPTS else ()
     outcomes = (outcome_field(prompt, kind) for prompt in OUTCOME_PROMPTS.get(step_key, ()) for kind in kinds)
     parser = (ARRIVAL_INPUT_FIELD,) if step_key == "check_in" and channel in CHANNEL_FIELDS else ()
-    fallback = (PARSER_FALLBACK_FIELD,) if step_key in PARSER_FALLBACK_STEPS and channel in CHANNEL_FIELDS else ()
+    stay_parser = (
+        (PARSER_FALLBACK_FIELD, PARSER_CORRECTIONS_FIELD)
+        if step_key in STAY_PARSER_STEPS and channel in CHANNEL_FIELDS else ()
+    )
     retry = (RETRY_LIMIT_FIELD,) if step_key in RETRY_LIMIT_STEPS and channel in CHANNEL_FIELDS else ()
     silence = (SILENCE_WINDOW_FIELD,) if (
         step_key in SILENCE_WINDOW_STEPS and kinds and (step_key != "welcome" or language == "pl")
@@ -112,7 +122,7 @@ def prompt_fields(language, channel, step_key):
     ) else ()
     return (
         *primary, *outcomes, *answer_label_fields(language, channel, step_key),
-        *parser, *fallback, *retry, *silence, *interruption, *timeout,
+        *parser, *stay_parser, *retry, *silence, *interruption, *timeout,
     )
 
 
@@ -151,6 +161,8 @@ def validate_step_configuration(language, channel, key, configuration):
         raise ValidationError("Choose a supported voice timeout action.")
     if PARSER_FALLBACK_FIELD in configuration and parser_fallback_mode(configuration) is None:
         raise ValidationError("Choose a supported parser fallback policy.")
+    if PARSER_CORRECTIONS_FIELD in configuration and parser_corrections_mode(configuration) is None:
+        raise ValidationError("Choose a supported parser corrections policy.")
     if ARRIVAL_INPUT_FIELD in configuration:
         mode = configuration[ARRIVAL_INPUT_FIELD]
         if not isinstance(mode, str) or mode not in dict(ARRIVAL_INPUT_CHOICES):
@@ -201,6 +213,17 @@ def parser_fallback_mode(configuration):
 
 def allows_model_fallback(configuration):
     return parser_fallback_mode(configuration) != BUILT_IN_PARSER_ONLY
+
+
+def parser_corrections_mode(configuration):
+    if not isinstance(configuration, dict):
+        return None
+    value = configuration.get(PARSER_CORRECTIONS_FIELD)
+    return value if isinstance(value, str) and value in PARSER_CORRECTIONS_LABELS else None
+
+
+def allows_parser_corrections(configuration):
+    return parser_corrections_mode(configuration) != SKIP_PARSER_CORRECTIONS
 
 
 def voice_timeout_mode(configuration):

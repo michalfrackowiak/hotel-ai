@@ -21,8 +21,8 @@ from .scenario import default_chat_text, render_chat, set_prompt, split_voice_pa
 from .scenario_dispatch import RETRY_COUNT, RETRY_HANDOVER, advance_counted_turn
 from .scenario_pinned_prompts import browser_prompt_bindings, browser_prompt_overrides
 from .scenario_step_settings import (
-    ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, MAX_RETRY_LIMIT, PARSER_FALLBACK_STEPS, REQUIRE_ARRIVAL_RANGE,
-    allows_model_fallback, retry_limit_value, voice_timeout_mode,
+    ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, MAX_RETRY_LIMIT, REQUIRE_ARRIVAL_RANGE, STAY_PARSER_STEPS,
+    allows_model_fallback, allows_parser_corrections, retry_limit_value, voice_timeout_mode,
 )
 from .scenario_validation import approved_destination
 from .speech import MAX_TEXT_CHARACTERS
@@ -127,7 +127,7 @@ class BookingReplySimulationForm(forms.Form):
         elif values.get("fictional_correction"):
             self.add_error("fictional_correction", "Enter an example guest reply for the correction.")
         if model_value := values.get("fictional_model_value"):
-            if parser_stage not in PARSER_FALLBACK_STEPS:
+            if parser_stage not in STAY_PARSER_STEPS:
                 self.add_error("fictional_model_value", "Choose a welcome, arrival, departure, or guest-count reply.")
             elif not values.get("reply") or not review_text_allowed(values["reply"]):
                 self.add_error("fictional_model_value", "Enter a fictional guest reply without contact details.")
@@ -249,7 +249,11 @@ def simulate_booking_reply(
             parsed = fictional_model_value
             model_outcome = "Used as the model fallback value."
     correction = None
-    if fictional_correction and not switch_to_english and (stage != "welcome" or parsed is not None):
+    corrections_allowed = allows_parser_corrections(parser_configuration)
+    if (
+        fictional_correction and corrections_allowed and not switch_to_english
+        and (stage != "welcome" or parsed is not None)
+    ):
         correction = apply_reviewed_correction(
             {**state, "stage": parser_stage}, reply, parsed, fictional_correction, source=channel,
         )
@@ -281,6 +285,7 @@ def simulate_booking_reply(
         "fictional_correction": fictional_correction,
         "model_outcome": model_outcome,
         "correction_applied": correction is not None,
+        "corrections_allowed": corrections_allowed,
         "retry_limit": retry_limit,
         "prior_retries": prior_retries or 0,
         "resulting_retry_count": result.get(RETRY_COUNT, 0),

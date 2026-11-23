@@ -114,7 +114,7 @@
         {% endif %}
         {% if simulation.fictional_correction %}
           <dt>Fictional parser correction</dt>
-          <dd>{% if simulation.correction_applied %}Applied{% else %}No change to the parsed value{% endif %}</dd>
+          <dd>{% if not simulation.corrections_allowed %}Skipped by this step’s parser policy{% elif simulation.correction_applied %}Applied{% else %}No change to the parsed value{% endif %}</dd>
         {% endif %}
         {% if simulation.retry_limit %}
           <dt>Configured retry limit</dt><dd>{{ simulation.retry_limit }}</dd>

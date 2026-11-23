@@ -65,7 +65,7 @@ def _result_text(state, value):
     return value, True
 
 
-def review_booking_input(state, text, parsed, *, source):
+def review_booking_input(state, text, parsed, *, source, apply_corrections=True):
     """Record and resolve the guest turn under the caller's revision write lock."""
     stage, language = state["stage"], state["language"]
     if stage == "welcome" and parsed is not None:
@@ -78,7 +78,7 @@ def review_booking_input(state, text, parsed, *, source):
     original = _extracted_value(state, text, parsed)
     if stage not in CONTACT_STAGES and not review_text_allowed(text):
         return original, True
-    corrected = learned_result(state, text, original, source=source)
+    corrected = learned_result(state, text, original, source=source) if apply_corrections else None
     result, succeeded = _result_text(state, original)
     delete_expired_samples()
     samples = ParserSample.objects

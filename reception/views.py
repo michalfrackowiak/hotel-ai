@@ -33,9 +33,9 @@ from .scenario_pinning import (
     carry_web_scenario, pin_web_scenario, pinned_scenario_version_id, published_pinned_steps, web_scenario_channel,
 )
 from .scenario_step_settings import (
-    ALLOW_VOICE_SKIP, ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, PARSER_FALLBACK_STEPS,
-    REQUIRE_ARRIVAL_RANGE, SILENCE_WINDOW_STEPS, VOICE_INTERRUPTION_STEPS, VOICE_TIMEOUT_STEPS, allows_model_fallback,
-    silence_window_seconds, voice_interruption_mode, voice_timeout_mode,
+    ALLOW_VOICE_SKIP, ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, REQUIRE_ARRIVAL_RANGE, SILENCE_WINDOW_STEPS,
+    STAY_PARSER_STEPS, VOICE_INTERRUPTION_STEPS, VOICE_TIMEOUT_STEPS, allows_model_fallback,
+    allows_parser_corrections, silence_window_seconds, voice_interruption_mode, voice_timeout_mode,
 )
 from .speech import (
     MAX_PCM_BYTES, MAX_TEXT_CHARACTERS, SpeechBusy, SpeechUnavailable, synthesize, synthesize_welcome, transcribe,
@@ -138,7 +138,7 @@ def _result(state, *, stale=False, cursor=0):
 def _pinned_step_configuration(state, stage):
     if pinned_scenario_version_id(state) is None:
         return {}
-    configured_stages = SILENCE_WINDOW_STEPS | VOICE_INTERRUPTION_STEPS | VOICE_TIMEOUT_STEPS | PARSER_FALLBACK_STEPS
+    configured_stages = SILENCE_WINDOW_STEPS | VOICE_INTERRUPTION_STEPS | VOICE_TIMEOUT_STEPS | STAY_PARSER_STEPS
     if stage not in configured_stages and not answer_label_fields(
         state["language"], web_scenario_channel(state), stage,
     ):
@@ -284,7 +284,7 @@ def message(request):
     parsed = None
     if (
         turn and preview and preview["revision"] == revision and preview["language"] == language
-        and preview["stage"] in (PARSER_FALLBACK_STEPS | {"welcome"})
+        and preview["stage"] in (STAY_PARSER_STEPS | {"welcome"})
     ):
         stage = "check_in" if preview["stage"] == "welcome" else preview["stage"]
         check_in = date.fromisoformat(preview["check_in"]) if stage == "check_out" else None
@@ -349,8 +349,13 @@ def message(request):
             was_welcome = state["stage"] == "welcome"
             input_parsed = False
             if turn and settings.HOTEL_PARSER_TRAINING_ENABLED:
+                parser_stage = "check_in" if was_welcome else state["stage"]
+                apply_corrections = parser_stage not in STAY_PARSER_STEPS or allows_parser_corrections(
+                    _pinned_step_configuration(state, parser_stage),
+                )
                 parsed, input_parsed = review_booking_input(
                     state, text, parsed, source="voice" if transcript_input else "chat",
+                    apply_corrections=apply_corrections,
                 )
             require_arrival_range = (
                 parsed is not None and state["stage"] in ("welcome", "check_in")
