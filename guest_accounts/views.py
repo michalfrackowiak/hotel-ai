@@ -9,7 +9,7 @@ from django.db import transaction
 from django.db.models import Exists, F
 from django.db.models.functions import Now
 from django.http import JsonResponse
-from django.http.request import UnreadablePostError
+from django.http.request import UnreadablePostError, split_domain_port
 from django.middleware.csrf import rotate_token
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare
@@ -36,15 +36,26 @@ def _error(message, status):
     return JsonResponse({"error": message}, status=status)
 
 
-def google_client_id():
+def _is_guest_host(request):
+    if not settings.HOTEL_GOOGLE_GUEST_HOST:
+        return False
+    host, _ = split_domain_port(request.get_host())
+    return host == settings.HOTEL_GOOGLE_GUEST_HOST
+
+
+def google_client_id(request):
     client_id = settings.HOTEL_GOOGLE_CLIENT_ID
-    if settings.HOTEL_GOOGLE_GUEST_SIGNIN_ENABLED and GOOGLE_CLIENT_ID.fullmatch(client_id):
+    if (
+        settings.HOTEL_GOOGLE_GUEST_SIGNIN_ENABLED
+        and GOOGLE_CLIENT_ID.fullmatch(client_id)
+        and _is_guest_host(request)
+    ):
         return client_id
     return None
 
 
 def _access_error(request):
-    if not google_client_id():
+    if not google_client_id(request):
         return _error("guest_sign_in_unavailable", 404)
     if request.user.is_authenticated:
         return _error("staff_session", 403)
@@ -111,7 +122,7 @@ def google_nonce(request):
         )
     if challenge.attempts >= MAX_CHALLENGE_ATTEMPTS:
         return _error("challenge_exhausted", 429)
-    return JsonResponse({"client_id": google_client_id(), "nonce": challenge.nonce})
+    return JsonResponse({"client_id": google_client_id(request), "nonce": challenge.nonce})
 
 
 @transaction.atomic
@@ -156,7 +167,7 @@ def google_sign_in(request):
     if error:
         return error
     try:
-        subject, returned_nonce = verify_google_credential(credential, google_client_id())
+        subject, returned_nonce = verify_google_credential(credential, google_client_id(request))
     except InvalidCredential:
         return _error("invalid_credential", 401)
     except VerificationUnavailable:
@@ -170,11 +181,13 @@ def google_sign_in(request):
 @require_POST
 @transaction.atomic
 def sign_out(request):
+    if not _is_guest_host(request):
+        return _error("guest_sign_in_unavailable", 404)
     if request.user.is_authenticated:
         return _error("staff_session", 403)
     if GUEST_SESSION_KEY in request.session:
         request.session.flush()
         rotate_token(request)
-    elif not google_client_id():
+    elif not google_client_id(request):
         return _error("guest_sign_in_unavailable", 404)
     return JsonResponse({"signed_in": False})

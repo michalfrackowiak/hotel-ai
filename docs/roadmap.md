@@ -30,6 +30,10 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 
 - [x] 0.8 Google guest sign-in controls: optional English and Polish sign-in and sign-out with reception draft continuity. See [browser checks and pilot setup](handoff.md#google-guest-sign-in-controls).
 
+- [x] 0.8 Google guest pilot routing: provide optional, rate-limited guest account routes for the approved HTTPS hostname. See [pilot configuration](google-guest-signin-readiness.md#pilot-proxy-configuration).
+
+- [ ] 0.8 Google guest pilot: verify real bilingual sign-in and anonymous booking on the approved hostname with the hotel Google web client.
+
 ## Alpha
 
 - [x] 0.5 production routed speech configuration: validate the opt-in Compose overlay, the preserved booking volume, the private web and worker network, and the ARM64 worker budget. See [cutover configuration](speech-cutover-config.md) and [PR #71](https://github.com/michalfrackowiak/hotel-ai/pull/71).

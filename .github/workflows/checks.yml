@@ -25,6 +25,8 @@ jobs:
         run: python -m unittest discover -s scripts -p 'test_controller_*.py'
       - name: Validate the routed speech Compose overlay
         run: python scripts/check_speech_routed_compose.py
+      - name: Check the optional Google guest Nginx routing
+        run: python scripts/check_guest_nginx_routing.py
       - name: Build the app image
         run: docker compose build
       - name: Check Django, migrations, and tests

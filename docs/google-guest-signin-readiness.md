@@ -20,3 +20,24 @@ Use the validated Google subject (`sub`) as the unique Google identity and enfor
 4. Run a controlled bilingual HTTPS pilot before enabling the production button. Verify new and returning accounts, cancellation and failure without draft loss, invalid and replayed tokens, duplicate first sign-in, logout and expiry, access to admin, and unauthorized booking reads. Validate chat, voice, microphone, speech, health and login on the hostname. Verify that turning off guest sign-in still allows anonymous booking. Test real Google accounts with the development client first, then confirm the production client only on the approved hostname.
 
 The next implementation can start with development fixtures while the hotel confirms DNS and OAuth project ownership. This assessment made no production DNS, certificate, Cloud project or application changes.
+
+## Pilot proxy configuration
+
+Use a separate TLS virtual host for the approved pilot hostname. Load the reception routes
+and include [guest routes](../deploy/nginx/hotel-ai-guest.inc) only inside that virtual host.
+Load the [guest rate zone](../deploy/nginx/hotel-ai-guest-zones.conf) once in the Nginx HTTP
+context. The four exact routes share a per-IP limit of 12 requests per minute, allow a burst
+of five above the rate, and limit request bodies to 4,224 bytes. Keep the existing IP virtual
+host available for active sessions.
+Continue to use the existing proxy scheme and secure-cookie settings in the pilot host.
+Add the pilot hostname to `DJANGO_ALLOWED_HOSTS` and set `HOTEL_GOOGLE_GUEST_HOST` to
+that same bare hostname, without a scheme, port, or path. With the flag and client ID set,
+Django still limits the Google controls and guest endpoints to the configured hostname.
+
+Before turning on the Django flag, verify the certificate and renewal, exact JavaScript origin,
+public policy links and anonymous chat and voice. With the flag still off, the guest endpoints
+should remain unusable through Django. Verify that the public IP still serves anonymous
+reception without Google controls and returns 404 for the guest paths. During the pilot,
+check both languages, popup behavior, session rotation, sign-out and the configured limits. For rollback, disable guest sign-in in the
+application, remove the pilot guest route include and check the configuration before reloading
+Nginx. Recheck anonymous booking and the guest routes.

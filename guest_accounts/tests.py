@@ -31,7 +31,11 @@ CREDENTIAL = "fixture.token.signature"
 SUBJECT = "fictional-google-subject"
 
 
-@override_settings(HOTEL_GOOGLE_GUEST_SIGNIN_ENABLED=True, HOTEL_GOOGLE_CLIENT_ID=CLIENT_ID)
+@override_settings(
+    HOTEL_GOOGLE_GUEST_SIGNIN_ENABLED=True,
+    HOTEL_GOOGLE_CLIENT_ID=CLIENT_ID,
+    HOTEL_GOOGLE_GUEST_HOST="testserver",
+)
 class GoogleGuestSignInTests(TestCase):
     def message(self, client=None, **payload):
         return (client or self.client).post(
@@ -73,6 +77,17 @@ class GoogleGuestSignInTests(TestCase):
                 self.assertEqual(self.credential().status_code, 404)
                 self.assertEqual(self.client.post(reverse("guest-sign-out")).status_code, 404)
                 self.assertEqual(self.message(start=True).json()["stage"], "check_in")
+        self.assertFalse(GoogleLoginChallenge.objects.exists())
+        self.assertFalse(GuestAccount.objects.exists())
+
+    def test_other_allowed_host_cannot_access_guest_routes(self):
+        with self.settings(ALLOWED_HOSTS=["testserver", "legacy.example.test"]):
+            legacy = Client(HTTP_HOST="legacy.example.test")
+            self.assertEqual(legacy.get(reverse("guest-session")).status_code, 404)
+            self.assertEqual(legacy.post(reverse("guest-google-nonce")).status_code, 404)
+            self.assertEqual(self.credential(legacy).status_code, 404)
+            self.assertEqual(legacy.post(reverse("guest-sign-out")).status_code, 404)
+            self.assertEqual(self.message(legacy, start=True).json()["stage"], "check_in")
         self.assertFalse(GoogleLoginChallenge.objects.exists())
         self.assertFalse(GuestAccount.objects.exists())
 
