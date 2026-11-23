@@ -80,6 +80,54 @@ body {
     border-top: 1px solid var(--field-border);
 }
 
+.voice-sphere {
+    --sphere-tone: #63788c;
+    display: grid;
+    flex: 0 0 40px;
+    height: 40px;
+    place-items: center;
+    border: 1px solid #8796a4;
+    border-radius: 50%;
+}
+
+.voice-sphere::before {
+    content: "";
+    width: 66%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: radial-gradient(circle at 34% 28%, #ffffffa8, transparent 55%), var(--sphere-tone);
+}
+
+.voice-sphere[data-state="listening"] {
+    --sphere-tone: #267f9b;
+    border: 2px solid #267f9b;
+}
+
+.voice-sphere[data-state="processing"] {
+    --sphere-tone: #9a742e;
+    border: 2px dotted #9a742e;
+}
+
+.voice-sphere[data-state="speaking"] {
+    --sphere-tone: #24537a;
+    border: 3px double #24537a;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .voice-sphere[data-state="speaking"][data-measured]::before {
+        transform: scale(var(--voice-scale, 1));
+    }
+
+    .voice-sphere[data-state="speaking"]:not([data-measured])::before {
+        animation: voice-pulse 900ms ease-in-out infinite alternate;
+    }
+
+    @keyframes voice-pulse {
+        from { transform: scale(.94); }
+        to { transform: scale(1.18); }
+    }
+}
+
 .reception-modes {
     display: flex;
     flex-wrap: wrap;
