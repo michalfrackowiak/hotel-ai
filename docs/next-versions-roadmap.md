@@ -105,6 +105,7 @@ The current admin edits prompt text and voice segments; conversation transitions
 - [x] Simulate bilingual guest-count replies and room-offer outcomes with fictional inventory.
 - [x] Simulate bilingual room selection and quote decisions using fictional offers.
 - [x] Simulate bilingual delivery choice and email or phone entry up to contact review.
+- [x] Simulate email and SMS contact review decisions and the initial receipt with a fictional booking reference.
 - [ ] Extend the simulator to additional steps and live parser parity. Validate missing placeholders, unreachable states, loops, required contact/consent paths and terminal states before publishing.
 - [x] Record the selected scenario version and entry channel on new web conversations. Preserve the pin across same-language turns, retries, and later publication or rollback. See [web conversation pinning](scenario-version-records.md#web-conversation-pinning).
 - [x] Render supported web prompts from the pinned version, with built-in fallbacks and compatibility for unpinned conversations. See [pinned web prompts](scenario-version-records.md#pinned-web-prompts).

@@ -2,6 +2,7 @@
 
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 from django import forms
 from django.utils import timezone
@@ -22,6 +23,10 @@ FICTIONAL_ROOMS = (
     (-1, "Demo Double", 2, Decimal("120")),
     (-2, "Demo Family", 6, Decimal("200")),
 )
+FICTIONAL_CONTACTS = {
+    "confirm_email": ("email", "guest@example.com"),
+    "confirm_sms": ("sms", "+1 202 555 0142"),
+}
 
 
 class BookingReplySimulationForm(forms.Form):
@@ -29,6 +34,7 @@ class BookingReplySimulationForm(forms.Form):
         ("check_in", "Arrival"), ("check_out", "Departure"), ("guests", "Guest count"),
         ("room", "Room selection"), ("confirm", "Quote decision"),
         ("delivery", "Delivery choice"), ("email", "Email entry"), ("phone", "Phone entry"),
+        ("confirm_email", "Contact review (email)"), ("confirm_sms", "Contact review (SMS)"),
     ))
     reply = forms.CharField(label="Example guest reply", max_length=500)
 
@@ -42,6 +48,10 @@ def _fictional_room_search(*, check_in, check_out, guests):
     ]
 
 
+def _fictional_booking(**_booking_details):
+    return SimpleNamespace(reference="DEMO-REFERENCE"), True
+
+
 def simulate_booking_reply(language, channel, steps, transitions, *, stage, reply):
     if stage == "check_in" and language == "pl" and selects_english(reply):
         return {"unsupported": True}
@@ -49,6 +59,9 @@ def simulate_booking_reply(language, channel, steps, transitions, *, stage, repl
     step_keys = {step.pk: step.key for step, _ in steps}
     edges = {(step_keys[source], event): step_keys[target] for source, event, target in transitions}
     configurations = {step.key: configuration for step, configuration in steps}
+    fictional_contact = FICTIONAL_CONTACTS.get(stage)
+    if fictional_contact:
+        stage = "contact_confirm"
     configuration = configurations[stage]
     decisions = []
 
@@ -60,7 +73,7 @@ def simulate_booking_reply(language, channel, steps, transitions, *, stage, repl
         return target if allowed else None
 
     contact_entry = stage in {"email", "phone"}
-    needs_delivery = stage == "delivery" or contact_entry
+    needs_delivery = stage == "delivery" or contact_entry or fictional_contact is not None
     needs_room_offer = stage in {"room", "confirm"} or needs_delivery
     state = new_conversation(language, "guests" if needs_room_offer else stage)
     state["stage"] = "guests" if needs_room_offer else stage
@@ -80,11 +93,15 @@ def simulate_booking_reply(language, channel, steps, transitions, *, stage, repl
             state = advance(state, "tak" if language == "pl" else "yes", None)
         if contact_entry:
             state = advance(state, "email" if stage == "email" else "sms", None)
+        elif fictional_contact:
+            method, candidate = fictional_contact
+            state = advance(advance(state, method, None), candidate, None)
     parsed = parse_stay_input(stage, reply, language, check_in=check_in)
     require_range = parsed is not None and configuration.get(ARRIVAL_INPUT_FIELD) == REQUIRE_ARRIVAL_RANGE
     result = advance_counted_turn(
         state, reply, parsed, resolve, lambda: retry_limit_value(configuration),
         voice=channel == "voice", require_arrival_range=require_range, room_search=_fictional_room_search,
+        booking_writer=_fictional_booking,
     )
     bindings = browser_prompt_bindings(result, channel)
     overrides = browser_prompt_overrides(language, channel, bindings, (
@@ -115,7 +132,11 @@ def simulate_booking_reply(language, channel, steps, transitions, *, stage, repl
             (event for _, event, target in decisions if target and event in {"approve_quote", "decline_quote"}), None,
         ),
         "delivery_choice": {"email": "Email", "phone": "SMS"}.get(result["stage"]) if stage == "delivery" else None,
-        "contact_candidate": result.get("contact_candidate") if contact_entry else None,
+        "contact_candidate": result.get("contact_candidate") if contact_entry or any(
+            event == "replace_contact" and target for _, event, target in decisions
+        ) else None,
+        "reviewed_contact": state.get("contact_candidate") if fictional_contact else None,
+        "fictional_reference": result.get("reference"),
         "guests": parsed if type(parsed) is int else None,
         "decisions": decisions,
         "stage": result["stage"],

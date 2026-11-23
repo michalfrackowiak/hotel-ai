@@ -157,7 +157,7 @@ def _allows_transition(state, event, destination, resolve_transition):
 
 def advance(
     state, message, parsed, *, voice=False, input_parsed=False, resolve_transition=None, timeout=False,
-    require_arrival_range=False, room_search=None,
+    require_arrival_range=False, room_search=None, booking_writer=None,
 ):
     stage = state["stage"]
     if stage in TERMINAL_STAGES or stage == DELIVERY_PENDING:
@@ -265,7 +265,9 @@ def advance(
             state["stage"] = destination
             set_prompt(state, destination)
     elif stage in CONTACT_STAGES:
-        return _contact_turn(state, message, answer, parsed if input_parsed else None, resolve_transition)
+        return _contact_turn(
+            state, message, answer, parsed if input_parsed else None, resolve_transition, booking_writer,
+        )
     return state
 
 
@@ -286,7 +288,7 @@ def _set_candidate(state, method, candidate):
     return set_prompt(state, f"confirm_{entry}", {"contact": candidate})
 
 
-def _contact_turn(state, message, answer, parsed, resolve_transition):
+def _contact_turn(state, message, answer, parsed, resolve_transition, booking_writer):
     language = state["language"]
     stage = state["stage"]
     reviewing = stage == "contact_confirm"
@@ -321,6 +323,7 @@ def _contact_turn(state, message, answer, parsed, resolve_transition):
             return _book(
                 state, email=candidate if method == "email" else "",
                 phone=candidate if method == "sms" else "", method=method, resolve_transition=resolve_transition,
+                booking_writer=booking_writer,
             )
     parse_contact = parse_email if method == "email" else parse_phone
     candidate = parsed or parse_contact(message)
@@ -423,7 +426,7 @@ def recognizes_booking_answer(state, message):
     return False
 
 
-def _book(state, *, email, phone, method, resolve_transition):
+def _book(state, *, email, phone, method, resolve_transition, booking_writer):
     language = state["language"]
     check_in, check_out = _stay_dates(state)
     wait = waits_for_confirmation(method)
@@ -433,7 +436,8 @@ def _book(state, *, email, phone, method, resolve_transition):
     if not _allows_transition(state, event, destination, resolve_transition):
         return state
     try:
-        booking, _ = confirm_booking(
+        write_booking = confirm_booking if booking_writer is None else booking_writer
+        booking, _ = write_booking(
             room_id=state["room_id"], check_in=check_in, check_out=check_out, guests=state["guests"],
             name="", email=email, phone=phone, delivery_method=method, language=language,
             nightly_rate=Decimal(state["nightly_rate"]), idempotency_key=UUID(state["booking_key"]),
