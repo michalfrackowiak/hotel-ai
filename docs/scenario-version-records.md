@@ -34,6 +34,8 @@ When **Require arrival and departure together** is selected, a reply that yields
 
 On a saved browser scenario step, enter a limit from 1 to 10 to hand over to reception when that many consecutive answers trigger the step's retry outcome. Leave the setting blank to inherit the shared value or use the default behavior. Enter 0 to disable the limit explicitly. A positive limit requires a `retry_exhausted` transition from that step to `handover` in the effective graph.
 
+Set **Voice silence window (seconds)** on a saved arrival, departure or guest-count step to wait 1–20 seconds for a guest to start speaking. The setting applies to each arrival segment marked **Listen** and to the listening window after the last spoken line when applicable. Ordinary playback pauses retain their segment timing. The built-in microphone capture waits for the configured interval. With browser-provided recognition, the setting controls the app timer and the browser may stop listening sooner. Leave the field blank to inherit the shared setting or keep the built-in timing. The combined browser reception uses its pinned chat version even when the microphone is active. A booking started with a voice version uses that version. Text reply timing and phone calls keep their existing behavior.
+
 Typed and transcribed answers count against the same limit. Moving to another step resets the count. Timeouts and stale requests do not count as retries. The automatic handover opens a staff conversation without copying the rejected answer into it.
 
 ## Review publication or rollback

@@ -13,9 +13,9 @@ from .scenario import default_chat_text, default_voice_parts
 from .scenario_answers import MAX_ANSWER_LABEL, ROOM_ANSWER_LABEL, answer_label_defaults, answer_label_fields
 from .scenario_editor import ARRIVAL_KEYS, VoicePartsField, _fields, _placeholder_help
 from .scenario_step_settings import (
-    ARRIVAL_INPUT_CHOICES, ARRIVAL_INPUT_FIELD, CHAT_FIELD, MAX_CHAT_TEXT, MAX_RETRY_LIMIT, OUTCOME_PROMPTS,
-    RETRY_LIMIT_FIELD, VOICE_FIELD, outcome_field, prompt_bindings,
-    prompt_fields, validate_step_configuration,
+    ARRIVAL_INPUT_CHOICES, ARRIVAL_INPUT_FIELD, CHAT_FIELD, MAX_CHAT_TEXT, MAX_RETRY_LIMIT, MAX_SILENCE_SECONDS,
+    OUTCOME_PROMPTS, RETRY_LIMIT_FIELD, SILENCE_WINDOW_FIELD, VOICE_FIELD, outcome_field, prompt_bindings,
+    prompt_fields, silence_window_seconds, validate_step_configuration,
 )
 
 SELECTION_SALT = "reception.scenario-selection.v1"
@@ -280,6 +280,13 @@ class ScenarioStepDraftForm(forms.ModelForm):
             "to inherit. A positive limit requires a retry_exhausted transition to handover."
         ),
     )
+    voice_silence_seconds = forms.IntegerField(
+        required=False, min_value=1, max_value=MAX_SILENCE_SECONDS, label="Voice silence window (seconds)",
+        help_text=(
+            "Time to wait for speech at this step. Applies to each listening segment and to listening after the "
+            "prompt ends. Leave blank to inherit."
+        ),
+    )
     arrival_input = forms.ChoiceField(
         required=False, label="Expected arrival input",
         choices=(("", "Use shared or built-in setting"), *ARRIVAL_INPUT_CHOICES),
@@ -303,7 +310,7 @@ class ScenarioStepDraftForm(forms.ModelForm):
         step = self.instance
         scenario = step.version.scenario if step.pk else None
         applicable_fields = prompt_fields(scenario.language, scenario.channel, step.key) if scenario else ()
-        for name in (CHAT_FIELD, VOICE_FIELD, ARRIVAL_INPUT_FIELD, RETRY_LIMIT_FIELD):
+        for name in (CHAT_FIELD, VOICE_FIELD, ARRIVAL_INPUT_FIELD, RETRY_LIMIT_FIELD, SILENCE_WINDOW_FIELD):
             if name not in applicable_fields:
                 self.fields.pop(name, None)
         if not step.pk or step.configuration == {}:
@@ -311,7 +318,7 @@ class ScenarioStepDraftForm(forms.ModelForm):
         if not scenario or not applicable_fields:
             return
         configuration = step.configuration if isinstance(step.configuration, dict) else {}
-        for name in (ARRIVAL_INPUT_FIELD, RETRY_LIMIT_FIELD):
+        for name in (ARRIVAL_INPUT_FIELD, RETRY_LIMIT_FIELD, SILENCE_WINDOW_FIELD):
             if name in self.fields:
                 self.initial[name] = configuration.get(name)
         default_source = "the shared default or built-in prompt" if step.version.base_version_id else "the built-in prompt"
@@ -397,7 +404,8 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
             labels = ("answer_button_labels",) if answer_label_fields(scenario.language, scenario.channel, obj.key) else ()
             parser = ("arrival_input_setting",) if ARRIVAL_INPUT_FIELD in prompts else ()
             retry = ("retry_limit_setting",) if RETRY_LIMIT_FIELD in prompts else ()
-            return (*self.fields, *primary, *summary, *labels, *parser, *retry)
+            silence = ("voice_silence_setting",) if SILENCE_WINDOW_FIELD in prompts else ()
+            return (*self.fields, *primary, *summary, *labels, *parser, *retry, *silence)
         fields = (*self.fields, *prompts)
         if obj.configuration != {}:
             return (*fields, "clear_overrides")
@@ -464,6 +472,10 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
         from .scenario_publication import describe_retry_limit
 
         return describe_retry_limit(obj.configuration) or "Shared or built-in setting"
+
+    @admin.display(description="Voice silence window (seconds)")
+    def voice_silence_setting(self, obj):
+        return silence_window_seconds(obj.configuration) or "Shared or built-in setting"
 
     @admin.display(description="Chat wording")
     def chat_text(self, obj):

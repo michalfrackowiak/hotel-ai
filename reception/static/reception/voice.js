@@ -307,7 +307,9 @@
             const source = audioContext.createMediaStreamSource(stream);
             const current = { source, node, track, revision: lastReply.revision, controller: new AbortController() };
             recording = current;
-            current.timer = setTimeout(() => stop(copy.silence), 25000);
+            // Leave enough time for the full utterance after the initial silence window.
+            const watchdog = lastReply.voiceSilenceSeconds ? Math.max(25000, silenceLimit + 15000) : 25000;
+            current.timer = setTimeout(() => stop(copy.silence), watchdog);
             node.port.onmessage = (event) => transcribe(current, event.data);
             node.onprocessorerror = () => stop(copy.microphone);
             source.connect(node).connect(audioContext.destination);
@@ -351,7 +353,10 @@
         }
     }
 
-    function awaitGuest(silenceLimit = silenceLimits[stage]) {
+    function awaitGuest(defaultSilenceLimit = silenceLimits[stage]) {
+        const silenceLimit = lastReply?.voiceSilenceSeconds
+            ? lastReply.voiceSilenceSeconds * 1000
+            : defaultSilenceLimit;
         if (!active) return;
         if (terminalStages.has(stage)) stop(copy.finished);
         else if (stage === "delivery_pending") status.textContent = copy.waiting;

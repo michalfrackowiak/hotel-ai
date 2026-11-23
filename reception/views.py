@@ -32,7 +32,9 @@ from .scenario_pinned_prompts import pinned_overrides
 from .scenario_pinning import (
     carry_web_scenario, pin_web_scenario, pinned_scenario_version_id, published_pinned_steps, web_scenario_channel,
 )
-from .scenario_step_settings import ARRIVAL_INPUT_FIELD, REQUIRE_ARRIVAL_RANGE
+from .scenario_step_settings import (
+    ARRIVAL_INPUT_FIELD, REQUIRE_ARRIVAL_RANGE, SILENCE_WINDOW_STEPS, silence_window_seconds,
+)
 from .speech import (
     MAX_PCM_BYTES, MAX_TEXT_CHARACTERS, SpeechBusy, SpeechUnavailable, synthesize, synthesize_welcome, transcribe,
     transcribe_welcome,
@@ -99,6 +101,8 @@ def _result(state, *, stale=False, cursor=0):
     elif payload["reply"] != state["reply"]:
         payload["voice_reply"] = state["reply"]
     step_configuration = _pinned_step_configuration(state, state["stage"])
+    if state["stage"] in SILENCE_WINDOW_STEPS and (seconds := silence_window_seconds(step_configuration)):
+        payload["voice_silence_seconds"] = seconds
     answer_labels = _pinned_answer_labels(state, step_configuration)
     if not (state["stage"] == "check_in" and _requires_arrival_range(step_configuration)) and (
         suggested := suggestions(state, answer_labels)
@@ -129,7 +133,9 @@ def _result(state, *, stale=False, cursor=0):
 def _pinned_step_configuration(state, stage):
     if pinned_scenario_version_id(state) is None:
         return {}
-    if stage != "check_in" and not answer_label_fields(state["language"], web_scenario_channel(state), stage):
+    if stage not in SILENCE_WINDOW_STEPS and not answer_label_fields(
+        state["language"], web_scenario_channel(state), stage,
+    ):
         return {}
     configuration = published_pinned_steps(state).filter(key=stage).values_list("configuration", flat=True).first()
     return configuration if isinstance(configuration, dict) else {}

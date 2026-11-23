@@ -10,6 +10,9 @@ CHAT_FIELD = "chat_text"
 VOICE_FIELD = "voice_parts"
 ARRIVAL_INPUT_FIELD = "arrival_input"
 RETRY_LIMIT_FIELD = "retry_limit"
+SILENCE_WINDOW_FIELD = "voice_silence_seconds"
+SILENCE_WINDOW_STEPS = frozenset({"check_in", "check_out", "guests"})
+MAX_SILENCE_SECONDS = 20
 RETRY_LIMIT_STEPS = frozenset({
     "check_in", "check_out", "guests", "room", "confirm", "delivery", "email", "phone", "contact_confirm",
 })
@@ -69,7 +72,8 @@ def prompt_fields(language, channel, step_key):
     outcomes = (outcome_field(prompt, kind) for prompt in OUTCOME_PROMPTS.get(step_key, ()) for kind in kinds)
     parser = (ARRIVAL_INPUT_FIELD,) if step_key == "check_in" and channel in CHANNEL_FIELDS else ()
     retry = (RETRY_LIMIT_FIELD,) if step_key in RETRY_LIMIT_STEPS and channel in CHANNEL_FIELDS else ()
-    return (*primary, *outcomes, *answer_label_fields(language, channel, step_key), *parser, *retry)
+    silence = (SILENCE_WINDOW_FIELD,) if step_key in SILENCE_WINDOW_STEPS and channel in CHANNEL_FIELDS else ()
+    return (*primary, *outcomes, *answer_label_fields(language, channel, step_key), *parser, *retry, *silence)
 
 
 def prompt_bindings(language, channel, step_key):
@@ -97,6 +101,10 @@ def validate_step_configuration(language, channel, key, configuration):
         raise ValidationError("Enter a whole number from 0 to %(maximum)s for the retry limit.", params={
             "maximum": MAX_RETRY_LIMIT,
         })
+    if SILENCE_WINDOW_FIELD in configuration and silence_window_seconds(configuration) is None:
+        raise ValidationError("Enter a whole number from 1 to %(maximum)s for the voice silence window.", params={
+            "maximum": MAX_SILENCE_SECONDS,
+        })
     if ARRIVAL_INPUT_FIELD in configuration:
         mode = configuration[ARRIVAL_INPUT_FIELD]
         if not isinstance(mode, str) or mode not in dict(ARRIVAL_INPUT_CHOICES):
@@ -122,3 +130,10 @@ def retry_limit_value(configuration):
         return None
     value = configuration.get(RETRY_LIMIT_FIELD)
     return value if type(value) is int and 0 <= value <= MAX_RETRY_LIMIT else None
+
+
+def silence_window_seconds(configuration):
+    if not isinstance(configuration, dict):
+        return None
+    value = configuration.get(SILENCE_WINDOW_FIELD)
+    return value if type(value) is int and 1 <= value <= MAX_SILENCE_SECONDS else None

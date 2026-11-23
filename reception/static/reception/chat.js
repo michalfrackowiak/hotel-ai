@@ -264,6 +264,7 @@
             reply: result.reply, stage, language, revision,
             voiceWelcome, welcomeParts: result.welcome_parts,
             voiceParts: result.voice_parts, voiceKey: result.voice_key, voiceReply: result.voice_reply,
+            voiceSilenceSeconds: result.voice_silence_seconds,
         } }));
     }
 
