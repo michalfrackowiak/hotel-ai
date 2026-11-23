@@ -5,6 +5,7 @@ from hashlib import sha256
 from uuid import uuid4
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
 from django.http.request import UnreadablePostError
@@ -17,7 +18,7 @@ from model_providers.extraction import extract_stay_value
 
 from .contacts import parse_email
 from .conversation import COPY as BOOKING_COPY
-from .conversation import TERMINAL_STAGES, WELCOME_PARTS, advance, new_conversation, selects_english
+from .conversation import TERMINAL_STAGES, WELCOME_PARTS, new_conversation, selects_english
 from .models import Conversation, StaffHandover
 from .parser_review import review_booking_input
 from .parsing import parse_stay_input
@@ -25,8 +26,17 @@ from .receipt import DELIVERY_PENDING, refresh_receipt
 from .scenario import (
     ENGLISH_WEB_GREETING, render_chat, scenario_overrides, set_prompt, split_voice_parts, voice_segments,
 )
+from .scenario_answers import answer_label_fields, quick_reply_defaults, suggestions, validate_answer_labels
+from .scenario_dispatch import RETRY_HANDOVER, advance_web_turn, resolve_web_transition
 from .scenario_pinned_prompts import pinned_overrides
-from .scenario_pinning import carry_web_scenario, pin_web_scenario, pinned_scenario_version_id, web_scenario_channel
+from .scenario_pinning import (
+    carry_web_scenario, pin_web_scenario, pinned_scenario_version_id, published_pinned_steps, web_scenario_channel,
+)
+from .scenario_step_settings import (
+    ALLOW_VOICE_SKIP, ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, PARSER_CORRECTIONS_STEPS, REQUIRE_ARRIVAL_RANGE,
+    SILENCE_WINDOW_STEPS, STAY_PARSER_STEPS, VOICE_INTERRUPTION_STEPS, VOICE_TIMEOUT_STEPS, allows_model_fallback,
+    allows_parser_corrections, silence_window_seconds, voice_interruption_mode, voice_timeout_mode,
+)
 from .speech import (
     MAX_PCM_BYTES, MAX_TEXT_CHARACTERS, SpeechBusy, SpeechUnavailable, synthesize, synthesize_welcome, transcribe,
     transcribe_welcome,
@@ -36,7 +46,6 @@ from .speech import (
 MAX_BODY_BYTES = 4096
 MAX_AUDIO_REQUEST_BYTES = 128
 MAX_MESSAGE_LENGTH = 500
-STAY_STAGES = ("check_in", "check_out", "guests")
 HANDOVER_PAGE_SIZE = 25
 OLD_ARRIVAL_PROMPTS = (
     "Dzień dobry, Resort Neptun Jastrzębia Góra.",
@@ -92,14 +101,32 @@ def _result(state, *, stale=False, cursor=0):
             payload["arrival_parts"] = parts
     elif payload["reply"] != state["reply"]:
         payload["voice_reply"] = state["reply"]
-    if suggestions := _suggestions(state):
-        payload["suggestions"] = suggestions
+    step_configuration = _pinned_step_configuration(state, state["stage"])
+    if state["stage"] in SILENCE_WINDOW_STEPS and (seconds := silence_window_seconds(step_configuration)):
+        payload["voice_silence_seconds"] = seconds
+    if state["stage"] in VOICE_INTERRUPTION_STEPS and voice_interruption_mode(step_configuration) == ALLOW_VOICE_SKIP:
+        payload["voice_can_skip_prompt"] = True
+    if state["stage"] in VOICE_TIMEOUT_STEPS and voice_timeout_mode(step_configuration) == CONTINUE_IN_CHAT:
+        payload["voice_timeout_continue_in_chat"] = True
+    answer_labels = _pinned_answer_labels(state, step_configuration)
+    if not (state["stage"] == "check_in" and _requires_arrival_range(step_configuration)) and (
+        suggested := suggestions(state, answer_labels)
+    ):
+        payload["suggestions"] = suggested
+    if quick_replies := {
+        field: answer_labels[field]
+        for field in quick_reply_defaults(state["language"], state["stage"])
+        if field in answer_labels
+    }:
+        payload["quick_reply_labels"] = quick_replies
     if state["stage"] == "check_in" and state["language"] == "pl" and state.get("voice_welcome"):
         payload["voice_welcome"] = True
     if state["stage"] == "handover":
         handover = StaffHandover.objects.get(pk=state["handover_id"])
         payload["handover_closed"] = handover.closed
-        payload["voice_welcome"] = not handover.closed and not handover.messages.exists()
+        payload["voice_welcome"] = (
+            not state.get(RETRY_HANDOVER) and not handover.closed and not handover.messages.exists()
+        )
         payload["handover_messages"] = list(
             handover.messages.filter(id__gt=cursor).order_by("id").values("id", "staff", "text")[:HANDOVER_PAGE_SIZE]
         )
@@ -108,22 +135,34 @@ def _result(state, *, stale=False, cursor=0):
     return JsonResponse(payload, status=409 if stale else 200)
 
 
-def _suggestions(state):
+def _pinned_step_configuration(state, stage):
+    if pinned_scenario_version_id(state) is None:
+        return {}
+    configured_stages = (
+        SILENCE_WINDOW_STEPS | VOICE_INTERRUPTION_STEPS | VOICE_TIMEOUT_STEPS | PARSER_CORRECTIONS_STEPS
+    )
+    if stage not in configured_stages and not answer_label_fields(
+        state["language"], web_scenario_channel(state), stage,
+    ):
+        return {}
+    configuration = published_pinned_steps(state).filter(key=stage).values_list("configuration", flat=True).first()
+    return configuration if isinstance(configuration, dict) else {}
+
+
+def _requires_arrival_range(configuration):
+    return configuration.get(ARRIVAL_INPUT_FIELD) == REQUIRE_ARRIVAL_RANGE
+
+
+def _pinned_answer_labels(state, configuration):
     language, stage = state["language"], state["stage"]
-    if stage == "check_in":
-        answers = ("Dzisiaj", "Jutro", "Pojutrze") if language == "pl" else ("Today", "Tomorrow", "Day after tomorrow")
-    elif stage == "check_out":
-        answers = ("1 noc", "2 noce", "3 noce") if language == "pl" else ("1 night", "2 nights", "3 nights")
-    elif stage == "guests":
-        answers = ("1", "2", "3", "4")
-    elif stage == "room":
-        return [
-            {"label": offer["room"], "text": str(number)}
-            for number, offer in enumerate(state["choices"], 1)
-        ]
-    else:
-        return []
-    return [{"label": answer, "text": answer} for answer in answers]
+    fields = answer_label_fields(language, "chat", stage)
+    if not fields or web_scenario_channel(state) != "chat":
+        return {}
+    try:
+        validate_answer_labels(language, "chat", stage, configuration)
+    except ValidationError:
+        return {}
+    return {field: configuration[field] for field in fields if field in configuration}
 
 
 def _invalid(status=400):
@@ -179,7 +218,7 @@ def _poll_receipt(session_id, language, revision):
     state = conversation.state
     if state["stage"] != DELIVERY_PENDING or state["revision"] != revision or state["language"] != language:
         return _result(state, stale=True)
-    state = refresh_receipt(state)
+    state = refresh_receipt(state, resolve_transition=resolve_web_transition)
     _save_state(conversation, state)
     return _result(state)
 
@@ -247,14 +286,16 @@ def message(request):
     parsed = None
     if (
         turn and preview and preview["revision"] == revision and preview["language"] == language
-        and preview["stage"] in (*STAY_STAGES, "welcome")
+        and preview["stage"] in (STAY_PARSER_STEPS | {"welcome"})
     ):
         stage = "check_in" if preview["stage"] == "welcome" else preview["stage"]
         check_in = date.fromisoformat(preview["check_in"]) if stage == "check_out" else None
         if not (stage == "check_in" and language == "pl" and selects_english(text)):
             parsed = parse_stay_input(stage, text, language, check_in=check_in)
             if parsed is None:
-                parsed = extract_stay_value(stage, text, language)
+                configuration = _pinned_step_configuration(preview, stage)
+                if allows_model_fallback(configuration):
+                    parsed = extract_stay_value(stage, text, language)
 
     # Recheck the revision under SQLite's write lock after parsing. Booking and
     # conversation updates commit together, including a retried confirmation.
@@ -289,7 +330,7 @@ def message(request):
         elif voice_start:
             if language == "pl" and state["stage"] == "check_in" and state.get("voice_welcome"):
                 state = _new_web_conversation(language)
-            elif state["stage"] == "handover":
+            elif state["stage"] == "handover" and not state.get(RETRY_HANDOVER):
                 handover = StaffHandover.objects.get(pk=state["handover_id"])
                 if not handover.closed and not handover.messages.exists():
                     handover.closed = True
@@ -310,15 +351,27 @@ def message(request):
             was_welcome = state["stage"] == "welcome"
             input_parsed = False
             if turn and settings.HOTEL_PARSER_TRAINING_ENABLED:
+                parser_stage = "check_in" if was_welcome else state["stage"]
+                apply_corrections = parser_stage not in PARSER_CORRECTIONS_STEPS or allows_parser_corrections(
+                    _pinned_step_configuration(state, parser_stage),
+                )
                 parsed, input_parsed = review_booking_input(
                     state, text, parsed, source="voice" if transcript_input else "chat",
+                    apply_corrections=apply_corrections,
                 )
-            state = advance(state, text or "", parsed, voice=voice, input_parsed=input_parsed)
+            require_arrival_range = (
+                parsed is not None and state["stage"] in ("welcome", "check_in")
+                and _requires_arrival_range(_pinned_step_configuration(state, "check_in"))
+            )
+            state = advance_web_turn(
+                state, text or "", parsed, voice=voice, input_parsed=input_parsed,
+                timeout=timeout, require_arrival_range=require_arrival_range,
+            )
             if was_welcome and state["stage"] == "check_in" and state["language"] == "pl" and not voice:
                 state["voice_welcome"] = True
             if state["stage"] == "handover":
                 handover = StaffHandover.objects.create(conversation=conversation, language=state["language"])
-                if text:
+                if text and not state.get(RETRY_HANDOVER):
                     handover.messages.create(text=text)
                 state["handover_id"] = handover.pk
         _save_state(conversation, state, fresh=fresh)

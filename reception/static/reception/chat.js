@@ -76,6 +76,7 @@
     };
 
     let revision = null;
+    let voiceTimeoutChatRevision = null;
     let stage = null;
     let pending = false;
     let connected = false;
@@ -88,6 +89,7 @@
     let staffReplied = false;
     let cursor = 0;
     let suggestedAnswers = [];
+    let quickReplyLabels = {};
     let displayedTurn = null;
     let transcriptShown = false;
     let canChangeDelivery = false;
@@ -108,21 +110,31 @@
         resetButton.textContent = copy.reset;
         retryButton.textContent = copy.retry;
         languageChoice.hidden = language !== "pl" || !["welcome", "check_in"].includes(stage);
+        const english = languageChoice.querySelector("button");
+        english.textContent = quickReplyLabels.answer_label_choose_english || "English";
+        english.lang = quickReplyLabels.answer_label_choose_english ? language : "en";
         const contactConfirmation = stage === "contact_confirm";
         confirmation.hidden = stage !== "confirm" && !contactConfirmation;
         contactValue.hidden = !contactConfirmation;
         changeDelivery.hidden = !contactConfirmation || !canChangeDelivery;
-        changeDelivery.textContent = copy.changeDelivery;
+        changeDelivery.textContent = quickReplyLabels.answer_label_change_delivery || copy.changeDelivery;
         changeDelivery.disabled = !canSend;
         typeInstead.hidden = !voiceActive || !["email", "phone", "contact_confirm"].includes(stage);
         typeInstead.disabled = !canSend;
         typeInstead.textContent = copy.typeInstead;
         const [yes, no] = confirmation.querySelectorAll("button");
-        yes.textContent = contactConfirmation ? copy.correct : copy.yes;
+        yes.textContent = contactConfirmation
+            ? quickReplyLabels.answer_label_approve_contact || copy.correct
+            : quickReplyLabels.answer_label_approve_quote || copy.yes;
         yes.dataset.answer = language === "pl" ? "Tak" : "Yes";
-        no.textContent = contactConfirmation ? copy.change : copy.no;
+        no.textContent = contactConfirmation
+            ? quickReplyLabels.answer_label_edit_contact || copy.change
+            : quickReplyLabels.answer_label_decline_quote || copy.no;
         no.dataset.answer = copy.no;
         delivery.hidden = stage !== "delivery";
+        const [email, sms] = delivery.querySelectorAll("button");
+        email.textContent = quickReplyLabels.answer_label_email || "E-mail";
+        sms.textContent = quickReplyLabels.answer_label_sms || "SMS";
         answerButtons.forEach((button) => {
             button.disabled = !canSend;
         });
@@ -228,6 +240,7 @@
                 lastReply = result.reply;
                 displayReply(result);
                 suggestedAnswers = result.suggestions || [];
+                quickReplyLabels = result.quick_reply_labels || {};
                 status.textContent = "";
                 updateControls();
                 announceReply(result);
@@ -252,6 +265,9 @@
             reply: result.reply, stage, language, revision,
             voiceWelcome, welcomeParts: result.welcome_parts,
             voiceParts: result.voice_parts, voiceKey: result.voice_key, voiceReply: result.voice_reply,
+            voiceSilenceSeconds: result.voice_silence_seconds,
+            voiceCanSkipPrompt: result.voice_can_skip_prompt === true,
+            voiceTimeoutContinueInChat: result.voice_timeout_continue_in_chat === true,
         } }));
     }
 
@@ -306,6 +322,7 @@
             revision = result.revision;
             voiceWelcome = Boolean(result.voice_welcome);
             suggestedAnswers = result.suggestions || [];
+            quickReplyLabels = result.quick_reply_labels || {};
             transcriptShown = false;
             connected = true;
             status.textContent = result.stale ? labels[language].updated : "";
@@ -353,9 +370,11 @@
 
     function trackSilence() {
         clearTimeout(idleTimer);
-        if (voiceActive || document.hidden || !connected || pending) return;
+        if (voiceActive || document.hidden || !connected || pending || revision === voiceTimeoutChatRevision) return;
         if (stage === "welcome") idleTimer = setTimeout(replyTimeout, 2000);
-        if (stage === "check_in" && !messageInput.value.trim()) idleTimer = setTimeout(replyTimeout, 10000);
+        if (stage === "check_in" && !messageInput.value.trim()) {
+            idleTimer = setTimeout(replyTimeout, 10000);
+        }
     }
 
     messageInput.addEventListener("input", () => {
@@ -363,6 +382,7 @@
     });
     document.addEventListener("visibilitychange", trackSilence);
     form.addEventListener("reception:voice-session", (event) => {
+        if (event.detail.continueInChat) voiceTimeoutChatRevision = revision;
         voiceActive = event.detail.active;
         if (displayedTurn) {
             if (voiceActive) {
@@ -377,6 +397,11 @@
         trackSilence();
     });
     form.addEventListener("reception:voice-silence", replyTimeout);
+    form.addEventListener("reception:voice-prompt-skipped", (event) => {
+        if (displayedTurn?.revision !== event.detail.revision) return;
+        displayedTurn.item.querySelector("p").textContent = displayedTurn.result.reply;
+        log.scrollTop = log.scrollHeight;
+    });
     form.addEventListener("reception:spoken", (event) => {
         const spoken = event.detail;
         if (!displayedTurn || spoken.revision !== displayedTurn.revision) return;

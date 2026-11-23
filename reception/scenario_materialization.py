@@ -6,7 +6,7 @@ from django.db.models import Q
 
 from .models import ScenarioStep, ScenarioTransition, ScenarioVersion
 from .scenario_step_settings import prompt_fields, validate_step_configuration
-from .scenario_validation import APPROVED_STEPS, APPROVED_TRANSITIONS, MAX_TRANSITIONS
+from .scenario_validation import APPROVED_STEPS, MAX_TRANSITIONS, approved_destination
 
 
 def _read_graph(version_id, language, channel, using):
@@ -35,7 +35,7 @@ def _read_graph(version_id, language, channel, using):
         if source_id not in keys_by_id or target_id not in keys_by_id:
             raise ValidationError("Shared defaults cannot contain transitions between versions.")
         source, target = keys_by_id[source_id], keys_by_id[target_id]
-        if (source, event) in transitions or APPROVED_TRANSITIONS.get(source, {}).get(event) != target:
+        if (source, event) in transitions or approved_destination(source, event) != target:
             raise ValidationError("Shared defaults require unique approved booking transitions.")
         transitions[source, event] = target
     return steps, transitions
@@ -69,40 +69,52 @@ def materialize_scenario_defaults(draft):
         if current["base_version_id"] is None:
             return
 
-        language = current["scenario__language"]
-        channel = current["scenario__channel"]
-        base_exists = ScenarioVersion.objects.using(using).filter(
-            pk=current["base_version_id"],
-            published_at__isnull=False,
-            base_version_id__isnull=True,
-            scenario__language=language,
-            scenario__channel="shared",
-        ).exists()
-        if language not in ("en", "pl") or channel not in ("chat", "voice") or not base_exists:
-            raise ValidationError("Shared defaults require a sealed, independent template in the same language.")
-
-        base_steps, base_transitions = _read_graph(current["base_version_id"], language, "shared", using)
-        channel_steps, channel_transitions = _read_graph(draft.pk, language, channel, using)
-        for key, base_step in base_steps.items():
-            inherited = {
-                field: base_step.configuration[field]
-                for field in prompt_fields(channel, key)
-                if field in base_step.configuration
-            }
-            if local := channel_steps.get(key):
-                configuration = {**inherited, **local.configuration}
-                validate_step_configuration(language, channel, key, configuration)
-                if configuration != local.configuration:
-                    local.configuration = configuration
-                    local.save(using=using, update_fields=["configuration"])
-            else:
-                validate_step_configuration(language, channel, key, inherited)
-                channel_steps[key] = ScenarioStep.objects.using(using).create(
-                    version_id=draft.pk, key=key, position=base_step.position, configuration=inherited,
+        steps, transitions, inherited_edges = plan_scenario_defaults(
+            draft, language=current["scenario__language"], channel=current["scenario__channel"],
+        )
+        persisted = {}
+        for key, (step, configuration) in steps.items():
+            if step.version_id != draft.pk:
+                step = ScenarioStep.objects.using(using).create(
+                    version_id=draft.pk, key=key, position=step.position, configuration=configuration,
                 )
+            elif configuration != step.configuration:
+                step.configuration = configuration
+                step.save(using=using, update_fields=["configuration"])
+            persisted[key] = step
+        for source, event in inherited_edges:
+            target = transitions[source, event]
+            ScenarioTransition.objects.using(using).create(
+                source_id=persisted[source].pk, event=event, target_id=persisted[target].pk,
+            )
 
-        for (source, event), target in base_transitions.items():
-            if (source, event) not in channel_transitions:
-                ScenarioTransition.objects.using(using).create(
-                    source_id=channel_steps[source].pk, event=event, target_id=channel_steps[target].pk,
-                )
+
+def plan_scenario_defaults(draft, *, language, channel):
+    """Return the effective steps and transitions of an inheriting draft without writing rows."""
+    using = draft._state.db
+    base_exists = ScenarioVersion.objects.using(using).filter(
+        pk=draft.base_version_id,
+        published_at__isnull=False,
+        base_version_id__isnull=True,
+        scenario__language=language,
+        scenario__channel="shared",
+    ).exists()
+    if language not in ("en", "pl") or channel not in ("chat", "voice") or not base_exists:
+        raise ValidationError("Shared defaults require a sealed, independent template in the same language.")
+
+    base_steps, base_transitions = _read_graph(draft.base_version_id, language, "shared", using)
+    local_steps, local_transitions = _read_graph(draft.pk, language, channel, using)
+    steps = {key: (step, step.configuration) for key, step in local_steps.items()}
+    for key, base_step in base_steps.items():
+        inherited = {
+            field: base_step.configuration[field]
+            for field in prompt_fields(language, channel, key)
+            if field in base_step.configuration
+        }
+        local = local_steps.get(key)
+        configuration = {**inherited, **local.configuration} if local else inherited
+        validate_step_configuration(language, channel, key, configuration)
+        steps[key] = (local or base_step, configuration)
+
+    inherited_edges = tuple(edge for edge in base_transitions if edge not in local_transitions)
+    return steps, {**base_transitions, **local_transitions}, inherited_edges

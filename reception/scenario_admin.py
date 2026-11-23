@@ -10,9 +10,16 @@ from django.views.decorators.http import require_http_methods
 
 from .models import Scenario, ScenarioPublication, ScenarioStep, ScenarioTransition, ScenarioVersion
 from .scenario import default_chat_text, default_voice_parts
+from .scenario_answers import MAX_ANSWER_LABEL, ROOM_ANSWER_LABEL, answer_label_defaults, answer_label_fields
 from .scenario_editor import ARRIVAL_KEYS, VoicePartsField, _fields, _placeholder_help
 from .scenario_step_settings import (
-    CHAT_FIELD, MAX_CHAT_TEXT, VOICE_FIELD, prompt_fields, prompt_key, validate_step_configuration,
+    ARRIVAL_INPUT_CHOICES, ARRIVAL_INPUT_FIELD, CHAT_FIELD, MAX_CHAT_TEXT, MAX_RETRY_LIMIT, MAX_SILENCE_SECONDS,
+    OUTCOME_PROMPTS, PARSER_CORRECTIONS_CHOICES, PARSER_CORRECTIONS_FIELD, PARSER_CORRECTIONS_LABELS,
+    PARSER_FALLBACK_CHOICES, PARSER_FALLBACK_FIELD, PARSER_FALLBACK_LABELS, RETRY_LIMIT_FIELD,
+    SILENCE_WINDOW_FIELD, VOICE_FIELD, VOICE_INTERRUPTION_CHOICES,
+    VOICE_INTERRUPTION_FIELD, VOICE_INTERRUPTION_LABELS, VOICE_TIMEOUT_CHOICES, VOICE_TIMEOUT_FIELD,
+    VOICE_TIMEOUT_LABELS, outcome_field, parser_corrections_mode, parser_fallback_mode, prompt_bindings, prompt_fields,
+    silence_window_seconds, validate_step_configuration, voice_interruption_mode, voice_timeout_mode,
 )
 
 SELECTION_SALT = "reception.scenario-selection.v1"
@@ -94,8 +101,16 @@ class ScenarioVersionAdmin(ScenarioDraftAdmin):
             return tuple(field for field in self.fields if field not in {"graph_validation", "outcome_coverage"})
         return self.fields
 
+    def _can_view_flow(self, request, obj=None):
+        return self.has_view_or_change_permission(request, obj) and self._can_inspect_graph(request.user)
+
     def get_urls(self):
         return [
+            path(
+                "<int:object_id>/flow/",
+                self.admin_site.admin_view(self.flow_overview),
+                name="reception_scenarioversion_flow",
+            ),
             path(
                 "<int:object_id>/selection/<str:action>/",
                 self.admin_site.admin_view(self.selection_review),
@@ -105,6 +120,10 @@ class ScenarioVersionAdmin(ScenarioDraftAdmin):
         ]
 
     def render_change_form(self, request, context, add=False, change=False, form_url="", obj=None):
+        if obj is not None and self._can_view_flow(request, obj):
+            context["scenario_flow_url"] = reverse(
+                f"{self.admin_site.name}:reception_scenarioversion_flow", args=[obj.pk],
+            )
         if obj is not None and self._can_review_selection(request, obj):
             action = "rollback" if obj.published_at is not None else "publish"
             context["scenario_selection_url"] = reverse(
@@ -113,6 +132,36 @@ class ScenarioVersionAdmin(ScenarioDraftAdmin):
             active = obj.scenario.published_version_id == obj.pk
             context["scenario_selection_label"] = "Selection history" if active else f"Review {action}"
         return super().render_change_form(request, context, add, change, form_url, obj)
+
+    @method_decorator(require_http_methods(["GET", "POST"]))
+    def flow_overview(self, request, object_id):
+        from .scenario_overview import scenario_flow_overview
+        from .scenario_simulator import BookingReplySimulationForm
+
+        if not self._can_view_flow(request):
+            raise PermissionDenied
+        version = self.get_object(request, object_id)
+        if version is None:
+            raise Http404
+        if not self._can_view_flow(request, version):
+            raise PermissionDenied
+
+        request.current_app = self.admin_site.name
+        return TemplateResponse(request, "admin/reception/scenarioversion/flow_overview.html", {
+            **self.admin_site.each_context(request),
+            **scenario_flow_overview(
+                version,
+                simulation_form=BookingReplySimulationForm(
+                    request.POST if request.method == "POST" else None,
+                    language=version.scenario.language,
+                    channel=version.scenario.channel,
+                ),
+            ),
+            "title": "Scenario flow overview",
+            "opts": self.model._meta,
+            "version": version,
+            "change_url": reverse(f"{self.admin_site.name}:reception_scenarioversion_change", args=[version.pk]),
+        })
 
     @method_decorator(require_http_methods(["GET", "POST"]))
     def selection_review(self, request, object_id, action):
@@ -270,6 +319,47 @@ class ScenarioVersionAdmin(ScenarioDraftAdmin):
 
 
 class ScenarioStepDraftForm(forms.ModelForm):
+    retry_limit = forms.IntegerField(
+        required=False, min_value=0, max_value=MAX_RETRY_LIMIT, label="Retry limit",
+        help_text=(
+            "Number of consecutive same-step retries before handover. Set to 0 for no limit or leave it blank "
+            "to inherit. A positive limit requires a retry_exhausted transition to handover."
+        ),
+    )
+    voice_silence_seconds = forms.IntegerField(
+        required=False, min_value=1, max_value=MAX_SILENCE_SECONDS, label="Voice silence window (seconds)",
+        help_text=(
+            "Time to wait for speech at this step. Applies to each listening segment and to listening after the "
+            "prompt ends. Leave blank to inherit."
+        ),
+    )
+    voice_interruption = forms.ChoiceField(
+        required=False, label="Voice interruption",
+        choices=(("", "Use shared or built-in setting"), *VOICE_INTERRUPTION_CHOICES),
+        help_text="Applies during browser voice. Skipping stops the spoken reply and starts listening.",
+    )
+    voice_timeout = forms.ChoiceField(
+        required=False, label="Voice timeout action",
+        choices=(("", "Use shared or built-in setting"), *VOICE_TIMEOUT_CHOICES),
+        help_text="What happens if the guest stays silent through the final voice listening window at this step.",
+    )
+    parser_corrections = forms.ChoiceField(
+        required=False, label="Reviewed parser corrections",
+        choices=(("", "Use shared or built-in setting"), *PARSER_CORRECTIONS_CHOICES),
+        help_text=(
+            "Choose whether reviewed corrections can change the parsed value. Sample collection follows site settings."
+        ),
+    )
+    parser_fallback = forms.ChoiceField(
+        required=False, label="Parser fallback",
+        choices=(("", "Use shared or built-in setting"), *PARSER_FALLBACK_CHOICES),
+        help_text="Choose whether an unrecognized answer may be passed to the configured model provider.",
+    )
+    arrival_input = forms.ChoiceField(
+        required=False, label="Expected arrival input",
+        choices=(("", "Use shared or built-in setting"), *ARRIVAL_INPUT_CHOICES),
+        help_text="Require both stay dates in one answer or allow guests to give their departure separately.",
+    )
     chat_text = forms.CharField(
         required=False, max_length=MAX_CHAT_TEXT, label="Chat wording", widget=forms.Textarea(attrs={"rows": 4}),
     )
@@ -277,7 +367,7 @@ class ScenarioStepDraftForm(forms.ModelForm):
         required=False, label="Voice segments",
         help_text="Segments play from top to bottom. Clear a row's text, pause and Listen setting to remove it.",
     )
-    clear_overrides = forms.BooleanField(required=False, label="Clear all prompt overrides")
+    clear_overrides = forms.BooleanField(required=False, label="Clear all step overrides")
 
     class Meta:
         model = ScenarioStep
@@ -287,8 +377,12 @@ class ScenarioStepDraftForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         step = self.instance
         scenario = step.version.scenario if step.pk else None
-        applicable_fields = prompt_fields(scenario.channel, step.key) if scenario else ()
-        for name in (CHAT_FIELD, VOICE_FIELD):
+        applicable_fields = prompt_fields(scenario.language, scenario.channel, step.key) if scenario else ()
+        settings = (
+            ARRIVAL_INPUT_FIELD, RETRY_LIMIT_FIELD, SILENCE_WINDOW_FIELD, VOICE_INTERRUPTION_FIELD,
+            VOICE_TIMEOUT_FIELD, PARSER_FALLBACK_FIELD, PARSER_CORRECTIONS_FIELD,
+        )
+        for name in (CHAT_FIELD, VOICE_FIELD, *settings):
             if name not in applicable_fields:
                 self.fields.pop(name, None)
         if not step.pk or step.configuration == {}:
@@ -296,28 +390,41 @@ class ScenarioStepDraftForm(forms.ModelForm):
         if not scenario or not applicable_fields:
             return
         configuration = step.configuration if isinstance(step.configuration, dict) else {}
-        key = prompt_key(scenario.language, step.key)
+        for name in settings:
+            if name in self.fields:
+                self.initial[name] = configuration.get(name)
         default_source = "the shared default or built-in prompt" if step.version.base_version_id else "the built-in prompt"
-        if chat := self.fields.get(CHAT_FIELD):
-            default = default_chat_text(scenario.language, key)
-            self.initial[CHAT_FIELD] = configuration.get(CHAT_FIELD, "")
-            chat.help_text = f"Leave blank to use {default_source}." + _placeholder_help(_fields([default]))
-            chat.widget.attrs["placeholder"] = default
-        if voice := self.fields.get(VOICE_FIELD):
-            parts = configuration.get(VOICE_FIELD)
-            if isinstance(parts, list) and all(isinstance(part, dict) for part in parts):
-                self.initial[VOICE_FIELD] = parts
-            voice.widget.allow_listening = key in ARRIVAL_KEYS
-            defaults = default_voice_parts(scenario.language, key)
-            voice.help_text += f" Leave every row blank to use {default_source}."
-            voice.help_text += _placeholder_help(_fields(part["text"] for part in defaults))
+        for name, default in answer_label_defaults(scenario.language, step.key).items():
+            if label := self.fields.get(name):
+                self.initial[name] = configuration.get(name, "")
+                label.widget.attrs["placeholder"] = default
+                label.help_text += f" Leave blank to use {default_source}."
+        for key, fields in prompt_bindings(scenario.language, scenario.channel, step.key).items():
+            chat_name, voice_name = fields.get(CHAT_FIELD), fields.get(VOICE_FIELD)
+            if chat := self.fields.get(chat_name):
+                default = default_chat_text(scenario.language, key)
+                self.initial[chat_name] = configuration.get(chat_name, "")
+                chat.help_text = f"Leave blank to use {default_source}." + _placeholder_help(_fields([default]))
+                chat.widget.attrs["placeholder"] = default
+            if voice := self.fields.get(voice_name):
+                parts = configuration.get(voice_name)
+                if isinstance(parts, list) and all(isinstance(part, dict) for part in parts):
+                    self.initial[voice_name] = parts
+                voice.widget.allow_listening = key in ARRIVAL_KEYS
+                defaults = default_voice_parts(scenario.language, key)
+                voice.help_text += f" Leave every row blank to use {default_source}."
+                voice.help_text += _placeholder_help(_fields(part["text"] for part in defaults))
+                if key == "option":
+                    voice.widget.max_parts = 1
+                    voice.help_text += " This segment is used inside the room list. Set its pause to zero."
 
     def clean(self):
         data = super().clean()
         step = self.instance
         if not step.pk:
             return data
-        editable = [name for name in (CHAT_FIELD, VOICE_FIELD) if name in self.fields]
+        scenario = step.version.scenario
+        editable = [name for name in prompt_fields(scenario.language, scenario.channel, step.key) if name in self.fields]
         if data.get("clear_overrides"):
             for name in editable:
                 self.errors.pop(name, None)
@@ -327,9 +434,11 @@ class ScenarioStepDraftForm(forms.ModelForm):
                 raise ValidationError("Clear the stored prompt overrides before entering new content.")
             configuration = {
                 **{name: value for name, value in step.configuration.items() if name not in editable},
-                **{name: data[name] for name in editable if data[name]},
+                **{
+                    name: data[name] for name in editable
+                    if data[name] or (name == RETRY_LIMIT_FIELD and data[name] == 0)
+                },
             }
-            scenario = step.version.scenario
             validate_step_configuration(scenario.language, scenario.channel, step.key, configuration)
             step.configuration = configuration
         return data
@@ -359,13 +468,109 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
     def get_fields(self, request, obj=None):
         if obj is None:
             return self.fields
-        fields = (*self.fields, *prompt_fields(obj.version.scenario.channel, obj.key))
-        if obj.configuration != {} and self.has_change_permission(request, obj):
+        scenario = obj.version.scenario
+        prompts = prompt_fields(scenario.language, scenario.channel, obj.key)
+        if not self.has_change_permission(request, obj):
+            primary = tuple(name for name in prompts if name in (CHAT_FIELD, VOICE_FIELD))
+            summary = ("outcome_wording",) if obj.key in OUTCOME_PROMPTS else ()
+            labels = ("answer_button_labels",) if answer_label_fields(scenario.language, scenario.channel, obj.key) else ()
+            parser = ("arrival_input_setting",) if ARRIVAL_INPUT_FIELD in prompts else ()
+            fallback = ("parser_fallback_setting",) if PARSER_FALLBACK_FIELD in prompts else ()
+            corrections = ("parser_corrections_setting",) if PARSER_CORRECTIONS_FIELD in prompts else ()
+            retry = ("retry_limit_setting",) if RETRY_LIMIT_FIELD in prompts else ()
+            silence = ("voice_silence_setting",) if SILENCE_WINDOW_FIELD in prompts else ()
+            interruption = ("voice_interruption_setting",) if VOICE_INTERRUPTION_FIELD in prompts else ()
+            timeout = ("voice_timeout_setting",) if VOICE_TIMEOUT_FIELD in prompts else ()
+            return (
+                *self.fields, *primary, *summary, *labels, *parser, *fallback, *corrections,
+                *retry, *silence, *interruption, *timeout,
+            )
+        fields = (*self.fields, *prompts)
+        if obj.configuration != {}:
             return (*fields, "clear_overrides")
         return fields
 
+    def get_form(self, request, obj=None, **kwargs):
+        if obj is not None and self.has_change_permission(request, obj):
+            variants = {}
+            scenario = obj.version.scenario
+            available = prompt_fields(scenario.language, scenario.channel, obj.key)
+            for field, answer in answer_label_defaults(scenario.language, obj.key).items():
+                if field not in available:
+                    continue
+                if field == ROOM_ANSWER_LABEL:
+                    label = "Room answer button label"
+                    help_text = "Keep {room} in the label. The button still selects the quoted room."
+                else:
+                    label = f"Answer button label for {answer}"
+                    help_text = "Keep the same answer meaning. Only the displayed label changes."
+                variants[field] = forms.CharField(
+                    required=False, max_length=MAX_ANSWER_LABEL, label=label, help_text=help_text,
+                )
+            for prompt in OUTCOME_PROMPTS.get(obj.key, ()):
+                label = prompt.replace("_", " ").capitalize()
+                chat_name = outcome_field(prompt, CHAT_FIELD)
+                if chat_name in available:
+                    variants[chat_name] = forms.CharField(
+                        required=False, max_length=MAX_CHAT_TEXT, label=f"{label} chat wording",
+                        widget=forms.Textarea(attrs={"rows": 3}),
+                    )
+                voice_name = outcome_field(prompt, VOICE_FIELD)
+                if voice_name in available:
+                    variants[voice_name] = VoicePartsField(
+                        required=False, label=f"{label} voice segments",
+                        help_text="Segments play from top to bottom.",
+                    )
+            if variants:
+                kwargs["form"] = type("ScenarioStepOutcomeForm", (self.form,), variants)
+        return super().get_form(request, obj, **kwargs)
+
     def get_readonly_fields(self, request, obj=None):
         return ("version", "key") if obj is not None else ()
+
+    @admin.display(description="Outcome wording")
+    def outcome_wording(self, obj):
+        from .scenario_publication import describe_outcome_wording
+
+        return " | ".join(describe_outcome_wording(obj.configuration)) or "Default wording"
+
+    @admin.display(description="Answer button labels")
+    def answer_button_labels(self, obj):
+        from .scenario_publication import describe_answer_labels
+
+        return " | ".join(describe_answer_labels(obj.configuration)) or "Default labels"
+
+    @admin.display(description="Expected arrival input")
+    def arrival_input_setting(self, obj):
+        from .scenario_publication import describe_arrival_input
+
+        return describe_arrival_input(obj.configuration) or "Shared or built-in setting"
+
+    @admin.display(description="Reviewed parser corrections")
+    def parser_corrections_setting(self, obj):
+        return PARSER_CORRECTIONS_LABELS.get(parser_corrections_mode(obj.configuration), "Shared or built-in setting")
+
+    @admin.display(description="Parser fallback")
+    def parser_fallback_setting(self, obj):
+        return PARSER_FALLBACK_LABELS.get(parser_fallback_mode(obj.configuration), "Shared or built-in setting")
+
+    @admin.display(description="Retry limit")
+    def retry_limit_setting(self, obj):
+        from .scenario_publication import describe_retry_limit
+
+        return describe_retry_limit(obj.configuration) or "Shared or built-in setting"
+
+    @admin.display(description="Voice silence window (seconds)")
+    def voice_silence_setting(self, obj):
+        return silence_window_seconds(obj.configuration) or "Shared or built-in setting"
+
+    @admin.display(description="Voice interruption")
+    def voice_interruption_setting(self, obj):
+        return VOICE_INTERRUPTION_LABELS.get(voice_interruption_mode(obj.configuration), "Shared or built-in setting")
+
+    @admin.display(description="Voice timeout action")
+    def voice_timeout_setting(self, obj):
+        return VOICE_TIMEOUT_LABELS.get(voice_timeout_mode(obj.configuration), "Shared or built-in setting")
 
     @admin.display(description="Chat wording")
     def chat_text(self, obj):

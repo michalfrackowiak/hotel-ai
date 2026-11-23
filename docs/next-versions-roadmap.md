@@ -89,12 +89,40 @@ The current admin edits prompt text and voice segments; conversation transitions
 - [x] Materialize pinned shared defaults and validate the resulting graph. Seal, select, roll back, and audit versions through an internal atomic service.
 - [x] Expose permission-gated staff publication and rollback with an effective graph diff, recent selection history, and stale-review protection. See [staff review](scenario-version-records.md#review-publication-or-rollback).
 - [x] Edit primary draft prompts with validated chat placeholders and ordered voice segments, pauses and arrival listening.
-- [ ] Extend editing to per-outcome wording, answer buttons, expected parser fields, retry limits, validation messages, allowed branches, timeout actions, and delivery/handover behavior. Add voice silence windows and interruption policy, and independent chat button labels.
+- [x] Add per-outcome chat wording and voice segments for supported browser prompts.
+- [x] Edit chat labels for date and room suggestions, language choice, quote and contact decisions, and delivery actions independently of submitted answers.
+- [x] Configure whether an arrival step accepts a single arrival date or requires both stay dates in one reply.
+- [x] Configure retry limits for supported browser booking steps and route exhausted retries to reception.
+- [x] Configure pinned browser voice silence windows for arrival, departure and guest count.
+- [x] Extend pinned browser voice silence windows to room selection, quote decisions, delivery choice, email, phone and contact confirmation.
+- [x] Configure the Polish bilingual welcome's browser voice silence window before the usual arrival prompt.
+- [x] Configure whether guests can skip spoken prompts at the arrival, departure and guest-count steps.
+- [x] Extend opt-in prompt skipping to the Polish welcome, room selection, delivery choice, and email and phone entry. Keep quote and contact confirmation playback outside this setting.
+- [x] Configure whether final browser voice silence at arrival continues the booking in chat.
+- [x] Configure whether final browser voice silence at the Polish welcome keeps the welcome open in chat, and preview the result in the simulator.
+- [x] Configure optional model parser fallback for browser arrival, departure, and guest-count replies.
+- [x] Configure whether reviewed parser corrections apply to browser arrival, departure, and guest-count replies, including when the Polish welcome uses the arrival parser.
+- [x] Extend the reviewed correction policy to browser room selection, email and phone entry.
+- [x] Add automated regression coverage for pinned room and contact correction policies and admin previews of language switching, voice timeouts, bilingual date parsing, fictional parser outcomes and retry handover.
+- [ ] Extend editing to other parser settings, additional validation messages, allowed branches, timeout actions, and delivery/handover behavior.
 - [ ] Permit adding/reordering optional steps and routing through approved actions. Keep availability, price calculation, required consent and atomic booking creation as enforced server invariants. Forbid arbitrary Python, SQL or unvalidated external actions in the editor.
-- [ ] Provide a flow overview and simulator with example inputs, extracted values, chosen transition and rendered voice/chat output. Validate missing placeholders, unreachable states, loops, required contact/consent paths and terminal states before publishing.
+- [x] Provide a read-only admin flow overview of the saved or effective inherited graph and its validation findings.
+- [x] Preview one bilingual browser arrival reply in the flow overview using built-in parsing, effective transitions and rendered chat/voice wording.
+- [x] Simulate a bilingual departure reply using a fictional arrival date, including stay durations and departure retries.
+- [x] Simulate bilingual guest-count replies and room-offer outcomes with fictional inventory.
+- [x] Simulate bilingual room selection and quote decisions using fictional offers.
+- [x] Simulate bilingual delivery choice and email or phone entry up to contact review.
+- [x] Simulate email and SMS contact review decisions and the initial receipt with a fictional booking reference.
+- [x] Simulate email and SMS receipt polling outcomes with fictional delivery statuses and no provider calls.
+- [x] Simulate Polish welcome timeout and bilingual arrival timeout, including the final voice window and **Continue in chat**.
+- [x] Simulate a reply with prior consecutive retries and preview retry-limit handover without opening a staff conversation.
+- [x] Preview fictional reviewed parser corrections for arrival, departure and guest count without accessing saved samples.
+- [x] Preview fictional model results for arrival, departure and guest count using the scenario's fallback settings without calling a model provider.
+- [x] Simulate Polish welcome replies, including a single arrival date, a complete stay range and the switch to English.
+- [ ] Extend the simulator to additional steps and live parser parity. Validate missing placeholders, unreachable states, loops, required contact/consent paths and terminal states before publishing.
 - [x] Record the selected scenario version and entry channel on new web conversations. Preserve the pin across same-language turns, retries, and later publication or rollback. See [web conversation pinning](scenario-version-records.md#web-conversation-pinning).
 - [x] Render supported web prompts from the pinned version, with built-in fallbacks and compatibility for unpinned conversations. See [pinned web prompts](scenario-version-records.md#pinned-web-prompts).
-- [ ] Use the pinned version for approved transition dispatch. Preserve the booking engine’s consent and booking guarantees.
+- [x] Use the pinned version for approved browser transition dispatch, from welcome through contact confirmation and receipt. Preserve the booking engine’s consent and booking guarantees. See [pinned browser transitions](scenario-version-records.md#pinned-browser-transitions).
 
 **Acceptance:** staff can configure every scenario state in both channels/languages; new sessions use a published version while active bookings finish consistently; simulator and real conversation agree; no edited branch can bypass confirmation or create duplicate/overlapping bookings.
 

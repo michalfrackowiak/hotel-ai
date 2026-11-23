@@ -31,7 +31,9 @@ RECEIPT_KEYS = (
 def scenario_keys(language):
     from .conversation import COPY
 
-    booking = tuple(key for key in COPY[language] if key not in ("welcome", "voice_option", "and"))
+    # The combined-date retry is configured on the versioned arrival step.
+    excluded = {"welcome", "voice_option", "and", "stay_dates_required"}
+    booking = tuple(key for key in COPY[language] if key not in excluded)
     welcome = tuple(key for locale, key in WELCOME_KEYS if locale == language)
     web = ("web_check_in",) if language == "en" else ()
     return (*welcome, *web, *booking, *RECEIPT_KEYS, *(f"phone_{key}" for key in PHONE_COPY[language]))

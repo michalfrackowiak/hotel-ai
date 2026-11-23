@@ -58,6 +58,15 @@ def _request_value(config, messages, stage):
     return _post_json(f"{url}/chat/completions", payload, key=key)["choices"][0]["message"]["content"]
 
 
+def validate_model_stay_value(stage, value):
+    if stage == "guests":
+        return value if type(value) is int and 1 <= value <= 32767 else None
+    if stage in STAY_FIELDS and isinstance(value, str) and len(value) == 10:
+        parsed = date.fromisoformat(value)
+        return parsed if parsed.isoformat() == value else None
+    return None
+
+
 def extract_stay_value(stage, text, language):
     """Interpret one stay field. The booking flow validates and confirms the result."""
     if stage not in STAY_FIELDS:
@@ -79,12 +88,7 @@ def extract_stay_value(stage, text, language):
         content = _request_value(config, messages, stage)
         if content is None:
             return None
-        value = json.loads(content)["value"]
-        if stage == "guests":
-            return value if type(value) is int and 1 <= value <= 32767 else None
-        if isinstance(value, str) and len(value) == 10:
-            parsed = date.fromisoformat(value)
-            return parsed if parsed.isoformat() == value else None
+        return validate_model_stay_value(stage, json.loads(content)["value"])
     except (ValueError, TypeError, KeyError, IndexError, OSError, HTTPException, RecursionError):
         logger.warning("Reception model did not return a usable stay value (%s)", config.provider)
     return None

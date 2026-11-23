@@ -1,0 +1,164 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{{ change_url }}">{{ version }}</a> &rsaquo; Flow overview
+</div>
+{% endblock %}
+
+{% block content %}
+  <h2>{{ version }}</h2>
+  {% if version.published_at %}
+    <p>Saved published graph</p>
+  {% elif flow_saved_only %}
+    <p>Saved draft graph. The shared defaults could not be applied.</p>
+  {% elif version.base_version_id %}
+    <p>Draft with shared defaults from {{ version.base_version }}</p>
+  {% else %}
+    <p>Saved draft graph</p>
+  {% endif %}
+  <p>Entry step <code>{{ flow_entry }}</code></p>
+
+  {% if flow_errors %}
+    <h3>Validation findings</h3>
+    <ul class="errorlist">
+      {% for error in flow_errors %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+  {% else %}
+    <p>Step and transition validation passed.</p>
+  {% endif %}
+
+  <table>
+    <caption>Scenario steps and outcomes</caption>
+    <thead>
+      <tr><th scope="col">Position</th><th scope="col">Step</th><th scope="col">Outcomes</th></tr>
+    </thead>
+    <tbody>
+      {% for step in flow_steps %}
+        <tr>
+          <td>{{ step.position }}</td>
+          <th scope="row">
+            <code>{{ step.key }}</code>
+            {% if step.terminal %}<span>(terminal)</span>{% endif %}
+            {% if step.inherited %}<span>(shared)</span>{% endif %}
+          </th>
+          <td>
+            {% if step.outcomes %}
+              <ul>
+                {% for event, target in step.outcomes %}
+                  <li><code>{{ event }}</code> &rarr; <code>{{ target }}</code></li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              &mdash;
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="3">No steps saved for this version.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if simulation_form %}
+    <h3>Simulate a booking reply, timeout or receipt</h3>
+    <p>Preview one typed or transcribed booking reply. Use fictional details. Departure assumes arrival tomorrow. Later steps assume a two-night stay from tomorrow and fictional rooms for up to two or six guests. Room selection offers both rooms to two guests. Quote decisions and later steps use the first room.</p>
+    <p>Arrival examples {% for example in arrival_examples %}<code>{{ example }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}. Departure example <code>{{ departure_example }}</code>. Guest-count example <code>{{ guest_count_example }}</code>. Room example <code>{{ room_example }}</code>. Quote examples {% for example in quote_examples %}<code>{{ example }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}.</p>
+    <p>Delivery examples <code>email</code>, <code>sms</code>. Email example <code>guest@example.com</code>. Phone example <code>+1 202 555 0142</code>.</p>
+    <p>Contact review accepts the same yes and no examples as the quote decision. Approval uses a fictional booking reference and previews the initial receipt without creating a booking or sending a message.</p>
+    <p>For an email or SMS receipt, choose a fictional delivery status. Leave the reply blank. The preview uses a fictional reference and does not contact a delivery provider.</p>
+    <p>For an arrival or Polish welcome timeout, choose chat inactivity or the final voice listening window. The final voice window uses this version's timeout setting, including when the combined reception uses a chat version with the microphone active. Leave the reply blank for timeouts.</p>
+    <p>For a reply step with a retry limit, the prior count represents fictional consecutive retries at that same step. If the next reply reaches the limit, the simulator previews the reception handover without opening a staff conversation.</p>
+    <p>The reply preview uses built-in parsing and the current date settings. For welcome, arrival, departure, or guest count, you can enter a fictional model result or parser correction. The preview applies the scenario's model fallback setting without contacting a model provider or reading saved corrections.</p>
+    {% if simulation_form.language == "pl" %}
+      <p>In a Polish welcome or arrival reply, enter <code>English</code> or <code>2</code> to preview switching to the built-in English arrival prompt.</p>
+    {% endif %}
+    <form method="post">
+      {% csrf_token %}
+      {{ simulation_form.as_p }}
+      <button type="submit">Simulate</button>
+    </form>
+
+    {% if simulation %}
+      <h4>Simulation result</h4>
+      <dl>
+        {% if simulation.context_arrival %}<dt>Fictional arrival</dt><dd>{{ simulation.context_arrival }}</dd>{% endif %}
+        {% if simulation.context_departure %}<dt>Fictional departure</dt><dd>{{ simulation.context_departure }}</dd>{% endif %}
+        {% if simulation.receipt_scenario %}
+          <dt>Fictional receipt status</dt><dd>{{ simulation.receipt_scenario }}</dd>
+          <dt>Fictional reference</dt><dd>{{ simulation.fictional_reference }}</dd>
+        {% elif simulation.timeout %}
+          {% if simulation.continue_in_chat %}<dt>Voice timeout action</dt><dd>Continue in chat</dd>{% endif %}
+        {% elif simulation.input_stage == "guests" %}
+          <dt>Extracted guest count</dt><dd>{{ simulation.guests|default_if_none:"—" }}</dd>
+        {% elif simulation.input_stage == "room" %}
+          <dt>Fictional room options</dt><dd>{{ simulation.room_options|join:", " }}</dd>
+          <dt>Selected room</dt><dd>{{ simulation.selected_room|default:"—" }}</dd>
+        {% elif simulation.input_stage == "confirm" %}
+          <dt>Fictional quoted room</dt><dd>{{ simulation.quoted_room }}</dd>
+          <dt>Quote decision</dt><dd>{% if simulation.quote_decision == "approve_quote" %}Accepted{% elif simulation.quote_decision == "decline_quote" %}Declined{% else %}—{% endif %}</dd>
+        {% elif simulation.input_stage == "delivery" %}
+          <dt>Selected delivery method</dt><dd>{{ simulation.delivery_choice|default:"—" }}</dd>
+        {% elif simulation.input_stage == "email" or simulation.input_stage == "phone" %}
+          <dt>Parsed contact for review</dt><dd>{{ simulation.contact_candidate|default:"—" }}</dd>
+        {% elif simulation.input_stage == "contact_confirm" %}
+          <dt>Fictional contact for review</dt><dd>{{ simulation.reviewed_contact }}</dd>
+          {% if simulation.fictional_reference %}<dt>Fictional reference</dt><dd>{{ simulation.fictional_reference }}</dd>{% endif %}
+          {% if simulation.contact_candidate %}<dt>Parsed replacement contact</dt><dd>{{ simulation.contact_candidate }}</dd>{% endif %}
+        {% else %}
+          <dt>Extracted arrival</dt><dd>{{ simulation.arrival|default:"—" }}</dd>
+          <dt>Extracted departure</dt><dd>{{ simulation.departure|default:"—" }}</dd>
+        {% endif %}
+        {% if simulation.model_outcome %}
+          <dt>Fictional model result</dt><dd>{{ simulation.model_outcome }}</dd>
+        {% endif %}
+        {% if simulation.fictional_correction %}
+          <dt>Fictional parser correction</dt>
+          <dd>{% if not simulation.corrections_allowed %}Skipped by this step’s parser policy{% elif simulation.correction_applied %}Applied{% else %}No change to the parsed value{% endif %}</dd>
+        {% endif %}
+        {% if simulation.retry_limit %}
+          <dt>Configured retry limit</dt><dd>{{ simulation.retry_limit }}</dd>
+          <dt>Prior consecutive retries</dt><dd>{{ simulation.prior_retries }}</dd>
+          {% if simulation.retry_handover %}
+            <dt>Retry outcome</dt><dd>Limit reached. Handover to reception.</dd>
+          {% else %}
+            <dt>Resulting consecutive retries</dt><dd>{{ simulation.resulting_retry_count }}</dd>
+          {% endif %}
+        {% endif %}
+        {% if simulation.language != simulation_form.language %}
+          <dt>Language change</dt><dd>English (built-in prompt)</dd>
+        {% endif %}
+        <dt>Resulting step</dt><dd><code>{{ simulation.stage }}</code></dd>
+      </dl>
+      {% if simulation.decisions %}
+        <h4>Transition decisions</h4>
+        <ul>
+          {% for source, event, target in simulation.decisions %}
+            <li><code>{{ source }}</code> &middot; <code>{{ event }}</code> &rarr; <code>{{ target|default:"Unavailable" }}</code></li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      <h4>Chat reply</h4>
+      <p>{{ simulation.chat }}</p>
+      {% if simulation.continue_in_chat %}
+        <p>The browser ends the voice session and keeps the current step open in chat. This action sends no server timeout request.</p>
+      {% else %}
+        <h4>Spoken reply</h4>
+        <p>Segment durations come from the script. Playback and microphone timing are outside this preview.</p>
+        {% if simulation.voice %}
+          <ol>
+            {% for part in simulation.voice %}
+              <li lang="{{ part.language }}">
+                {{ part.text }}
+                {% if part.listen %}<span>(Listen for {{ part.seconds }} s)</span>
+                {% elif part.seconds %}<span>(Pause for {{ part.seconds }} s)</span>{% endif %}
+              </li>
+            {% endfor %}
+          </ol>
+        {% else %}
+          <p>{{ simulation.voice_fallback }}</p>
+        {% endif %}
+      {% endif %}
+    {% endif %}
+  {% endif %}
+{% endblock %}

@@ -9,7 +9,7 @@ from bookings.services import BookingError, available_rooms, confirm_booking
 from . import legacy_conversation
 from .contacts import parse_email, parse_phone
 from .parsing import NUMBER_WORDS, ORDINALS, StayDates, parse_stay_input
-from .receipt import DELIVERY_PENDING, start_receipt
+from .receipt import DELIVERY_PENDING, start_receipt, waits_for_confirmation
 from .scenario import room_options, set_prompt
 
 
@@ -50,6 +50,7 @@ COPY = {
         "check_out_retry": "Please give a departure date after arrival or the length of your stay. For example, say for three nights.",
         "guests": "Please tell me the total number of guests (adults and children) for the reservation.",
         "stay_dates": "Check-in is {check_in} and check-out is {check_out}.",
+        "stay_dates_required": "Please give both your arrival and departure dates in one answer.",
         "guests_retry": "Please give the total number of adults and children as a positive whole number.",
         "rooms": "I have checked availability. For your dates, we have the following rooms available: {options}. Which option would you like to select?",
         "option": "room {room} for {total} PLN total",
@@ -75,6 +76,7 @@ COPY = {
         "check_out_retry": "Podaj datę wyjazdu po dacie przyjazdu lub długość pobytu, na przykład na trzy noce.",
         "guests": "Podaj łączną liczbę osób (dorosłych i dzieci), dla których mamy przygotować rezerwację.",
         "stay_dates": "Przyjazd {check_in}, wyjazd {check_out}.",
+        "stay_dates_required": "Podaj datę przyjazdu i datę wyjazdu w jednej odpowiedzi.",
         "guests_retry": "Podaj łączną liczbę dorosłych i dzieci jako dodatnią liczbę całkowitą.",
         "rooms": "Sprawdziłam dostępność. Na wybrany termin mamy następujące wolne pokoje: {options}. Którą opcję chciałbyś wybrać?",
         "option": "pokój {room} w cenie {total} PLN za pobyt",
@@ -149,7 +151,14 @@ def selects_english(message):
     return _answer(message) in ENGLISH_SELECTIONS
 
 
-def advance(state, message, parsed, *, voice=False, input_parsed=False):
+def _allows_transition(state, event, destination, resolve_transition):
+    return resolve_transition is None or resolve_transition(state, event) == destination
+
+
+def advance(
+    state, message, parsed, *, voice=False, input_parsed=False, resolve_transition=None, timeout=False,
+    require_arrival_range=False, room_search=None, booking_writer=None,
+):
     stage = state["stage"]
     if stage in TERMINAL_STAGES or stage == DELIVERY_PENDING:
         return state
@@ -157,7 +166,19 @@ def advance(state, message, parsed, *, voice=False, input_parsed=False):
     answer = _answer(message)
     if stage in ("welcome", "check_in") and language == "pl" and answer in ENGLISH_SELECTIONS:
         return new_conversation("en", "check_in")
+    today = timezone.localdate() if stage in ("welcome", "check_in") else None
     if stage == "welcome":
+        if resolve_transition is not None:
+            if isinstance(parsed, StayDates) and today <= parsed.check_in < parsed.check_out:
+                event, destination = "stay_dates", "guests"
+            elif type(parsed) is date and parsed >= today and not require_arrival_range:
+                event, destination = "arrival", "check_out"
+            else:
+                event, destination = ("timeout" if timeout else "continue"), "check_in"
+            if not _allows_transition(state, event, destination, resolve_transition):
+                return {**state, "revision": uuid4().hex}
+            # The validated welcome edge covers the same-turn date handling.
+            resolve_transition = None
         state = new_conversation(language, "check_in")
         if not isinstance(parsed, (date, StayDates)):
             return state
@@ -178,48 +199,75 @@ def advance(state, message, parsed, *, voice=False, input_parsed=False):
 
     state = {**state, "revision": uuid4().hex}
     if stage == "check_in":
+        retry_prompt = "stay_dates_required" if require_arrival_range else "check_in"
         if isinstance(parsed, StayDates):
-            if timezone.localdate() <= parsed.check_in < parsed.check_out:
+            valid = today <= parsed.check_in < parsed.check_out
+            event, destination = ("stay_dates", "guests") if valid else ("retry", "check_in")
+            allowed = _allows_transition(state, event, destination, resolve_transition)
+            if valid and allowed:
                 state.update(stage="guests", check_in=parsed.check_in.isoformat(), check_out=parsed.check_out.isoformat())
                 set_prompt(state, "stay_dates", _display_dates(state), tail="guests")
             else:
-                set_prompt(state, "check_in")
+                set_prompt(state, retry_prompt)
         elif type(parsed) is date:
-            if parsed >= timezone.localdate():
+            valid = parsed >= today and not require_arrival_range
+            event, destination = ("arrival", "check_out") if valid else ("retry", "check_in")
+            allowed = _allows_transition(state, event, destination, resolve_transition)
+            if valid and allowed:
                 state.update(stage="check_out", check_in=parsed.isoformat())
                 set_prompt(state, "check_out")
             else:
-                set_prompt(state, "check_in")
+                set_prompt(state, retry_prompt)
         else:
-            return _terminal(state, "handover")
+            event = "timeout" if timeout else "unrecognized"
+            if _allows_transition(state, event, "handover", resolve_transition):
+                return _terminal(state, "handover")
+            set_prompt(state, "check_in")
     elif stage == "check_out":
-        if type(parsed) is date and parsed > date.fromisoformat(state["check_in"]):
+        departure = type(parsed) is date and parsed > date.fromisoformat(state["check_in"])
+        event, destination = ("departure", "guests") if departure else ("retry", "check_out")
+        allowed = _allows_transition(state, event, destination, resolve_transition)
+        if departure and allowed:
             state.update(stage="guests", check_out=parsed.isoformat())
             set_prompt(state, "guests")
         else:
             set_prompt(state, "check_out_retry")
     elif stage == "guests":
         if type(parsed) is int and 1 <= parsed <= 32767:
-            return _offer_rooms(state, parsed, voice)
+            return _offer_rooms(state, parsed, voice, resolve_transition, room_search)
+        _allows_transition(state, "retry", "guests", resolve_transition)
         set_prompt(state, "guests_retry")
     elif stage == "room":
-        return _select_room(state, parsed if input_parsed else _room_choice(state, answer))
+        choice = parsed if input_parsed else _room_choice(state, answer)
+        event, destination = ("selected", "confirm") if choice is not None else ("retry", "room")
+        if _allows_transition(state, event, destination, resolve_transition):
+            return _select_room(state, choice)
     elif stage == "confirm":
         if answer in CANCEL[language]:
-            return _terminal(state, "cancelled")
-        if answer in CONFIRM[language]:
+            if _allows_transition(state, "decline_quote", "cancelled", resolve_transition):
+                return _terminal(state, "cancelled")
+        elif answer in CONFIRM[language]:
+            if not _allows_transition(state, "approve_quote", "delivery", resolve_transition):
+                return state
             state["stage"] = "delivery"
             set_prompt(state, "delivery")
             state.setdefault("booking_key", str(uuid4()))
+        else:
+            _allows_transition(state, "retry", "confirm", resolve_transition)
     elif stage == "delivery":
         if answer in EMAIL_ANSWERS:
-            state["stage"] = "email"
-            set_prompt(state, "email")
+            event, destination = "email", "email"
         elif answer in SMS_ANSWERS:
-            state["stage"] = "phone"
-            set_prompt(state, "phone")
+            event, destination = "sms", "phone"
+        else:
+            event, destination = "retry", "delivery"
+        if _allows_transition(state, event, destination, resolve_transition) and destination != "delivery":
+            state["stage"] = destination
+            set_prompt(state, destination)
     elif stage in CONTACT_STAGES:
-        return _contact_turn(state, message, answer, parsed if input_parsed else None)
+        return _contact_turn(
+            state, message, answer, parsed if input_parsed else None, resolve_transition, booking_writer,
+        )
     return state
 
 
@@ -240,24 +288,26 @@ def _set_candidate(state, method, candidate):
     return set_prompt(state, f"confirm_{entry}", {"contact": candidate})
 
 
-def _contact_turn(state, message, answer, parsed):
+def _contact_turn(state, message, answer, parsed, resolve_transition, booking_writer):
     language = state["language"]
     stage = state["stage"]
     reviewing = stage == "contact_confirm"
     method = state["contact_method"] if reviewing else ("email" if stage == "email" else "sms")
     entry = "email" if method == "email" else "phone"
     if answer in CONTACT_HANDOVER[language]:
-        return _terminal(state, "handover")
+        if _allows_transition(state, "reception", "handover", resolve_transition):
+            return _terminal(state, "handover")
+        return state
     if state.get("flow") == "neptun":
         if answer in DELIVERY_CHANGES[language]:
-            return _contact_entry(state, "delivery")
+            return _route_contact_entry(state, "change_delivery", "delivery", resolve_transition)
         if answer in EMAIL_ANSWERS:
-            return _contact_entry(state, "email")
+            return _route_contact_entry(state, "choose_email", "email", resolve_transition)
         if answer in SMS_ANSWERS:
-            return _contact_entry(state, "phone")
+            return _route_contact_entry(state, "choose_sms", "phone", resolve_transition)
     if reviewing:
         if answer in CANCEL[language] or answer in CONTACT_CHANGES[language]:
-            return _contact_entry(state, entry)
+            return _route_contact_entry(state, f"edit_{entry}", entry, resolve_transition)
         if answer in CONFIRM[language]:
             candidate = state["contact_candidate"]
             if state.get("flow") != "neptun":
@@ -272,24 +322,42 @@ def _contact_turn(state, message, answer, parsed):
                 return legacy_conversation.advance(state, candidate, None)
             return _book(
                 state, email=candidate if method == "email" else "",
-                phone=candidate if method == "sms" else "", method=method,
+                phone=candidate if method == "sms" else "", method=method, resolve_transition=resolve_transition,
+                booking_writer=booking_writer,
             )
     parse_contact = parse_email if method == "email" else parse_phone
     candidate = parsed or parse_contact(message)
     if candidate is None:
+        _allows_transition(state, "retry", stage, resolve_transition)
         return state if reviewing else set_prompt(state, f"invalid_{entry}")
-    return _set_candidate(state, method, candidate)
+    event = "replace_contact" if reviewing else "valid_contact"
+    if _allows_transition(state, event, "contact_confirm", resolve_transition):
+        return _set_candidate(state, method, candidate)
+    return state
 
 
-def _offer_rooms(state, guests, voice):
+def _route_contact_entry(state, event, entry, resolve_transition):
+    if _allows_transition(state, event, entry, resolve_transition):
+        return _contact_entry(state, entry)
+    return state
+
+
+def _offer_rooms(state, guests, voice, resolve_transition, room_search):
     language = state["language"]
     check_in, check_out = _stay_dates(state)
+    search = available_rooms if room_search is None else room_search
     try:
-        offers = available_rooms(check_in=check_in, check_out=check_out, guests=guests)
+        offers = search(check_in=check_in, check_out=check_out, guests=guests)
     except BookingError:
-        return new_conversation(language, "offer_changed")
+        if _allows_transition(state, "offer_changed", "check_in", resolve_transition):
+            return new_conversation(language, "offer_changed")
+        return state
     if not offers:
-        return new_conversation(language, "unavailable")
+        if _allows_transition(state, "unavailable", "check_in", resolve_transition):
+            return new_conversation(language, "unavailable")
+        return state
+    if not _allows_transition(state, "available", "room", resolve_transition):
+        return state
     if voice:
         offers = offers[:2]
     state.update(
@@ -358,18 +426,29 @@ def recognizes_booking_answer(state, message):
     return False
 
 
-def _book(state, *, email, phone, method):
+def _book(state, *, email, phone, method, resolve_transition, booking_writer):
     language = state["language"]
     check_in, check_out = _stay_dates(state)
+    wait = waits_for_confirmation(method)
+    event, destination = (
+        ("approve_contact", DELIVERY_PENDING) if wait else ("approve_contact_without_wait", "completed")
+    )
+    if not _allows_transition(state, event, destination, resolve_transition):
+        return state
     try:
-        booking, _ = confirm_booking(
+        write_booking = confirm_booking if booking_writer is None else booking_writer
+        booking, _ = write_booking(
             room_id=state["room_id"], check_in=check_in, check_out=check_out, guests=state["guests"],
             name="", email=email, phone=phone, delivery_method=method, language=language,
             nightly_rate=Decimal(state["nightly_rate"]), idempotency_key=UUID(state["booking_key"]),
         )
     except BookingError as error:
         if error.code in {"invalid_email", "invalid_phone"}:
-            _contact_entry(state, "email" if method == "email" else "phone")
-            return set_prompt(state, error.code)
-        return new_conversation(language, "offer_changed")
-    return start_receipt(state, str(booking.reference), method)
+            entry = "email" if method == "email" else "phone"
+            if _allows_transition(state, error.code, entry, resolve_transition):
+                _contact_entry(state, entry)
+                return set_prompt(state, error.code)
+        elif _allows_transition(state, "offer_changed", "check_in", resolve_transition):
+            return new_conversation(language, "offer_changed")
+        return state
+    return start_receipt(state, str(booking.reference), method, wait=wait)

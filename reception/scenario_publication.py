@@ -11,7 +11,13 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .models import Scenario, ScenarioPublication, ScenarioStep, ScenarioTransition, ScenarioVersion
+from .scenario_answers import ROOM_ANSWER_LABEL
 from .scenario_materialization import materialize_scenario_defaults
+from .scenario_step_settings import (
+    ARRIVAL_INPUT_CHOICES, ARRIVAL_INPUT_FIELD, PARSER_CORRECTIONS_LABELS, PARSER_FALLBACK_LABELS,
+    VOICE_INTERRUPTION_LABELS, VOICE_TIMEOUT_LABELS, parser_corrections_mode, parser_fallback_mode, retry_limit_value,
+    silence_window_seconds, voice_interruption_mode, voice_timeout_mode,
+)
 from .scenario_validation import APPROVED_STEPS, MAX_TRANSITIONS, validate_materialized_scenario
 
 
@@ -89,20 +95,75 @@ def _graph_snapshot(version_id, using):
     return tuple((key, position, config) for _, key, position, config in rows), transitions
 
 
-def _describe_step(position, configuration):
-    parts = [f"position {position}"]
-    if not isinstance(configuration, dict):
-        return f"position {position}, invalid saved prompt configuration"
-    if text := configuration.get("chat_text"):
-        parts.append(f"chat: {text}")
-    voice = configuration.get("voice_parts")
+def _describe_prompt(configuration, *, prefix=""):
+    if text := configuration.get(f"{prefix}chat_text"):
+        yield f"{prefix.replace('_', ' ')}chat: {text}"
+    voice = configuration.get(f"{prefix}voice_parts")
     if isinstance(voice, list):
         for number, segment in enumerate(voice, 1):
             if isinstance(segment, dict):
                 listen = ", listen" if segment.get("listen") else ""
-                parts.append(
-                    f"voice {number}: {segment.get('text', '')} ({segment.get('seconds', 0)}s{listen})",
-                )
+                yield f"{prefix.replace('_', ' ')}voice {number}: {segment.get('text', '')} ({segment.get('seconds', 0)}s{listen})"
+
+
+def describe_outcome_wording(configuration):
+    if isinstance(configuration, dict):
+        prefixes = {
+            field.removesuffix(kind)
+            for field in configuration
+            for kind in ("chat_text", "voice_parts")
+            if field.endswith(f"_{kind}")
+        }
+        for prefix in sorted(prefixes):
+            yield from _describe_prompt(configuration, prefix=prefix)
+
+
+def describe_answer_labels(configuration):
+    if isinstance(configuration, dict):
+        for field in sorted(configuration):
+            if field == ROOM_ANSWER_LABEL:
+                yield f"Room answer button: {configuration[field]}"
+            elif field.startswith("answer_label_"):
+                label = field.removeprefix("answer_label_").replace("_", " ")
+                yield f"Answer button {label}: {configuration[field]}"
+
+
+def describe_arrival_input(configuration):
+    if isinstance(configuration, dict):
+        mode = configuration.get(ARRIVAL_INPUT_FIELD)
+        if isinstance(mode, str):
+            return dict(ARRIVAL_INPUT_CHOICES).get(mode)
+    return None
+
+
+def describe_retry_limit(configuration):
+    limit = retry_limit_value(configuration)
+    if limit is None:
+        return None
+    return str(limit) if limit else "No limit"
+
+
+def _describe_step(position, configuration):
+    if not isinstance(configuration, dict):
+        return f"position {position}, invalid saved prompt configuration"
+    parts = [
+        f"position {position}", *_describe_prompt(configuration), *describe_outcome_wording(configuration),
+        *describe_answer_labels(configuration),
+    ]
+    if mode := describe_arrival_input(configuration):
+        parts.append(f"Expected arrival input: {mode}")
+    if mode := parser_fallback_mode(configuration):
+        parts.append(f"Parser fallback: {PARSER_FALLBACK_LABELS[mode]}")
+    if mode := parser_corrections_mode(configuration):
+        parts.append(f"Reviewed parser corrections: {PARSER_CORRECTIONS_LABELS[mode]}")
+    if limit := describe_retry_limit(configuration):
+        parts.append(f"Retry limit: {limit}")
+    if seconds := silence_window_seconds(configuration):
+        parts.append(f"Voice silence window: {seconds} seconds")
+    if mode := voice_interruption_mode(configuration):
+        parts.append(f"Voice interruption: {VOICE_INTERRUPTION_LABELS[mode]}")
+    if mode := voice_timeout_mode(configuration):
+        parts.append(f"Voice timeout action: {VOICE_TIMEOUT_LABELS[mode]}")
     return " | ".join(parts)
 
 

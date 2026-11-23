@@ -3,12 +3,12 @@
 from dataclasses import dataclass
 
 from django.core.exceptions import ValidationError
-from django.db.models import Exists, OuterRef
 
-from .models import ScenarioPublication, ScenarioStep
 from .scenario import _specs
-from .scenario_pinning import pinned_scenario_version_id, web_scenario_channel
-from .scenario_step_settings import CHAT_FIELD, STEP_PROMPTS, VOICE_FIELD, prompt_key, validate_step_configuration
+from .scenario_pinning import pinned_scenario_version_id, published_pinned_steps, web_scenario_channel
+from .scenario_step_settings import (
+    CHAT_FIELD, OUTCOME_PROMPTS, STEP_PROMPTS, VOICE_FIELD, prompt_bindings, validate_step_configuration,
+)
 
 
 @dataclass(frozen=True)
@@ -30,40 +30,44 @@ def pinned_overrides(state):
 
     language = state["language"]
     channel = web_scenario_channel(state)
-    specs = set(_specs(state))
-    keys_by_step = {
-        step: (language, key)
-        for step in STEP_PROMPTS
-        if (key := prompt_key(language, step)) and (language, key) in specs
-    }
-    if not keys_by_step:
+    bindings = browser_prompt_bindings(state, channel)
+    if not bindings:
         return {}
-
-    publication = ScenarioPublication.objects.filter(
-        scenario_id=OuterRef("version__scenario_id"),
-        selected_version_id=OuterRef("version_id"),
-        action="publish",
-    )
     steps = (
-        ScenarioStep.objects.filter(
-            version_id=version_id,
-            version__published_at__isnull=False,
-            version__scenario__language=language,
-            version__scenario__channel=channel,
-            key__in=keys_by_step,
-        )
-        .filter(Exists(publication))
-        .values_list("key", "configuration")[:len(keys_by_step)]
+        published_pinned_steps(state).filter(key__in=bindings)
+        .values_list("key", "configuration")[:len(bindings)]
     )
+    return browser_prompt_overrides(language, channel, bindings, steps)
+
+
+def browser_prompt_bindings(state, channel):
+    """Select prompt bindings relevant to the current reply."""
+    language = state["language"]
+    specs = set(_specs(state))
+    if (language, "rooms") in specs:
+        specs.add((language, "option"))
+    bindings = {}
+    for step in STEP_PROMPTS.keys() | OUTCOME_PROMPTS.keys():
+        relevant = {
+            prompt: fields for prompt, fields in prompt_bindings(language, channel, step).items()
+            if (language, prompt) in specs
+        }
+        if relevant:
+            bindings[step] = relevant
+    return bindings
+
+
+def browser_prompt_overrides(language, channel, bindings, steps):
+    """Render the same configuration mapping for live and preview graphs."""
     overrides = {}
     for step, configuration in steps:
         try:
             validate_step_configuration(language, channel, step, configuration)
         except ValidationError:
             continue
-        if configuration:
-            overrides[keys_by_step[step]] = _PinnedPrompt(
-                chat_text=configuration.get(CHAT_FIELD, ""),
-                voice_parts=tuple(configuration.get(VOICE_FIELD, ())),
-            )
+        for prompt, fields in bindings[step].items():
+            chat_text = configuration.get(fields.get(CHAT_FIELD), "")
+            voice_parts = configuration.get(fields.get(VOICE_FIELD), ())
+            if chat_text or voice_parts:
+                overrides[language, prompt] = _PinnedPrompt(chat_text, tuple(voice_parts))
     return overrides
