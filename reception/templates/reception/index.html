@@ -5,18 +5,23 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
-    <title>{% if language == "pl" %}Rezerwacja pokoju{% else %}Book a room{% endif %} · Neptun Resort</title>
+    <title>{{ page_title }} · Neptun Resort</title>
     <link rel="stylesheet" href="{% static 'reception/reception.css' %}">
-    <script src="{% static 'reception/chat.js' %}?v=welcome-voice-timeout" defer></script>
+    <script src="{% static 'reception/chat.js' %}?v=reception-modes" defer></script>
+    {% if mode != "chat" %}
     <script src="{% static 'reception/voice.js' %}?v=welcome-voice-timeout" defer></script>
+    {% endif %}
 </head>
 <body>
     {% include "reception/_header.html" with active_page="reception" %}
-    <main id="reception-app" data-language="{{ language }}" class="booking-layout">
+    <main id="reception-app" data-language="{{ language }}" data-mode="{{ mode }}"
+        {% if resume_conversation %}data-resume{% endif %} class="booking-layout">
         <section class="intro" aria-labelledby="booking-title">
             <div class="property-location" lang="pl">Jastrzębia Góra</div>
-            <h1 id="booking-title">{% if language == "pl" %}Zarezerwuj pokój{% else %}Book a room{% endif %}</h1>
+            <h1 id="booking-title">{{ heading }}</h1>
             <p>{% if language == "pl" %}Podaj terminy i liczbę gości. Recepcja sprawdzi dostępność i poda cenę przed potwierdzeniem rezerwacji.{% else %}Share your dates and guest count. Reception will check availability and quote the price before you confirm.{% endif %}</p>
+            {% include "reception/_modes.html" %}
+            {% if mode != "chat" %}
             <div class="voice-controls">
                 <button id="start-voice" class="confirm-button" type="button"
                     {% if piper_enabled %}data-audio-url="{% url 'reception-audio' %}"{% endif %}
@@ -29,6 +34,7 @@
                 <p id="voice-privacy" hidden>{% if language == "pl" %}Odpowiedzi głosowe są wysyłane na serwer hotelu w celu zamiany na tekst.{% else %}Spoken replies are sent to the hotel server for transcription.{% endif %}</p>
                 {% endif %}
             </div>
+            {% endif %}
         </section>
         <section class="chat-panel" aria-labelledby="reception-title">
             <header class="chat-header">
@@ -55,7 +61,9 @@
                     <button class="quiet-button" type="button" data-answer="{% if language == 'pl' %}Nie{% else %}No{% endif %}">{% if language == "pl" %}Nie{% else %}No{% endif %}</button>
                 </div>
                 <button id="chat-change-delivery" class="quiet-button" type="button" hidden>{% if language == "pl" %}Zmień sposób dostawy{% else %}Change delivery method{% endif %}</button>
+                {% if mode != "chat" %}
                 <button id="chat-type-instead" class="quiet-button" type="button" hidden>{% if language == "pl" %}Wpisz zamiast dyktować{% else %}Type instead{% endif %}</button>
+                {% endif %}
                 <div id="chat-delivery" class="confirmation-actions" hidden>
                     <button class="quiet-button" type="button" data-answer="Email">E-mail</button>
                     <button class="quiet-button" type="button" data-answer="SMS">SMS</button>

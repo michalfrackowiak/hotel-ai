@@ -1,5 +1,13 @@
 # Session handoff
 
+## Guest reception modes
+
+The dedicated `/chat/` and `/voice/` pages use the same session-backed booking draft. Chat offers typed replies and suggestions. Voice retains captions, transcribed replies and typed fallback, and requests microphone access only after the guest starts voice. Leaving the voice page stops playback and releases microphone tracks. The original `/` page retains its combined controls.
+
+A new draft selects the scenario for its entry mode and language. Changing modes resumes the current revision and keeps its original scenario pin. A full page navigation resumes at the current prompt. Earlier message bubbles stay in their original page rather than being copied into browser storage.
+
+The next reception increment is the playback-driven speaking animation with reduced-motion support. Public deployment of the new routes requires the updated [Nginx guest snippet](../deploy/nginx/hotel-ai-reception.inc) with the application image.
+
 ## Admin workflows
 
 The admin homepage groups shortcuts for reception, reservations and speech. Each shortcut uses Django's model permissions. Staff can filter confirmed reservations by stay timing, pause new reservations for an individual room, and inspect saved date parser settings with a fictional English or Polish reply.
@@ -8,7 +16,9 @@ Existing rooms default to accepting reservations. The booking transaction rechec
 
 Independent review approved the revised admin screens. Chromium found no horizontal overflow or axe WCAG A/AA violations at 320, 390 and 1440 pixels. Eleven new Django regressions passed. The local suite reported one existing Windows recovery-client deadline error out of 259 tests; that error reproduced in an unchanged baseline checkout.
 
-Next action: apply the bookings migration with the regular database backup during a staffed release and smoke-test the admin workflows using a disposable database. The local tests do not change the production room inventory.
+Production release on 23 November 2026 deployed PR #85 (b9b0467), including the guest styling from PR #84. The checksum-verified native ARM64 image passed the system check, migration drift check and all 11 focused admin tests in a network-isolated container. The cutover verified the SQLite backup checksum, integrity and foreign keys. The disposable restore passed bilingual chat, fictional booking, idempotent replay and the previous image's read check after migration. The live web service is healthy, all migrations are applied, and existing rooms accept reservations. The original speech workers kept running. English and Polish Piper synthesis and Vosk microphone-format smoke checks passed, and public HTTPS returned 200 for health, both reception pages and admin login. Private evidence is retained under the root-only operator directory scenario-release.gArFa05d.
+
+Next action: continue the physical microphone, sustained mixed-load and replacement-host acceptance checks.
 
 ## Guest frontend styling
 

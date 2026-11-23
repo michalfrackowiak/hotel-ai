@@ -42,6 +42,8 @@ jobs:
           curl --fail --silent --show-error http://127.0.0.1:8080/healthz/
           curl --fail --silent --show-error http://127.0.0.1:8080/ | grep -F 'id="start-voice"'
           curl --fail --silent --show-error 'http://127.0.0.1:8080/?lang=pl' | grep -F 'Włącz rozmowę głosową'
+          curl --fail --silent --show-error --output /dev/null 'http://127.0.0.1:8080/chat/?lang=en'
+          curl --fail --silent --show-error 'http://127.0.0.1:8080/voice/?lang=pl' | grep -F 'id="start-voice"'
           curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8080/static/reception/chat.js
           curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8080/static/reception/voice.js
           curl --fail --silent --show-error --output /dev/null http://127.0.0.1:8080/admin/login/

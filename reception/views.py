@@ -47,6 +47,11 @@ MAX_BODY_BYTES = 4096
 MAX_AUDIO_REQUEST_BYTES = 128
 MAX_MESSAGE_LENGTH = 500
 HANDOVER_PAGE_SIZE = 25
+RECEPTION_TITLES = {
+    "combined": {"en": ("Book a room", "Book a room"), "pl": ("Rezerwacja pokoju", "Zarezerwuj pokój")},
+    "chat": {"en": ("Reception chat", "Reception chat"), "pl": ("Czat z recepcją", "Czat z recepcją")},
+    "voice": {"en": ("Voice booking", "Voice booking"), "pl": ("Rozmowa głosowa", "Rozmowa głosowa")},
+}
 OLD_ARRIVAL_PROMPTS = (
     "Dzień dobry, Resort Neptun Jastrzębia Góra.",
     "Welcome to Resort Neptun Jastrzębia Góra.",
@@ -59,17 +64,24 @@ OLD_ARRIVAL_PROMPTS = (
 @never_cache
 @ensure_csrf_cookie
 @require_safe
-def index(request):
+def index(request, mode="combined"):
     language = request.GET.get("lang")
-    if language not in ("en", "pl"):
-        language = "pl"
+    valid_language = language in ("en", "pl")
+    resume = mode != "combined" and (request.GET.get("continue") == "1" or not valid_language)
+    if resume or not valid_language:
+        language = language if valid_language else "pl"
         if request.session.session_key:
             state = Conversation.objects.filter(session_id=request.session.session_key).values_list("state", flat=True).first()
             if state:
                 language = state["language"]
     request.session.setdefault("reception", True)
+    page_title, heading = RECEPTION_TITLES[mode][language]
     return render(request, "reception/index.html", {
         "language": language,
+        "mode": mode,
+        "page_title": page_title,
+        "heading": heading,
+        "resume_conversation": resume,
         "piper_enabled": bool(settings.HOTEL_PIPER_URL or settings.HOTEL_SPEECH_ROUTE_TARGETS),
         "asr_enabled": bool(settings.HOTEL_ASR_URL or settings.HOTEL_SPEECH_ROUTE_TARGETS),
         "parser_training_enabled": settings.HOTEL_PARSER_TRAINING_ENABLED,
@@ -240,7 +252,9 @@ def message(request):
     language = payload["language"]
     voice = payload.get("voice") is True
     opening_keys = {"language", "voice"} if voice else {"language"}
-    start = payload.get("start") is True and payload.keys() == opening_keys | {"start"}
+    resume = payload.get("resume") is True
+    start_keys = opening_keys | ({"start", "resume"} if resume else {"start"})
+    start = payload.get("start") is True and payload.keys() == start_keys
     reset = payload.get("reset") is True and payload.keys() == opening_keys | {"reset"}
     voice_start = payload.get("voice_start") is True and payload.keys() == {"language", "voice_start", "revision"}
     poll = payload.get("poll") is True and payload.keys() == {"language", "poll", "revision", "cursor"}
@@ -309,6 +323,8 @@ def message(request):
             defaults={"state": lambda: _new_web_conversation(language, channel=channel)},
         )
         state = conversation.state
+        if start and resume:
+            return _result(state)
         language_changed = start and state["language"] != language
         fresh = not created and (reset or language_changed)
         if created and (start or reset):

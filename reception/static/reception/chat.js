@@ -19,6 +19,8 @@
     const status = document.getElementById("chat-status");
     const footer = form.closest(".chat-footer");
     let language = app.dataset.language;
+    const dedicatedVoice = app.dataset.mode === "voice";
+    const legacyVoice = app.dataset.mode === "combined";
     const terminalStages = new Set(["completed", "cancelled", "delivery_pending"]);
     const labels = {
         en: {
@@ -119,9 +121,11 @@
         changeDelivery.hidden = !contactConfirmation || !canChangeDelivery;
         changeDelivery.textContent = quickReplyLabels.answer_label_change_delivery || copy.changeDelivery;
         changeDelivery.disabled = !canSend;
-        typeInstead.hidden = !voiceActive || !["email", "phone", "contact_confirm"].includes(stage);
-        typeInstead.disabled = !canSend;
-        typeInstead.textContent = copy.typeInstead;
+        if (typeInstead) {
+            typeInstead.hidden = !voiceActive || !["email", "phone", "contact_confirm"].includes(stage);
+            typeInstead.disabled = !canSend;
+            typeInstead.textContent = copy.typeInstead;
+        }
         const [yes, no] = confirmation.querySelectorAll("button");
         yes.textContent = contactConfirmation
             ? quickReplyLabels.answer_label_approve_contact || copy.correct
@@ -208,7 +212,7 @@
             cursor = entry.id;
         }
         handoverClosed = result.handover_closed;
-        if (voiceWelcome !== Boolean(result.voice_welcome)) {
+        if (legacyVoice && voiceWelcome !== Boolean(result.voice_welcome)) {
             voiceWelcome = Boolean(result.voice_welcome);
             form.dispatchEvent(new CustomEvent("reception:voice-welcome", { detail: { allowed: voiceWelcome } }));
         }
@@ -247,7 +251,7 @@
                 return;
             }
             if (!result || result.stage !== polledStage || result.language !== language) {
-                await requestChat({ start: true, language: result?.language || language });
+                await requestChat(openConversation({ resume: true }));
                 return;
             }
             revision = result.revision;
@@ -271,6 +275,10 @@
         } }));
     }
 
+    function openConversation({ resume = false } = {}) {
+        return { start: true, ...(resume ? { resume: true } : {}), ...(dedicatedVoice ? { voice: true } : {}) };
+    }
+
     async function requestChat(payload) {
         if (pending) return;
         clearTimeout(idleTimer);
@@ -291,7 +299,8 @@
                 failure = labels[language].reload;
                 return;
             }
-            if (payload.start || payload.reset) {
+            const preserveLog = payload.start && payload.resume && connected && result.revision === revision;
+            if ((payload.start && !preserveLog) || payload.reset) {
                 messages.replaceChildren();
                 cursor = 0;
                 lastReply = null;
@@ -309,18 +318,25 @@
                 const address = new URL(window.location.href);
                 address.searchParams.set("lang", language);
                 history.replaceState(null, "", address);
+                document.querySelectorAll(".reception-modes a").forEach((link) => {
+                    const destination = new URL(link.href);
+                    destination.searchParams.set("lang", language);
+                    link.href = destination.href;
+                });
             }
-            if (!wasHandover || result.stage !== "handover" || lastReply !== result.reply) {
+            if (preserveLog) {
+                reply = result;
+            } else if (!wasHandover || result.stage !== "handover" || lastReply !== result.reply) {
                 displayReply(result);
                 reply = result;
             } else if (payload.voice_start) {
                 reply = result;
             }
             lastReply = result.reply;
-            if (!result.stale && !payload.timeout && !payload.voice_start) messageInput.value = "";
+            if (!preserveLog && !result.stale && !payload.timeout && !payload.voice_start) messageInput.value = "";
             stage = result.stage;
             revision = result.revision;
-            voiceWelcome = Boolean(result.voice_welcome);
+            voiceWelcome = legacyVoice && Boolean(result.voice_welcome);
             suggestedAnswers = result.suggestions || [];
             quickReplyLabels = result.quick_reply_labels || {};
             transcriptShown = false;
@@ -370,7 +386,7 @@
 
     function trackSilence() {
         clearTimeout(idleTimer);
-        if (voiceActive || document.hidden || !connected || pending || revision === voiceTimeoutChatRevision) return;
+        if (dedicatedVoice || voiceActive || document.hidden || !connected || pending || revision === voiceTimeoutChatRevision) return;
         if (stage === "welcome") idleTimer = setTimeout(replyTimeout, 2000);
         if (stage === "check_in" && !messageInput.value.trim()) {
             idleTimer = setTimeout(replyTimeout, 10000);
@@ -427,12 +443,15 @@
     changeDelivery.addEventListener("click", () => {
         sendMessage(language === "pl" ? "zmień sposób dostawy" : "change delivery");
     });
-    typeInstead.addEventListener("click", () => {
+    typeInstead?.addEventListener("click", () => {
         form.dispatchEvent(new CustomEvent("reception:type-instead"));
         messageInput.focus();
     });
-    resetButton.addEventListener("click", () => requestChat({ reset: true }));
-    retryButton.addEventListener("click", () => requestChat({ start: true }));
+    resetButton.addEventListener("click", () => requestChat({ reset: true, ...(dedicatedVoice ? { voice: true } : {}) }));
+    retryButton.addEventListener("click", () => requestChat(openConversation({ resume: connected || revision !== null || app.hasAttribute("data-resume") })));
+    window.addEventListener("pageshow", (event) => {
+        if (event.persisted) requestChat(openConversation({ resume: true }));
+    });
 
-    requestChat({ start: true });
+    requestChat(openConversation({ resume: app.hasAttribute("data-resume") }));
 })();
