@@ -11,6 +11,7 @@ RATE_PLACES = 2
 class Room(models.Model):
     code = models.CharField(max_length=40, unique=True)
     capacity = models.PositiveSmallIntegerField()
+    accepts_reservations = models.BooleanField(default=True, db_default=True)
     google_calendar_id = models.CharField(max_length=255, null=True, blank=True, unique=True)
 
     class Meta:

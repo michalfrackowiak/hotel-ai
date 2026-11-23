@@ -47,7 +47,7 @@ def _available_rooms(check_in: date, check_out: date, guests: int):
         room=OuterRef("pk"), check_in__lt=check_out, check_out__gt=check_in
     )
     return Room.objects.select_related("price").filter(
-        ~Exists(overlaps), capacity__gte=guests, price__isnull=False
+        ~Exists(overlaps), accepts_reservations=True, capacity__gte=guests, price__isnull=False
     )
 
 

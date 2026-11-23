@@ -1,0 +1,47 @@
+{% extends "admin/base_site.html" %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .date-preview-form input {
+        box-sizing: border-box;
+        max-width: 100%;
+    }
+    .breadcrumbs a,
+    .date-preview-result p a {
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:reception_parserconfiguration_changelist' %}">Parser configuration</a>
+    &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<p>Try a fictional reply using the saved settings for {{ configuration.get_language_display }}. The preview uses built-in date extraction and does not save the reply. It skips reviewed corrections and scenario fallback.</p>
+<p>Relative dates use the hotel's current date, <time datetime="{{ today|date:'Y-m-d' }}">{{ today|date:"Y-m-d" }}</time>.</p>
+<form method="post" class="date-preview-form">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <div class="submit-row"><button type="submit" class="button default">Preview dates</button></div>
+</form>
+{% if result is not None %}
+<section class="date-preview-result" aria-labelledby="date-preview-result">
+    <h2 id="date-preview-result">Parser result</h2>
+    {% if result %}
+    <dl>
+        {% if result.arrival %}<dt>Arrival</dt><dd>{{ result.arrival|date:"Y-m-d" }}</dd>{% endif %}
+        {% if result.departure %}<dt>Departure</dt><dd>{{ result.departure|date:"Y-m-d" }}</dd>{% endif %}
+    </dl>
+    <p>The live booking flow also checks date order, availability and step-specific rules.</p>
+    {% else %}
+    <p>No date was extracted. Check the reply, the selected question and <a href="{% url 'admin:reception_parserconfiguration_change' configuration.pk %}">the saved numeric format options</a>.</p>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}

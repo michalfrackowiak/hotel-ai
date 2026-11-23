@@ -1,16 +1,41 @@
+from django import forms
 from django.contrib import admin
+from django.utils import timezone
 
 from .models import Booking, BookingConfirmation, CalendarPublication, Client, Price, Room
 
 
+class RoomForm(forms.ModelForm):
+    class Meta:
+        model = Room
+        fields = "__all__"
+        help_texts = {
+            "code": "Guests see this code when choosing a room.",
+            "capacity": "Maximum number of guests allowed in the room.",
+            "accepts_reservations": "Clear this to pause new reservations, including previously quoted offers. Existing reservations stay valid.",
+            "google_calendar_id": "Optional Google Calendar ID for publishing future reservations for this room.",
+        }
+
+
 @admin.register(Room)
 class RoomAdmin(admin.ModelAdmin):
-    list_display = ("code", "capacity", "google_calendar_id")
+    form = RoomForm
+    list_display = ("code", "capacity", "accepts_reservations", "google_calendar_id")
+    list_filter = ("accepts_reservations",)
     search_fields = ("code", "google_calendar_id")
+
+
+class PriceForm(forms.ModelForm):
+    class Meta:
+        model = Price
+        fields = "__all__"
+        help_texts = {"nightly_rate": "Rate per room per night in PLN. Saved reservations retain their original rate."}
 
 
 @admin.register(Price)
 class PriceAdmin(admin.ModelAdmin):
+    form = PriceForm
+    search_fields = ("room__code",)
     list_display = ("room", "nightly_rate")
     list_select_related = ("room",)
 
@@ -32,8 +57,33 @@ class ClientAdmin(ViewOnlyAdmin):
     search_fields = ("name", "email", "phone")
 
 
+class StayTimingFilter(admin.SimpleListFilter):
+    title = "stay timing"
+    parameter_name = "stay_timing"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("arriving", "Arriving today"),
+            ("staying", "Staying tonight"),
+            ("departing", "Departing today"),
+            ("upcoming", "Arriving after today"),
+        )
+
+    def queryset(self, request, queryset):
+        today = timezone.localdate()
+        conditions = {
+            "arriving": {"check_in": today},
+            "staying": {"check_in__lte": today, "check_out__gt": today},
+            "departing": {"check_out": today},
+            "upcoming": {"check_in__gt": today},
+        }
+        conditions_for_filter = conditions.get(self.value())
+        return queryset.filter(**conditions_for_filter) if conditions_for_filter else queryset
+
+
 @admin.register(Booking)
 class BookingAdmin(ViewOnlyAdmin):
+    list_filter = (StayTimingFilter,)
     list_display = ("reference", "room", "client", "check_in", "check_out", "guests", "total_price")
     list_select_related = ("room", "client")
     search_fields = ("reference", "room__code", "client__name", "client__email", "client__phone")
@@ -50,6 +100,6 @@ class CalendarPublicationAdmin(ViewOnlyAdmin):
 @admin.register(BookingConfirmation)
 class BookingConfirmationAdmin(ViewOnlyAdmin):
     list_display = ("booking", "method", "status", "claimed_at", "accepted_at")
-    list_filter = ("status", "method")
+    list_filter = ("status", "method", "language")
     list_select_related = ("booking",)
     search_fields = ("booking__reference", "provider_reference")

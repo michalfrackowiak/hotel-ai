@@ -1,5 +1,15 @@
 # Session handoff
 
+## Admin workflows
+
+The admin homepage groups shortcuts for reception, reservations and speech. Each shortcut uses Django's model permissions. Staff can filter confirmed reservations by stay timing, pause new reservations for an individual room, and inspect saved date parser settings with a fictional English or Polish reply.
+
+Existing rooms default to accepting reservations. The booking transaction rechecks the switch for every new confirmation, including outstanding quotes. Existing reservations and same-key retries still resolve. An older release can read and create room rows after the migration, but it will ignore any room pauses until the new release is restored. Check paused rooms before a rollback.
+
+Independent review approved the revised admin screens. Chromium found no horizontal overflow or axe WCAG A/AA violations at 320, 390 and 1440 pixels. Eleven new Django regressions passed. The local suite reported one existing Windows recovery-client deadline error out of 259 tests; that error reproduced in an unchanged baseline checkout.
+
+Next action: apply the bookings migration with the regular database backup during a staffed release and smoke-test the admin workflows using a disposable database. The local tests do not change the production room inventory.
+
 ## Guest frontend styling
 
 The first 0.7 visual update applies Neptun Resort branding, a shared navy and warm-neutral palette, and compact mobile layouts to reception, availability, reservation and booking lookup. Browser booking and voice controls retain their existing behavior.

@@ -119,7 +119,7 @@ def _number(token, language):
 
 
 def parse_stay_input(
-    stage: str, text: str, language: str, *, check_in: date | None = None,
+    stage: str, text: str, language: str, *, check_in: date | None = None, today: date | None = None,
 ) -> StayDates | date | int | None:
     value = " ".join(text.casefold().strip().rstrip(".!?。！？").split())
     if stage == "guests":
@@ -130,7 +130,7 @@ def parse_stay_input(
         return _number(number[1], language) if number else None
 
     if stage in ("check_in", "check_out"):
-        today = timezone.localdate()
+        today = today if today is not None else timezone.localdate()
         anchor = check_in if stage == "check_out" else None
         config = _date_config(language)
         try:
