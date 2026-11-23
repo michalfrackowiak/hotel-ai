@@ -7,10 +7,10 @@
     <meta name="color-scheme" content="light">
     <title>{{ page_title }} · Neptun Resort</title>
     <link rel="stylesheet" href="{% static 'reception/reception.css' %}">
-    <script src="{% static 'reception/chat.js' %}?v=reception-modes" defer></script>
     {% if mode != "chat" %}
     <script src="{% static 'reception/voice.js' %}?v=welcome-voice-timeout" defer></script>
     {% endif %}
+    <script src="{% static 'reception/chat.js' %}?v=reception-modes" defer></script>
 </head>
 <body>
     {% include "reception/_header.html" with active_page="reception" %}

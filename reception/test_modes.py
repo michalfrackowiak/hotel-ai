@@ -33,6 +33,7 @@ class ReceptionModeTests(TestCase):
                 for marker in ("start-voice", "reception/voice.js", "chat-type-instead"):
                     self.assertNotContains(chat, marker)
                     self.assertContains(voice, marker)
+                self.assertLess(voice.content.index(b"reception/voice.js"), voice.content.index(b"reception/chat.js"))
                 for page in (chat, voice):
                     self.assertContains(page, 'id="chat-log"')
                     self.assertContains(page, 'id="chat-form"')
