@@ -55,10 +55,13 @@ The x86-64 web, Piper and Vosk images built on Docker Engine 29.9.3. The fiction
 passed SQLite integrity, foreign keys, source and restore row-count agreement, migration
 compatibility, English and Polish reception entry and fictional booking replay. All verifier
 writes rolled back and the original checksum matched. The verifier covered 37 tables in
-8.95 seconds. Gunicorn booted and listened on its container loopback.
+8.95 seconds. Gunicorn booted and its loopback health check passed, as did Piper health.
 
 Available Windows physical memory fell to 1 MiB with all three workers started. The run
 was stopped before the HTTP and speech checks completed. The script now requires at least
 2 GiB of available Windows memory before setup and again before worker startup. Docker caps
 remain one CPU per container and 256 MiB for web, 384 MiB for Piper and 768 MiB for Vosk.
+The scoped cleanup verified that all rehearsal containers, volumes and the network were
+removed. The eight pre-existing running containers kept their identities.
+
 The hosted Linux job exercises the full fixture with the already-built CI images.
