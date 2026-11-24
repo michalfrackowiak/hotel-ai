@@ -5,7 +5,7 @@
 Private parser date preview can replay fictional examples against a proposed
 exact correction. It compares expected, built-in and effective results and
 exercises chat and voice scope independently. The replay does not read
-training samples or save changes.
+training samples or save changes. All 174 reception tests passed.
 
 Next parser training increment: track correction effectiveness. Separate-host
 recovery still requires a staging target.

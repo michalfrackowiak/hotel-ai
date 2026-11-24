@@ -24,4 +24,4 @@ On the arrival step the parser can read both dates from one response. Examples i
 
 ## Replay a fictional date correction
 
-Open **Preview dates** for English or Polish, then use **Replay fictional date examples**. Submit a proposed correction and compare the expected, built-in and effective result for each fictional reply. The replay uses the selected language's saved date format settings and keeps chat and voice corrections scoped separately.
+Open **Preview dates** for English or Polish, then use **Fictional correction replay**. Submit a proposed correction and compare the expected, built-in and effective result for each fictional reply. The replay uses the selected language's saved date format settings and keeps chat and voice corrections scoped separately.
