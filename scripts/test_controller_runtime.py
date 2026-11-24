@@ -13,7 +13,7 @@ import sys
 from tempfile import TemporaryDirectory
 from threading import Event, Thread
 import unittest
-from unittest.mock import call, patch
+from unittest.mock import Mock, call, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from speech_controller.admission import ControllerAdmission, ResourcePolicy
@@ -21,7 +21,7 @@ from speech_controller.backend import DockerLifecycleBackend
 from speech_controller.dispatch import ControlConfiguration
 from speech_controller.docker_control import ApprovedContainer, ControlUnavailable, DockerControls
 from speech_controller.endpoint_binding import BoundReadiness, EndpointBinding
-from speech_controller.journal import encode
+from speech_controller.journal import JournalUnavailable, encode
 from speech_controller.lifecycle import SwitchRequest
 from speech_controller.readiness import ProbeTarget
 from speech_controller.routed_executor import RoutedLifecycleExecutor
@@ -192,6 +192,59 @@ class RuntimeTests(unittest.TestCase):
                     self.assertEqual(db.execute("SELECT COUNT(*) FROM claims").fetchone(), (1,))
                     db.execute("DELETE FROM claims")
                     db.commit()
+
+    def test_copied_store_pair_is_rejected_with_fresh_configuration_identities(self):
+        # The boot check and the durable journal binding are independent: a
+        # fresh configuration sees the copied files but cannot authorize them.
+        states = {"stt": "running", "tts": "running", "spare": "created"}
+        with self.boot_observations(states) as (starts, stops, _, _, _):
+            with self.runtime(boot_workers=True, observations=states) as executor:
+                self.assertEqual(executor.state, self.executor.state)
+            starts.assert_not_called()
+            stops.assert_not_called()
+
+        copies = self.root / "replacement-host"
+        copies.mkdir(mode=0o700)
+        originals = self.traffic_path, self.journal_path
+        before = tuple(path.read_bytes() for path in originals)
+        paths = tuple(copies / path.name for path in originals)
+        for path, content in zip(paths, before, strict=True):
+            path.write_bytes(content)
+            path.chmod(0o600)
+        identities = tuple((path.stat().st_dev, path.stat().st_ino) for path in paths)
+        for identity, original in zip(identities, self.config.identities, strict=True):
+            self.assertNotEqual(identity, original)
+        if sys.platform.startswith("linux"):
+            listener = socket.socket(socket.AF_UNIX)
+            self.addCleanup(listener.close)
+            listener.bind(self.config.docker_socket)
+            manifest = copies / "controller.json"
+            manifest.write_text(json.dumps(self.manifest() | {
+                "traffic_path": str(paths[0]), "journal_path": str(paths[1]),
+            }))
+            manifest.chmod(0o600)
+            restored_config = RuntimeConfiguration.load(str(manifest), TOKEN)
+        else:
+            restored_config = replace(
+                self.config, traffic_path=str(paths[0]), journal_path=str(paths[1]), identities=identities,
+            )
+        self.assertEqual(restored_config.identities, identities)
+
+        # Even a boot that would start the selected workers must stop before
+        # container inspection, mutations, or readiness probes.
+        states = {"stt": "exited", "tts": "exited", "spare": "created"}
+
+        class Observations(dict):
+            __getitem__ = Mock(side_effect=states.__getitem__)
+
+        with self.boot_observations(states) as (starts, stops, stopped, ready, _):
+            with self.assertRaisesRegex(JournalUnavailable, "Lifecycle journal unavailable"):
+                with self.runtime(restored_config, boot_workers=True, observations=Observations(states)):
+                    self.fail("Copied stores were accepted.")
+            for function in Observations.__getitem__, starts, stops, stopped, ready:
+                function.assert_not_called()
+        self.assertEqual(before, tuple(path.read_bytes() for path in originals))
+        self.assertEqual(before, tuple(path.read_bytes() for path in paths))
 
     def test_boot_rejects_replaced_journal_after_readiness(self):
         states = {"stt": "running", "tts": "running", "spare": "created"}
