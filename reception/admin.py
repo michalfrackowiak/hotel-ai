@@ -96,12 +96,13 @@ class ParserSampleForm(forms.ModelForm):
 
     class Meta:
         model = ParserSample
-        fields = ("corrected_result",)
+        fields = ("corrected_result", "correction_enabled")
         widgets = {"corrected_result": forms.TextInput(attrs={"size": 55})}
-        labels = {"corrected_result": "Corrected result"}
+        labels = {"corrected_result": "Corrected result", "correction_enabled": "Enable correction"}
         help_texts = {
             "corrected_result": "Matching future turns can use this correction if it is unambiguous and still valid. "
             "Clear the field to remove it.",
+            "correction_enabled": "Turn off to keep the correction for review without applying it to future turns.",
         }
 
     def __init__(self, *args, **kwargs):
@@ -110,14 +111,20 @@ class ParserSampleForm(forms.ModelForm):
         if field and self.instance.stage in self.examples:
             field.help_text = f"{self.examples[self.instance.stage]} {field.help_text}"
 
-    def clean_corrected_result(self):
+    def clean(self):
         from .parser_training import validate_correction
 
-        text = self.cleaned_data["corrected_result"]
-        if not text:
-            return ""
+        data = super().clean()
+        text = data.get("corrected_result")
         sample = self.instance
-        return validate_correction(sample.stage, sample.text, text, language=sample.language, source=sample.source)
+        if text and (text != sample.corrected_result or data.get("correction_enabled")):
+            try:
+                data["corrected_result"] = validate_correction(
+                    sample.stage, sample.text, text, language=sample.language, source=sample.source,
+                )
+            except forms.ValidationError as error:
+                self.add_error("corrected_result", error)
+        return data
 
 
 class ParserSampleReviewFilter(admin.SimpleListFilter):
@@ -125,22 +132,27 @@ class ParserSampleReviewFilter(admin.SimpleListFilter):
     parameter_name = "review"
 
     def lookups(self, request, model_admin):
-        return [("pending", "No correction"), ("corrected", "Corrected")]
+        return [("pending", "No correction"), ("corrected", "Corrected"),
+                ("enabled", "Enabled correction"), ("disabled", "Disabled correction")]
 
     def queryset(self, request, queryset):
         if self.value() == "pending":
             return queryset.filter(corrected_result="")
         if self.value() == "corrected":
             return queryset.exclude(corrected_result="")
+        if self.value() in ("enabled", "disabled"):
+            return queryset.exclude(corrected_result="").filter(correction_enabled=self.value() == "enabled")
         return queryset
 
 
 @admin.register(ParserSample)
 class ParserSampleAdmin(admin.ModelAdmin):
     form = ParserSampleForm
-    fields = ("created_at", "language", "stage", "source", "text", "succeeded", "parsed_result", "corrected_result")
+    fields = ("created_at", "language", "stage", "source", "text", "succeeded", "parsed_result", "corrected_result",
+              "correction_enabled")
     readonly_fields = ("created_at", "language", "stage", "source", "text", "succeeded", "parsed_result")
-    list_display = ("created_at", "language", "stage", "source", "input_excerpt", "parsed_result", "succeeded", "corrected")
+    list_display = ("created_at", "language", "stage", "source", "input_excerpt", "parsed_result", "succeeded",
+                    "correction_status")
     list_filter = ("language", "stage", "source", "succeeded", ParserSampleReviewFilter)
     ordering = ("-created_at", "-pk")
     list_per_page = 50
@@ -155,9 +167,11 @@ class ParserSampleAdmin(admin.ModelAdmin):
     def input_excerpt(self, sample):
         return sample.text[:77] + "…" if len(sample.text) > 77 else sample.text
 
-    @admin.display(boolean=True, description="Corrected")
-    def corrected(self, sample):
-        return bool(sample.corrected_result)
+    @admin.display(description="Correction status")
+    def correction_status(self, sample):
+        if not sample.corrected_result:
+            return "No correction"
+        return "Enabled" if sample.correction_enabled else "Disabled"
 
 
 @admin.register(ParserConfiguration)

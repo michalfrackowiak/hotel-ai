@@ -1,5 +1,15 @@
 # Session handoff
 
+## Exact parser correction controls
+
+Staff can pause an exact correction without deleting the reviewed sample. Disabled
+corrections are excluded from runtime matches and conflicts. Existing corrections
+start enabled.
+
+Next parser training increment: expose conflicts and effective rule status in
+admin. Separate-host recovery still requires a staging target.
+
+
 ## Booking date arithmetic limits
 
 A stay duration that exceeds the supported calendar leaves a valid arrival
