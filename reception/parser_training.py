@@ -158,10 +158,8 @@ def learned_result(state, text, parsed, *, source):
     if stage not in (*STAY_STAGES, *CONTACT_STAGES, "room") or not _text_ok(text) or not _normalized(text, stage):
         return None
     corrections = list(
-        ParserSample.objects.unexpired()
-        .filter(language=language, stage=stage, source=source, rule_key=rule_key(language, stage, text),
-                correction_enabled=True)
-        .exclude(corrected_result="")
+        ParserSample.objects.enabled_corrections()
+        .filter(language=language, stage=stage, source=source, rule_key=rule_key(language, stage, text))
         .order_by().values_list("corrected_result", flat=True).distinct()[:2]
     )
     if len(corrections) != 1:

@@ -83,6 +83,29 @@ class ParserSampleAdminTests(TestCase):
         enabled = self.client.get(self.list, {"review": "enabled"})
         self.assertEqual([row.pk for row in enabled.context["cl"].result_list], [self.sample.pk])
 
+    def test_correction_conflicts_follow_the_runtime_scope(self):
+        self.grant("view")
+        self.client.force_login(self.staff)
+        self.sample.corrected_result = "3"
+        self.sample.save(update_fields=["corrected_result"])
+        scope = dict(rule_key=self.sample.rule_key, corrected_result="4")
+        create_sample(2, **{**scope, "corrected_result": "3"})
+        create_sample(3, source="chat", **scope)
+        create_sample(4, language="pl", **scope)
+        create_sample(5, stage="room", **scope)
+        create_sample(6, corrected_result="4")
+        create_sample(7, correction_enabled=False, **scope)
+        expired = create_sample(8, **scope)
+        ParserSample.objects.filter(pk=expired.pk).update(created_at=timezone.now() - timedelta(days=181))
+
+        self.assertContains(self.client.get(self.change), "Eligible")
+        competing = create_sample(9, **scope)
+        filtered = self.client.get(self.list, {"review": "enabled"})
+        self.assertContains(filtered, '<td class="field-correction_status">Conflicting</td>', count=3, html=True)
+        self.assertContains(self.client.get(self.change), "Conflicting")
+        ParserSample.objects.filter(pk=competing.pk).update(correction_enabled=False)
+        self.assertContains(self.client.get(self.change), "Eligible")
+
     def test_can_disable_an_existing_correction_that_no_longer_validates(self):
         self.grant("view", "change")
         self.client.force_login(self.staff)

@@ -1,5 +1,16 @@
 # Session handoff
 
+## Parser correction conflicts
+
+The private training admin identifies conflicts among enabled, unexpired
+corrections for the same exact input, language, source and step. A conflict
+keeps the built-in parser in control. All 22 focused admin, training and
+review tests passed and Django reported no migration drift.
+
+Next parser training increment: fictional regression replay. Separate-host
+recovery still requires a staging target.
+
+
 ## Exact parser correction controls
 
 Staff can pause an exact correction without deleting the reviewed sample. Disabled

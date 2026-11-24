@@ -27,6 +27,7 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 - [x] 0.9 relative-date boundary audit: keep unsupported fractional offsets from being mistaken for calendar dates in English and Polish booking replies.
 - [x] 0.9 date arithmetic boundary: retain the valid arrival when a bilingual stay duration falls outside the supported calendar.
 - [x] 0.9 parser training rule controls: allow staff to disable and re-enable exact corrections while retaining the reviewed sample.
+- [x] 0.9 parser correction conflicts: show when enabled rules in the same exact match scope disagree and explain how a conflict affects guest replies.
 - [x] Contact safety increment: bilingual email/SMS readback and explicit confirmation before booking, correction and delivery changes, browser typed fallback, shared phone behavior, and revision/idempotency checks. All 149 Django tests and independent bilingual Chromium checks passed. [PR #33](https://github.com/michalfrackowiak/hotel-ai/pull/33) is merged and deployed; live bilingual contact and speech checks passed. See [contact confirmation](contact-confirmation.md).
 - [x] 0.4 bounded mixed-load increment: 60-second isolated bilingual speech and booking workload, 20 completed fictional bookings, resource counters, health-abort checks and verified cleanup. See [results](staging-mixed-load.md). Long-term stability, physical microphone, uncached startup and off-host recovery remain open.
 
