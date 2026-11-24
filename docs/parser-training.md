@@ -21,3 +21,7 @@ The queue holds up to 1,000 examples. Unreviewed rows and contact rows expire af
 Choose **Reception → Parser configuration** to update the English and Polish numeric date rules. Set the order for ambiguous dates (`04/05/2027`) and enable or disable ISO, slash, dot, dash, yearless, and two-digit-year formats. English defaults to month/day/year; Polish defaults to day/month/year. Written month names, relative dates, and durations continue to use the conversation language.
 
 On the arrival step the parser can read both dates from one response. Examples include `from 2027-07-12 to 2027-07-15`, `check in 12/28/2026 and check out 01/02/2027`, and `przyjazd 28 grudnia a wyjazd 2 stycznia`. When it finds a valid pair, it reads the arrival and departure back before continuing. Ambiguous or conflicting pairs still require a clearer date answer.
+
+## Replay a fictional date correction
+
+Open **Preview dates** for English or Polish, then use **Replay fictional date examples**. Submit a proposed correction and compare the expected, built-in and effective result for each fictional reply. The replay uses the selected language's saved date format settings and keeps chat and voice corrections scoped separately.

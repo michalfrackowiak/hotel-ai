@@ -3,7 +3,9 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
+from django.db import connection
 from django.test import Client, TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from bookings.models import Booking
@@ -30,6 +32,8 @@ class ParserDatePreviewTests(TestCase):
         self.client.force_login(self.staff)
         self.assertEqual(self.client.get(url).status_code, 403)
         self.assertEqual(self.client.post(url, {"reply": "tomorrow"}).status_code, 403)
+        replay = {"action": "replay", "example": "voice-arrival", "correction": "in two days"}
+        self.assertEqual(self.client.post(url, replay).status_code, 403)
         self.client.force_login(self.viewer)
         self.assertContains(self.client.get(reverse("admin:reception_parserconfiguration_changelist")), url)
         self.assertContains(self.client.get(url), "from tomorrow for three days")
@@ -90,3 +94,51 @@ class ParserDatePreviewTests(TestCase):
         response = self.client.post(self.url(self.en), {"stage": "fake", "reply": "x" * 501})
         self.assertEqual(set(response.context["form"].errors), {"stage", "reply"})
         self.assertIsNone(response.context["result"])
+
+    @patch("django.utils.timezone.localdate", return_value=date(2027, 4, 1))
+    def test_fictional_replay_compares_dates_without_reading_samples(self, _date):
+        self.client.force_login(self.viewer)
+        for configuration, correction in ((self.en, "in two days"), (self.pl, "za dwa dni")):
+            with self.subTest(language=configuration.language), CaptureQueriesContext(connection) as queries:
+                response = self.client.post(self.url(configuration), {
+                    "action": "replay", "example": "voice-arrival", "correction": correction,
+                })
+                self.assertContains(response, "With proposed correction")
+                rows = {row["case"].key: row for row in response.context["replay"]}
+                voice = rows["voice-arrival"]
+                self.assertEqual(voice["expected"], date(2027, 4, 3))
+                self.assertIsNone(voice["baseline"])
+                self.assertEqual(voice["effective"], voice["expected"])
+                self.assertFalse(voice["baseline_matches"])
+                self.assertTrue(voice["effective_matches"])
+                self.assertIsNone(rows["chat-arrival"]["effective"])
+                self.assertEqual(rows["checkout"]["effective"], date(2027, 4, 5))
+            self.assertFalse(any("reception_parsersample" in query["sql"] for query in queries))
+        self.assertFalse(ParserSample.objects.exists())
+        self.assertFalse(Booking.objects.exists())
+
+    def test_fictional_replay_rejects_unknown_and_control_examples(self):
+        self.client.force_login(self.viewer)
+        url = self.url(self.en)
+        response = self.client.post(url, {"action": "replay", "example": "unknown", "correction": "in two days"})
+        self.assertIn("example", response.context["replay_form"].errors)
+        self.assertIsNone(response.context["replay"])
+        response = self.client.post(url, {
+            "action": "replay", "example": "direct-arrival", "correction": "in two days",
+        })
+        self.assertIn("example", response.context["replay_form"].errors)
+        self.assertIsNone(response.context["replay"])
+
+    @patch("django.utils.timezone.localdate", return_value=date(2027, 4, 1))
+    def test_fictional_departure_replay_uses_known_arrival(self, _date):
+        self.client.force_login(self.viewer)
+        for configuration, correction in ((self.en, "for three nights"), (self.pl, "na trzy noce")):
+            with self.subTest(language=configuration.language):
+                response = self.client.post(self.url(configuration), {
+                    "action": "replay", "example": "voice-departure", "correction": correction,
+                })
+                rows = {row["case"].key: row for row in response.context["replay"]}
+                self.assertEqual(rows["voice-departure"]["arrival"], date(2027, 4, 2))
+                self.assertIsNone(rows["voice-departure"]["baseline"])
+                self.assertEqual(rows["voice-departure"]["effective"], date(2027, 4, 5))
+                self.assertEqual(rows["checkout"]["effective"], date(2027, 4, 5))

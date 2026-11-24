@@ -1,5 +1,16 @@
 # Session handoff
 
+## Fictional parser regression replay
+
+Private parser date preview can replay fictional examples against a proposed
+exact correction. It compares expected, built-in and effective results and
+exercises chat and voice scope independently. The replay does not read
+training samples or save changes.
+
+Next parser training increment: track correction effectiveness. Separate-host
+recovery still requires a staging target.
+
+
 ## Parser correction conflicts
 
 The private training admin identifies conflicts among enabled, unexpired

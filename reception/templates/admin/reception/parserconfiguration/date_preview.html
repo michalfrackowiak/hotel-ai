@@ -44,4 +44,31 @@
     {% endif %}
 </section>
 {% endif %}
+<section aria-labelledby="correction-replay">
+    <h2 id="correction-replay">Fictional correction replay</h2>
+    <p>Compare a proposed date correction against expected results for fictional replies. Enter fictional values only. The replay reads saved date settings and does not read or update training samples.</p>
+    <form method="post" class="date-preview-form">
+        {% csrf_token %}
+        {{ replay_form.as_p }}
+        <div class="submit-row"><button type="submit" class="button" name="action" value="replay">Replay correction</button></div>
+    </form>
+    {% if replay is not None %}
+    <table>
+        <caption>Fictional results</caption>
+        <thead><tr><th scope="col">Reply</th><th scope="col">Source</th><th scope="col">Booking question</th><th scope="col">Expected</th><th scope="col">Built-in</th><th scope="col">With proposed correction</th></tr></thead>
+        <tbody>
+        {% for row in replay %}
+        <tr>
+            <th scope="row">{{ row.case.reply }}</th>
+            <td>{{ row.case.source|capfirst }}</td>
+            <td>{{ row.question }}{% if row.arrival %}<br>Arrival {{ row.arrival|date:"Y-m-d" }}{% endif %}</td>
+            <td>{% include "admin/reception/parserconfiguration/replay_value.html" with value=row.expected only %}</td>
+            <td>{% include "admin/reception/parserconfiguration/replay_value.html" with value=row.baseline only %} · {% if row.baseline_matches %}Matches{% else %}Differs{% endif %}</td>
+            <td>{% include "admin/reception/parserconfiguration/replay_value.html" with value=row.effective only %} · {% if row.effective_matches %}Matches{% else %}Differs{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</section>
 {% endblock %}
