@@ -8,6 +8,9 @@ The result reports the revision, four route selections and audit counts without 
 a listener, contacting workers or creating replacement stores. Source custody and
 fencing are operator prerequisites. See [validator usage](routed-replacement-recovery.md#validate-the-captured-evidence).
 
+All five validator tests, 27 routed controller tests and seven journal tests passed locally.
+Independent review approved and verified that bypassing the source binding fails the refusal tests.
+
 Next action is preparing a new private store generation from verified evidence and
 verified stopped replacement workers. A disposable boot and stale request replay test
 must precede credentialed replacement-host recovery.
