@@ -1,5 +1,16 @@
 # Session handoff
 
+## Bilingual named-date years
+
+Embedded named dates now retain malformed explicit years for validation, so a
+date like June 21 027 cannot silently become a yearless arrival. Polish replies
+can include the year suffix r. and named dates followed by a stay duration
+remain supported. The 16 focused stay-parser and admin preview tests passed.
+
+Next parser audit: month abbreviations and configuration boundaries. The
+replacement-host rehearsal still requires a staging target.
+
+
 ## Bilingual numeric date widths
 
 The date parser now validates numeric component widths by format. The bilingual

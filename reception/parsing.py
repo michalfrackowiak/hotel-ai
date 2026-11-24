@@ -98,13 +98,16 @@ def _date_pattern(language):
     # Keep malformed numeric candidates visible so an invalid arrival does not
     # disappear from a range and leave its departure looking like a single date.
     numeric = r"[0-9]+[./-][0-9]+[./-][0-9]+|[0-9]{1,4}[./-][0-9]{1,2}"
+    # Retain unsupported year widths as part of the named date. A number
+    # that starts a duration belongs to the duration fragment instead.
+    year = rf"(?:[0-9]{{4}}|(?!{DURATIONS[language]}\b)[0-9]+)(?![\w/-]|\.[0-9])"
     if language == "en":
         ordinal = r"[0-9]{1,2}(?:st|nd|rd|th)"
         day = rf"(?:{ordinal}|[0-9]{{1,2}}|{ordinals})"
-        named = rf"(?:the )?(?:(?:{months}) {day}|{day} (?:of )?(?:{months}))(?:,? [0-9]{{4}})?"
+        named = rf"(?:the )?(?:(?:{months}) {day}|{day} (?:of )?(?:{months}))(?:(?:, ?| ){year})?"
     else:
         day = rf"(?:[0-9]{{1,2}}|{ordinals})"
-        named = rf"{day} (?:{months})(?: [0-9]{{4}}(?: r\.?| roku)?)?"
+        named = rf"{day} (?:{months})(?:(?:, ?| ){year}(?: roku| r\.?)?)?"
         ordinal = ordinals
     return re.compile(rf"(?<![\w./-])(?:{numeric}|{named}|{relative}|{RELATIVE_OFFSETS[language]}|{ordinal})(?![\w/-]|\.[0-9])")
 
@@ -305,7 +308,7 @@ def _add_duration(check_in, amount, unit):
 
 
 def _calendar_date(value, language, anchor):
-    year = re.search(r"\s+([0-9]{4})(?:\s+(?:r|roku))?$", value)
+    year = re.search(r"(?:,\s*|\s+)([0-9]{4})(?:\s+(?:r\.?|roku))?$", value)
     if year:
         value = value[:year.start()].rstrip(", ")
     tokens = value.replace("-", " ").split()

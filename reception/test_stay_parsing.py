@@ -114,3 +114,27 @@ class NoisyStayParsingTests(TestCase):
                 reply = f"{prefix} {arrival} {checkout}"
                 with self.subTest(language=language, reply=reply):
                     self.assertIsNone(parse_stay_input("check_in", reply, language))
+
+    def test_malformed_named_year_does_not_fall_back_to_yearless_date(self, _today):
+        for language, prefix, day, checkout in (
+            ("en", "arriving from", "June 21st", "to tomorrow"),
+            ("pl", "przyjadę od", "21 czerwca", "do jutra"),
+        ):
+            for suffix in (" 27", " 027", " 02027", ", 27", ",027"):
+                named = day + suffix
+                for reply in (named, f"{prefix} {named}", f"{prefix} {named} {checkout}"):
+                    with self.subTest(language=language, reply=reply):
+                        self.assertIsNone(parse_stay_input("check_in", reply, language))
+                departure = f"checking out on {named}" if language == "en" else f"wyjadę {named}"
+                self.assertIsNone(parse_stay_input("check_out", departure, language, check_in=date(2027, 6, 20)))
+
+    def test_named_dates_keep_explicit_years_and_numeric_durations(self, _today):
+        arrival = date(2027, 6, 21)
+        for language, reply, expected in (
+            ("en", "arriving June 21st, 2027", arrival),
+            ("en", "arriving June 21st 14 nights", StayDates(arrival, date(2027, 7, 5))),
+            ("pl", "przyjadę 21 czerwca 2028 r. dziękuję", date(2028, 6, 21)),
+            ("pl", "przyjadę 21 czerwca 14 nocy", StayDates(arrival, date(2027, 7, 5))),
+        ):
+            with self.subTest(language=language, reply=reply):
+                self.assertEqual(parse_stay_input("check_in", reply, language), expected)
