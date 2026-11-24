@@ -1,6 +1,8 @@
+import logging
 import re
 from datetime import date
 
+from django.db import transaction
 from django.utils import timezone
 
 from .contacts import PHONE_DIGITS, parse_email, parse_phone
@@ -8,6 +10,9 @@ from .conversation import _answer, _room_choice, selects_english
 from .models import ParserSample
 from .parser_training import learned_result, rule_key
 from .parsing import StayDates
+
+
+correction_logger = logging.getLogger("reception.parser_corrections")
 
 
 MAX_PARSER_SAMPLES = 1000
@@ -91,4 +96,15 @@ def review_booking_input(state, text, parsed, *, source, apply_corrections=True)
             language=language, stage=stage, source=source, text=text,
             parsed_result=result, succeeded=succeeded, rule_key=rule_key(language, stage, text),
         )
-    return (original if corrected is None else corrected), True
+    if corrected is None:
+        return original, True
+    if language in ("en", "pl") and source in ("chat", "voice"):
+        original_result = "missing" if original is None else "present"
+        transaction.on_commit(
+            lambda: correction_logger.info(
+                "parser_correction_applied language=%s stage=%s source=%s original_result=%s",
+                language, stage, source, original_result,
+            ),
+            robust=True,
+        )
+    return corrected, True

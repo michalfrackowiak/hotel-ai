@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
+from django.db import transaction
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -9,7 +10,7 @@ from django.utils import timezone
 from bookings.models import Booking, Price, Room
 
 from .models import Conversation, ParserSample, Scenario, ScenarioTransition
-from .parser_training import validate_correction
+from .parser_training import rule_key, validate_correction
 from .scenario_publication import publish_scenario_version, review_scenario_selection
 from .scenario_validation import APPROVED_STEPS, APPROVED_TRANSITIONS
 
@@ -67,14 +68,48 @@ class ParserReviewTests(TestCase):
         sample = ParserSample.objects.get(text="two guess")
         sample.corrected_result = "2"
         sample.save(update_fields=["corrected_result"])
-        retry = self.answer(retry, "two guess")
+        with self.assertNoLogs("reception.parser_corrections", level="INFO"):
+            with self.captureOnCommitCallbacks(execute=True):
+                retry = self.answer(retry, "two guess")
+            with self.captureOnCommitCallbacks(execute=True):
+                with transaction.atomic():
+                    self.answer(retry, "two guess", voice=True, transcript=True)
+                    transaction.set_rollback(True)
         self.assertEqual(retry["stage"], "guests")
-        offers = self.answer(retry, "two guess", voice=True, transcript=True)
+        with self.assertLogs("reception.parser_corrections", level="INFO") as events:
+            with self.captureOnCommitCallbacks(execute=True):
+                offers = self.answer(retry, "two guess", voice=True, transcript=True)
+            with self.captureOnCommitCallbacks(execute=True):
+                duplicate = self.client.post(
+                    reverse("reception-message"),
+                    {"language": "en", "revision": retry["revision"], "message": "two guess",
+                     "voice": True, "transcript": True},
+                    content_type="application/json",
+                )
+        self.assertEqual(duplicate.status_code, 409)
+        self.assertEqual([event.getMessage() for event in events.records], [
+            "parser_correction_applied language=en stage=guests source=voice original_result=missing",
+        ])
         self.assertEqual(offers["stage"], "room")
         confirmation = self.answer(offers, "option 1")
         self.assertEqual(confirmation["stage"], "confirm")
         self.assertEqual(ParserSample.objects.get(stage="room").parsed_result, "ROOM-2")
         self.assertFalse(Booking.objects.exists())
+
+    def test_correction_event_can_replace_an_original_result(self):
+        turn = self.date_steps("pl")
+        raw = "trzy osoby"
+        ParserSample.objects.create(
+            language="pl", stage="guests", source="voice", text=raw, parsed_result="3",
+            succeeded=True, rule_key=rule_key("pl", "guests", raw), corrected_result="2",
+        )
+        with self.assertLogs("reception.parser_corrections", level="INFO") as events:
+            with self.captureOnCommitCallbacks(execute=True):
+                offers = self.answer(turn, raw, voice=True, transcript=True)
+        self.assertEqual(offers["stage"], "room")
+        self.assertEqual([event.getMessage() for event in events.records], [
+            "parser_correction_applied language=pl stage=guests source=voice original_result=present",
+        ])
 
     def test_records_contact_parses_and_expires_contact_corrections(self):
         turn = self.date_steps()

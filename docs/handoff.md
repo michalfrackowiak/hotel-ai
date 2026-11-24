@@ -1,5 +1,16 @@
 # Session handoff
 
+## Live parser correction usage
+
+A committed booking turn emits a bounded event when an exact reviewed correction
+changes the result. The event reports language, source, booking step and whether
+a result was present before correction. All 202 reception and telephony tests passed.
+The event measures correction use. Guest-confirmed
+accuracy remains open.
+
+Separate-host recovery still requires a staging target.
+
+
 ## Fictional correction effectiveness
 
 The admin date replay summarizes baseline and proposed matches, improvements

@@ -123,6 +123,18 @@ HOTEL_GOOGLE_GUEST_HOST = os.environ.get("HOTEL_GOOGLE_GUEST_HOST", "").strip().
 HOTEL_GOOGLE_CLIENT_ID = os.environ.get("HOTEL_GOOGLE_CLIENT_ID", "").strip()
 
 HOTEL_PARSER_TRAINING_ENABLED = os.environ.get("HOTEL_PARSER_TRAINING_ENABLED") == "1"
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "parser_corrections": {"class": "logging.StreamHandler"},
+    },
+    "loggers": {
+        "reception.parser_corrections": {
+            "handlers": ["parser_corrections"], "level": "INFO", "propagate": False,
+        },
+    },
+}
 try:
     HOTEL_PIPER_TIMEOUT = int(os.environ.get("HOTEL_PIPER_TIMEOUT", "10"))
 except ValueError as error:
