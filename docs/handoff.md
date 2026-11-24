@@ -1,5 +1,18 @@
 # Session handoff
 
+## Fresh routed replacement workers
+
+The hosted fixture prepares and boots the restored routes with fresh container and bridge
+identities under the saved provider names. It verifies the replacement approvals, starts
+only the selected workers, and preserves the original stopped containers for the fixed
+endpoint rollback. No production Docker resources participate.
+
+All 25 focused WSL controller tests and the compile and whitespace checks passed.
+
+Next action is a quiet replacement-host acceptance run. Production TLS, DNS and elapsed
+recovery measurements remain open, as does stale-request fencing before dispatch can be
+re-enabled. See [disposable boot rehearsal](routed-replacement-recovery.md#disposable-boot-rehearsal).
+
 ## Disposable routed replacement boot
 
 Hosted native Linux stages the replacement pair at revision 4 from a disposable archived

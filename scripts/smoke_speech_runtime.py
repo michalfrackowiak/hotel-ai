@@ -117,10 +117,11 @@ class DockerFixture:
             images[service] = image
         return images
 
-    def network(self):
+    def network(self, suffix=""):
+        network_name = self.owner + suffix
         options = ("network", "create", "--driver", "bridge", "--internal", "--label", self.label)
         self.check_health()
-        provisional = full_id(self.run(*options, self.owner + "-pool"))
+        provisional = full_id(self.run(*options, network_name + "-pool"))
         self.networks.add(provisional)
         ipam = json.loads(self.run("network", "inspect", "--format", "{{json .IPAM.Config}}", provisional))
         require(isinstance(ipam, list) and len(ipam) == 1, "Fixture requires one IPv4 subnet.")
@@ -131,7 +132,7 @@ class DockerFixture:
         self.run("network", "rm", provisional)
         self.networks.remove(provisional)
         self.check_health()
-        network_id = full_id(self.run(*options, "--subnet", str(subnet), self.owner))
+        network_id = full_id(self.run(*options, "--subnet", str(subnet), network_name))
         self.networks.add(network_id)
         return network_id, [str(subnet.network_address + host) for host in range(4, 8)]
 
@@ -470,9 +471,60 @@ def snapshot_sqlite(source, destination):
 
 
 def replacement_workers_match(controls, names, selected):
-    return all(controls.inspect(name) == ("running" if name in selected else "exited")
+    return all(controls.inspect(name) == ("running" if name in selected else "created")
                for name in names.values())
 
+
+def fresh_replacement_workers(docker, config, names):
+    require(docker.source is None and docker.health is None, "Fresh replacement workers are hosted-fixture only.")
+    source = {item["name"]: item for item in config["deployments"]}
+    source_ids = {item["container_id"] for item in source.values()}
+    require(len(source) == len(source_ids) == len(names) == 4 and source_ids <= docker.containers,
+            "Replacement requires exactly four owned source workers.")
+    for name, item in source.items():
+        docker.run("rename", item["container_id"], name + "-source")
+
+    network, addresses = docker.network("-replacement")
+    require(network not in {item["network_id"] for item in source.values()},
+            "Replacement unexpectedly reused the source network.")
+    deployments = []
+    for (role, name), address in zip(names.items(), addresses, strict=True):
+        prior = source[name]
+        memory = str(prior["memory_bytes"])
+        identity = docker.create(role, "--network", network, "--ip", address, "--memory", memory,
+                                 "--memory-swap", memory, prior["image_id"])
+        port = 5000 if prior["task"] == "tts" else 5001
+        deployments.append(prior | {
+            "container_id": identity, "network_id": network, "address": address,
+            "base_url": f"http://{address}:{port}",
+        })
+    replacement_ids = {item["container_id"] for item in deployments}
+    require(len(replacement_ids) == 4 and replacement_ids.isdisjoint(source_ids),
+            "Replacement unexpectedly reused a source worker identity.")
+    return source, deployments
+
+
+def source_workers_stopped(docker, source):
+    identities = {item["container_id"] for item in source.values()}
+    require(identities <= docker.containers, "Source worker is no longer owned by the fixture.")
+    output = docker.run("inspect", "--type", "container", "--format", "{{.Id}} {{.State.Status}}",
+                        *sorted(identities))
+    return set(output.splitlines()) == {f"{identity} exited" for identity in identities}
+
+
+def restore_source_worker_names(docker, source, deployments, controls, selected):
+    for name in sorted(selected):
+        require(controls.stop(name) == "exited", "Fresh replacement worker did not stop for rollback.")
+    for item in deployments:
+        identity = item["container_id"]
+        require(identity in docker.containers
+                and controls.verify_stopped_endpoint(item["name"], item["network_id"], item["address"]) is True,
+                "Fresh replacement worker changed before rollback removal.")
+        docker.run("rm", identity)
+        docker.containers.remove(identity)
+    for name, item in source.items():
+        require(item["container_id"] in docker.containers, "Source worker is no longer owned by the fixture.")
+        docker.run("rename", item["container_id"], name)
 
 def rehearse_replacement(docker, image, directory, fixture_dir, archive, originals, backup,
                          traffic_path, journal_path, controls, names, django_secret,
@@ -494,7 +546,6 @@ def rehearse_replacement(docker, image, directory, fixture_dir, archive, origina
     replacement_manifest.touch(mode=0o600, exist_ok=False)
     config = json.loads(manifest.read_text(encoding="utf-8"))
     config.update(traffic_path=str(replacement_traffic), journal_path=str(replacement_journal))
-    replacement_manifest.write_text(json.dumps(config), encoding="utf-8")
     snapshot_sqlite(backup, replacement / "bookings.sqlite3")
     drafts = replacement / "expected-drafts.json"
     drafts.touch(mode=0o600, exist_ok=False)
@@ -504,8 +555,15 @@ def rehearse_replacement(docker, image, directory, fixture_dir, archive, origina
     selected = set(routes.values())
     for name in sorted(selected):
         controls.stop(name)
-    require(all(controls.inspect(name) == "exited" for name in names.values()),
-            "Replacement preparation expected all four staged workers stopped.")
+    require(all(controls.verify_stopped_endpoint(item["name"], item["network_id"], item["address"]) is True
+                for item in config["deployments"]), "Replacement preparation expected four verified stopped workers.")
+    source, deployments = fresh_replacement_workers(docker, config, names)
+    config["deployments"] = deployments
+    replacement_manifest.write_text(json.dumps(config), encoding="utf-8")
+    replacement_config = RuntimeConfiguration.load_for_initialization(str(replacement_manifest), token)
+    replacement_controls = DockerControls(
+        replacement_config.docker_socket, replacement_config.daemon_id, replacement_config.approvals,
+    )
     state = prepare(str(replacement_manifest), token, traffic_path=archive / traffic_path.name,
                     journal_path=archive / journal_path.name, capture_path=capture, audit_dir=directory,
                     recovery_id="staged-replacement", reason="Disposable routed replacement rehearsal")
@@ -515,11 +573,14 @@ def rehearse_replacement(docker, image, directory, fixture_dir, archive, origina
     require(record["status"] == "prepared" and record["source"]["completed_switches"] == 5
             and record["source"]["completed_recoveries"] == 1
             and record["source"]["journal_sha256"] == originals[journal_path].hex()
+            and {(worker["name"], worker["container_id"], worker["network_id"], worker["address"])
+                 for worker in record["replacement"]["workers"]}
+            == {(item["name"], item["container_id"], item["network_id"], item["address"]) for item in deployments}
             and record["replacement"]["traffic_sha256"] == digest(replacement_traffic).hex()
             and record["replacement"]["journal_sha256"] == digest(replacement_journal).hex(),
             "Replacement audit record did not preserve source history or output checksums.")
-    require(all(controls.inspect(name) == "exited" for name in names.values()),
-            "Replacement preparation started a staged worker.")
+    require(all(replacement_controls.inspect(name) == "created" for name in names.values()),
+            "Replacement preparation started a fresh worker.")
 
     with closing(sqlite3.connect(replacement_journal.as_uri() + "?mode=ro", uri=True, timeout=1)) as db:
         require(db.execute("SELECT 1 FROM operations UNION ALL SELECT 1 FROM reconciliations LIMIT 1").fetchone()
@@ -529,19 +590,24 @@ def rehearse_replacement(docker, image, directory, fixture_dir, archive, origina
     with runtime(command, env, boot_workers=True) as process:
         require(ready(endpoint, token=token, timeout=90, process=process,
                       check_health=docker.check_health) == final
-                and replacement_workers_match(controls, names, selected),
+                and replacement_workers_match(replacement_controls, names, selected)
+                and source_workers_stopped(docker, source),
                 "Replacement startup changed the saved state or started an unselected worker.")
-        launch_admin(docker, image, replacement, targets, names, endpoint[1], token, django_secret,
+        launch_admin(docker, image, replacement, replacement_config.targets, names, endpoint[1], token, django_secret,
                      mode="replacement")
         require(ready(endpoint, token=token, process=process, check_health=docker.check_health) == final
-                and replacement_workers_match(controls, names, selected),
+                and replacement_workers_match(replacement_controls, names, selected)
+                and source_workers_stopped(docker, source),
                 "Replacement checks changed the saved routes or running workers.")
     require(process.returncode == 0 and
             stopped_restart_state(replacement_traffic, replacement_journal, final["state"]) == before,
             "Replacement checks changed the store identities or new controller journal.")
     require(all(digest(path) == value for path, value in originals.items()),
             "Replacement checks changed an original source database.")
-    print("Replacement boot kept revision 4, original audit evidence and selected workers.", flush=True)
+    restore_source_worker_names(docker, source, deployments, replacement_controls, selected)
+    require(all(controls.verify_stopped_endpoint(item["name"], item["network_id"], item["address"]) is True
+                for item in source.values()), "An original stopped worker identity changed before rollback.")
+    print("Replacement boot kept revision 4 and original audit evidence using fresh worker identities.", flush=True)
 
 
 def rehearse_rollback(docker, image, directory, fixture_dir, traffic_path, journal_path,
@@ -580,9 +646,6 @@ def rehearse_rollback(docker, image, directory, fixture_dir, traffic_path, journ
                          traffic_path, journal_path, controls, names, django_secret,
                          manifest, targets, endpoint, token, env, final)
 
-    for task in MEMORY:
-        controls.stop(names[task + "-new"])
-        require(controls.inspect(names[task + "-new"]) == "exited", "Replacement worker did not stop for rollback.")
     settings = {
         "GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted", "DJANGO_ALLOWED_HOSTS": "testserver",
         "DJANGO_SECRET_KEY": django_secret, "DJANGO_DB_PATH": "/fixture/restored.sqlite3",
