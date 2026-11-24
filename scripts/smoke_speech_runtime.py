@@ -470,9 +470,11 @@ def snapshot_sqlite(source, destination):
         original.backup(copy)
 
 
-def replacement_workers_match(controls, names, selected):
-    return all(controls.inspect(name) == ("running" if name in selected else "created")
-               for name in names.values())
+def replacement_workers_match(controls, names, selected, *, stopped=()):
+    expected = {name: "created" for name in names.values()}
+    expected.update(dict.fromkeys(selected, "running"))
+    expected.update(dict.fromkeys(stopped, "exited"))
+    return all(controls.inspect(name) == status for name, status in expected.items())
 
 
 def fresh_replacement_workers(docker, config, names):
@@ -595,19 +597,27 @@ def rehearse_replacement(docker, image, directory, fixture_dir, archive, origina
                 "Replacement startup changed the saved state or started an unselected worker.")
         launch_admin(docker, image, replacement, replacement_config.targets, names, endpoint[1], token, django_secret,
                      mode="replacement")
-        require(ready(endpoint, token=token, process=process, check_health=docker.check_health) == final
-                and replacement_workers_match(replacement_controls, names, selected)
+        expected = {**final["state"], "revision": 6}
+        require(ready(endpoint, token=token, process=process, check_health=docker.check_health)
+                == {**final, "state": expected, "observed": expected}
+                and replacement_workers_match(replacement_controls, names, selected, stopped=(names["tts-old"],))
                 and source_workers_stopped(docker, source),
                 "Replacement checks changed the saved routes or running workers.")
     require(process.returncode == 0 and
-            stopped_restart_state(replacement_traffic, replacement_journal, final["state"]) == before,
-            "Replacement checks changed the store identities or new controller journal.")
+            stopped_restart_state(replacement_traffic, replacement_journal, expected)[0] == before[0],
+            "Replacement checks changed the store identities or left the controller unready.")
+    with closing(sqlite3.connect(replacement_journal.as_uri() + "?mode=ro", uri=True, timeout=1)) as db:
+        outcomes = [json.loads(row[0]) for row in db.execute("SELECT outcome FROM operations")]
+        require(sorted((item["status"], item["state"]["revision"]) for item in outcomes)
+                == [("succeeded", 5), ("succeeded", 6)]
+                and db.execute("SELECT 1 FROM reconciliations").fetchone() is None,
+                "Replacement journal did not contain exactly the two fresh switches.")
     require(all(digest(path) == value for path, value in originals.items()),
             "Replacement checks changed an original source database.")
     restore_source_worker_names(docker, source, deployments, replacement_controls, selected)
     require(all(controls.verify_stopped_endpoint(item["name"], item["network_id"], item["address"]) is True
                 for item in source.values()), "An original stopped worker identity changed before rollback.")
-    print("Replacement boot kept revision 4 and original audit evidence using fresh worker identities.", flush=True)
+    print("Replacement boot restored revision 4; two fresh switches preserved the original routes and audit evidence.", flush=True)
 
 
 def rehearse_rollback(docker, image, directory, fixture_dir, traffic_path, journal_path,

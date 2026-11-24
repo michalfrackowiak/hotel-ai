@@ -156,11 +156,12 @@ resource limits. The controller must reopen the new generation and start only th
 selected by the saved routes. The original stopped workers stay available for rollback. Django resumes fictional drafts
 and exercises English and Polish speech through the new traffic store.
 
-With switch and recovery dispatch disabled, attempts to submit old requests must leave
-the controller state and workers unchanged. This check covers the disabled cutover state.
-Before enabling dispatch on a replacement host, review and fence restored requests
-independently of this fixture. An independently provisioned replacement host and credentialed TLS, DNS and timing checks
-remain separate.
+The fixture first submits restored requests with dispatch disabled and checks that the
+controller state and workers are unchanged. It then enables switch and recovery dispatch
+in the disposable Django configuration under a fresh generation. Archived requests must
+remain fenced at the restored route revision. A fresh English TTS switch to the replacement
+standby and back exercises real dispatch and restores the selected routes. The separate
+replacement-host run still requires credentialed TLS, DNS and elapsed recovery checks.
 
 
 ## Fence restored admin requests

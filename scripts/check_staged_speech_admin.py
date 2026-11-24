@@ -183,6 +183,7 @@ def recover(client):
 
 
 def switch(client, slot, revision, target):
+    from model_providers.dispatch_generation import current_dispatch_generation
     from model_providers.models import SpeechSwitchRequest
 
     language, task = slot
@@ -195,7 +196,7 @@ def switch(client, slot, revision, target):
     require(len(rows) == 4 and row["target"] == target and row["preview"], "Expected switch target unavailable.")
     response = client.post(url, {"preview": row["preview"]}, **csrf(client))
     require(response.status_code == 302, "Switch preparation did not save an admin request.")
-    record = SpeechSwitchRequest.objects.get(closed=False)
+    record = SpeechSwitchRequest.objects.get(closed=False, dispatch_generation=current_dispatch_generation())
     detail = admin_url("switch_detail", switch_id=record.pk)
     require(response.url == detail and record.attempted_at is None and record.payload == {
         "expected_revision": revision - 1, "request_id": "admin-" + record.pk.hex, "slot": list(slot), "target": target,
@@ -282,27 +283,68 @@ def check_restarted_drafts(operator, workers):
     print("Reopened Django verified live admin status, bilingual Piper/Vosk, drafts and audit history.", flush=True)
 
 
-def check_disabled_dispatch(operator):
-    from django.test import Client
-    from model_providers.models import SpeechRecoveryRequest, SpeechSwitchRequest
+def check_restored_dispatch(operator, workers):
+    from django.test import Client, override_settings
+    from model_providers.models import SpeechDeployment, SpeechRecoveryRequest, SpeechSelection, SpeechSwitchRequest
 
     staff = Client(enforce_csrf_checks=True)
     staff.force_login(operator)
     require(staff.get("/").status_code == 200, "Could not obtain a fixture CSRF token.")
     # This restored database is disposable. Model requests that were still
     # retryable when the booking backup was captured, retaining their old IDs.
+    retries = []
     for model, flag, name, key, payload in (
         (SpeechSwitchRequest, "closed", "switch_detail", "switch_id", {"action": "send", "confirmed": "on"}),
         (SpeechRecoveryRequest, "completed", "recovery_detail", "recovery_id", {"confirmed": "on"}),
     ):
-        record = model.objects.order_by("pk").first()
-        model.objects.filter(pk=record.pk).update(**{flag: False}, outcome=None)
+        records = model.objects.order_by("pk")
+        if model is SpeechSwitchRequest:
+            records = records.filter(payload__slot=["en", "tts"])
+        record = records.first()
+        request_payload = {**record.payload, "expected_revision": 4}
+        changes = {}
+        if model is SpeechSwitchRequest:
+            request_payload["target"] = workers["tts-old"]
+            changes["previous_target"] = workers["tts-new"]
+        model.objects.filter(pk=record.pk).update(
+            **{flag: False}, **changes, outcome=None, attempted_at=None, payload=request_payload,
+        )
         before = list(model.objects.order_by("pk").values())
         url = admin_url(name, **{key: record.pk})
         response = staff.post(url, payload, **csrf(staff))
         require(response.status_code == 403 and list(model.objects.order_by("pk").values()) == before,
                 "Disabled dispatch accepted or changed a stale admin request.")
-    print("Restored switch and recovery retries were denied with dispatch disabled.", flush=True)
+        retries.append((model, before, url, payload))
+
+    slot = ("en", "tts")
+    routes = {item: workers[f"{item[1]}-new"] for item in SLOTS}
+    selection = SpeechSelection.objects.get(language=slot[0], task=slot[1])
+    original = selection.deployment
+    standby = SpeechDeployment.objects.create(
+        name="Replacement standby TTS", slug="replacement-standby-tts", provider=original.provider,
+        host=original.host, container_name=workers["tts-old"],
+    )
+    selection.deployment = standby
+    selection.save(update_fields=["deployment"])
+    live_state(staff, 4, routes)
+
+    with override_settings(HOTEL_SPEECH_CONTROL_SWITCH_ENABLED=True, HOTEL_SPEECH_CONTROL_RECOVERY_ENABLED=True,
+                           HOTEL_SPEECH_CONTROL_GENERATION="disposable-replacement"):
+        for model, before, url, payload in retries:
+            response = staff.post(url, payload, **csrf(staff))
+            require(response.status_code == 200 and response.context["dispatch_allowed"] is False
+                    and list(model.objects.order_by("pk").values()) == before,
+                    "A restored admin request was not fenced with dispatch enabled.")
+        live_state(staff, 4, routes)
+        switch(staff, slot, 5, standby.container_name)
+        routes[slot] = standby.container_name
+        live_state(staff, 5, routes)
+        selection.deployment = original
+        selection.save(update_fields=["deployment"])
+        switch(staff, slot, 6, original.container_name)
+        routes[slot] = original.container_name
+        live_state(staff, 6, routes)
+    print("Restored retries stayed fenced; fresh English TTS switches succeeded at revisions 5 and 6.", flush=True)
 
 
 def main():
@@ -337,7 +379,7 @@ def main():
         operator = get_user_model().objects.get(username="runtime-fixture-operator")
         check_restarted_drafts(operator, workers)
         if replacing:
-            check_disabled_dispatch(operator)
+            check_restored_dispatch(operator, workers)
         require(not Booking.objects.exists(), "The restart created a booking.")
         return
 
