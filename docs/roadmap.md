@@ -21,6 +21,7 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 - [x] 0.4 staging increment: cached-image process readiness, two-request admission, cgroup memory peaks and web-health responsiveness. See [staging results](staging-speech-capacity.md). Sustained mixed workload and microphone evaluation remain open.
 - [x] 0.9 numeric date-width audit: align English and Polish direct replies and embedded numeric date fragments with the same ISO and localized component widths.
 - [x] 0.9 named-date year audit: preserve explicit years in English and Polish booking replies and reject malformed years before inferring a year.
+- [x] 0.9 month abbreviations: recognize common English and Polish month abbreviations in direct and embedded booking dates.
 - [x] Contact safety increment: bilingual email/SMS readback and explicit confirmation before booking, correction and delivery changes, browser typed fallback, shared phone behavior, and revision/idempotency checks. All 149 Django tests and independent bilingual Chromium checks passed. [PR #33](https://github.com/michalfrackowiak/hotel-ai/pull/33) is merged and deployed; live bilingual contact and speech checks passed. See [contact confirmation](contact-confirmation.md).
 - [x] 0.4 bounded mixed-load increment: 60-second isolated bilingual speech and booking workload, 20 completed fictional bookings, resource counters, health-abort checks and verified cleanup. See [results](staging-mixed-load.md). Long-term stability, physical microphone, uncached startup and off-host recovery remain open.
 

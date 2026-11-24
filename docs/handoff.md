@@ -1,5 +1,16 @@
 # Session handoff
 
+## Bilingual month abbreviations
+
+The booking date parser recognizes common English and Polish month abbreviations
+in standalone replies and dates inside stay ranges. It validates these dates
+with the same calendar rules as full month names. All eight new positive cases
+failed on the baseline and all 18 focused tests passed with the change.
+
+Next parser audit: date configuration boundaries. Separate-host recovery still
+requires a staging target.
+
+
 ## Bilingual named-date years
 
 Embedded named dates now retain malformed explicit years for validation, so a

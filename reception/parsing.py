@@ -39,6 +39,15 @@ MONTHS = {
     "en": {name: number for number, name in enumerate(ENGLISH_MONTHS, 1)},
     "pl": {name: number for number, name in enumerate(POLISH_MONTHS, 1)},
 }
+MONTH_ABBREVIATIONS = {
+    "en": ("jan", "feb", "mar", "apr", None, "jun", "jul", "aug", "sep", "oct", "nov", "dec"),
+    "pl": ("sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"),
+}
+for language, abbreviations in MONTH_ABBREVIATIONS.items():
+    for number, abbreviation in enumerate(abbreviations, 1):
+        if abbreviation:
+            MONTHS[language].update({abbreviation: number, f"{abbreviation}.": number})
+MONTHS["en"].update({"sept": 9, "sept.": 9})
 EN_ORDINALS = (
     "first second third fourth fifth sixth seventh eighth ninth tenth eleventh twelfth thirteenth "
     "fourteenth fifteenth sixteenth seventeenth eighteenth nineteenth twentieth"
