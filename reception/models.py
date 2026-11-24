@@ -78,6 +78,7 @@ class ParserSample(models.Model):
     parsed_result = models.CharField(max_length=500, blank=True)
     succeeded = models.BooleanField()
     corrected_result = models.CharField(max_length=500, blank=True, default="")
+    correction_enabled = models.BooleanField(default=True)
     rule_key = models.CharField(max_length=64, db_index=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     objects = ParserSamples.as_manager()

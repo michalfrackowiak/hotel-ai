@@ -159,7 +159,8 @@ def learned_result(state, text, parsed, *, source):
         return None
     corrections = list(
         ParserSample.objects.unexpired()
-        .filter(language=language, stage=stage, source=source, rule_key=rule_key(language, stage, text))
+        .filter(language=language, stage=stage, source=source, rule_key=rule_key(language, stage, text),
+                correction_enabled=True)
         .exclude(corrected_result="")
         .order_by().values_list("corrected_result", flat=True).distinct()[:2]
     )

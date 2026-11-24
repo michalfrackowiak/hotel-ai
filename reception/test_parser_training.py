@@ -46,6 +46,20 @@ class ParserTrainingTests(TestCase):
         with self.assertRaisesMessage(ValidationError, "direct booking value"):
             validate_correction("guests", "two", "three", language="en", source="voice")
 
+    def test_disabled_corrections_do_not_apply_or_conflict(self):
+        state = {"language": "en", "stage": "guests"}
+        raw = "tree people"
+        first = self.sample(raw, "three", stage="guests")
+        second = self.sample(raw, "four", stage="guests")
+        self.assertTrue(first.correction_enabled)
+        self.assertIsNone(learned_result(state, raw, None, source="voice"))
+        ParserSample.objects.filter(pk=second.pk).update(correction_enabled=False)
+        self.assertEqual(learned_result(state, raw, None, source="voice"), 3)
+        ParserSample.objects.filter(pk=first.pk).update(correction_enabled=False)
+        self.assertIsNone(learned_result(state, raw, None, source="voice"))
+        ParserSample.objects.filter(pk=second.pk).update(correction_enabled=True)
+        self.assertEqual(learned_result(state, raw, None, source="voice"), 4)
+
     def test_date_pair_correction_is_validated_at_review_and_against_current_time(self):
         state = {"language": "en", "stage": "check_in"}
         with patch("reception.parsing.timezone.localdate", return_value=date(2027, 1, 1)):
