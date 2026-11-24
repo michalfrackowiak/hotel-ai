@@ -3,8 +3,9 @@ from decimal import Decimal
 from unittest.mock import patch
 from uuid import uuid4
 
+from django.contrib import admin
 from django.contrib.auth import get_user_model
-from django.test import Client, TestCase
+from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import escape
@@ -414,6 +415,45 @@ class ReceptionTests(TestCase):
 
 
 class ReceptionHandoverTests(TestCase):
+    def test_admin_shows_first_staff_response_and_unanswered_states(self):
+        now = timezone.now()
+        waiting, closed, answered = [
+            StaffHandover.objects.create(
+                conversation=Conversation.objects.create(conversation_id=uuid4().hex, state={}),
+                language="en",
+                closed=is_closed,
+            )
+            for is_closed in (False, True, True)
+        ]
+        StaffHandover.objects.filter(pk__in=(waiting.pk, closed.pk, answered.pk)).update(created_at=now)
+        waiting.messages.create(text="Is anyone available?")
+        answer_times = (
+            (False, 1),
+            (True, 240),
+            (True, 90),
+        )
+        for staff, seconds in answer_times:
+            message = answered.messages.create(staff=staff, text="Fictional handover message.")
+            answered.messages.filter(pk=message.pk).update(created_at=now + timedelta(seconds=seconds))
+
+        operator = get_user_model().objects.create_superuser(username="handover-reviewer")
+        self.client.force_login(operator)
+        inbox_path = reverse("admin:reception_staffhandover_changelist")
+        inbox = self.client.get(inbox_path)
+        for label in ("First staff response", "Awaiting reply", "Closed without reply", "0:01:30"):
+            self.assertContains(inbox, label)
+        detail = self.client.get(reverse("admin:reception_staffhandover_change", args=[answered.pk]))
+        self.assertContains(detail, "0:01:30")
+
+        request = RequestFactory().get(inbox_path)
+        request.user = operator
+        inbox_admin = admin.site.get_model_admin(StaffHandover)
+        with self.assertNumQueries(1):
+            self.assertEqual(
+                {row.pk: inbox_admin.first_staff_response(row) for row in inbox_admin.get_queryset(request)},
+                {waiting.pk: "Awaiting reply", closed.pk: "Closed without reply", answered.pk: "0:01:30"},
+            )
+
     def post(self, **payload):
         return self.client.post(reverse("reception-message"), {"language": "en", **payload}, content_type="application/json")
 

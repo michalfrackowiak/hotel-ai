@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django import forms
 from django.contrib import admin
+from django.db.models import OuterRef, Subquery
 from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
@@ -33,12 +36,25 @@ class HandoverTranscript(admin.TabularInline):
 @admin.register(StaffHandover)
 class StaffHandoverAdmin(admin.ModelAdmin):
     form = StaffHandoverForm
-    fields = ("created_at", "language", "closed", "reply")
-    readonly_fields = ("created_at", "language")
-    list_display = ("id", "created_at", "language", "closed")
+    fields = ("created_at", "language", "first_staff_response", "closed", "reply")
+    readonly_fields = ("created_at", "language", "first_staff_response")
+    list_display = ("id", "created_at", "language", "closed", "first_staff_response")
     list_filter = ("closed", "language")
     ordering = ("closed", "-created_at")
     inlines = (HandoverTranscript,)
+
+    def get_queryset(self, request):
+        first_reply = HandoverMessage.objects.filter(
+            handover_id=OuterRef("pk"), staff=True,
+        ).order_by("created_at").values("created_at")[:1]
+        return super().get_queryset(request).annotate(first_staff_reply_at=Subquery(first_reply))
+
+    @admin.display(description="First staff response")
+    def first_staff_response(self, obj):
+        if obj.first_staff_reply_at is None:
+            return "Closed without reply" if obj.closed else "Awaiting reply"
+        elapsed = obj.first_staff_reply_at - obj.created_at
+        return str(timedelta(days=elapsed.days, seconds=elapsed.seconds))
 
     def has_add_permission(self, request):
         return False

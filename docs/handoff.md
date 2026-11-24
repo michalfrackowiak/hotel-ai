@@ -1,5 +1,15 @@
 # Session handoff
 
+## Reception inbox first staff response
+
+The staff handover list and detail show the elapsed time from opening the
+handover to the first staff message. Open and closed handovers without a staff
+reply have separate labels. The admin reads the earliest staff timestamp in its
+existing list query, so the measure covers older threads and needs no migration
+or new guest data. This measures the first recorded web handover reply. Live
+delivery and phone transfer checks still require configured destinations.
+All seven handover tests passed, and Django reported no migration changes.
+
 ## Observed English voice wording
 
 The [hosted comparison](https://github.com/michalfrackowiak/hotel-ai/actions/runs/45494491981/job/138801232687)
