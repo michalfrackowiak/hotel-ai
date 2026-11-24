@@ -33,6 +33,7 @@ from speech_controller.docker_control import ApprovedContainer, ControlUnavailab
 from speech_controller.endpoint_binding import EndpointBinding
 from speech_controller.lifecycle import SwitchRequest
 from speech_controller.journal import JournalUnavailable
+from speech_controller.prepare_replacement import prepare
 from speech_controller.readiness import ProbeTarget
 from speech_controller.resources import host_resources
 from speech_controller.routed_recovery import PENDING_REASON
@@ -136,7 +137,7 @@ class DockerFixture:
 
     def create(self, role, *args, env=None):
         self.check_health()
-        cpu = self.web_cpu if role in ("django", "rollback", "restart-web") else str(self.worker_cpu / 1_000_000_000)
+        cpu = self.web_cpu if role in ("django", "rollback", "restart-web", "replacement-web") else str(self.worker_cpu / 1_000_000_000)
         identity = full_id(self.run("create", "--pull", "never", "--name", self.owner + "-" + role,
             "--label", self.label, "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
             "--init", "--cpus", cpu, *args, env=env))
@@ -411,7 +412,7 @@ def stage(docker, socket_path, directory, *, production=None):
         for role in roles:
             expected = "exited" if role.endswith("-old") else "running"
             require(controls.inspect(names[role]) == expected, "Boot started a worker outside the saved routes.")
-        launch_admin(docker, images["web"], fixture_dir, targets, names, port, token, django_secret, restarting=True)
+        launch_admin(docker, images["web"], fixture_dir, targets, names, port, token, django_secret, mode="restart")
         require(ready(endpoint, token=token, process=restarted, check_health=docker.check_health) == final,
                 "Controller changed after routed speech resumed.")
     require(restarted.returncode == 0
@@ -420,23 +421,28 @@ def stage(docker, socket_path, directory, *, production=None):
     print("Staged restart kept revision 4, original store identities and completed journal history.", flush=True)
     if production is None:
         rehearse_rollback(docker, images["web"], directory, fixture_dir, traffic_path, journal_path,
-                          controls, names, {binding.name: binding for binding in bindings}, django_secret)
+                          controls, names, {binding.name: binding for binding in bindings}, django_secret,
+                          manifest, targets, endpoint, token, env, final)
 
 
-def launch_admin(docker, image, fixture_dir, targets, names, port, token, django_secret, *, restarting=False):
+def launch_admin(docker, image, fixture_dir, targets, names, port, token, django_secret, *, mode=None):
     settings = {
         "DJANGO_SECRET_KEY": django_secret, "DJANGO_ALLOWED_HOSTS": "testserver",
         "DJANGO_DB_PATH": "/fixture/bookings.sqlite3", "HOTEL_SPEECH_TRAFFIC_DB": "/fixture/traffic.sqlite3",
         "HOTEL_SPEECH_ROUTE_TARGETS": json.dumps([asdict(target) for target in targets]),
         "HOTEL_SPEECH_CONTROL_URL": f"http://127.0.0.1:{port}", "HOTEL_SPEECH_CONTROL_TOKEN": token,
-        "HOTEL_SPEECH_CONTROL_HOST": "runtime-ci", "HOTEL_SPEECH_CONTROL_SWITCH_ENABLED": "1",
-        "HOTEL_SPEECH_CONTROL_RECOVERY_ENABLED": "1", "HOTEL_STAGE_WORKERS": json.dumps(names),
+        "HOTEL_SPEECH_CONTROL_HOST": "runtime-ci",
+        "HOTEL_SPEECH_CONTROL_SWITCH_ENABLED": "0" if mode == "replacement" else "1",
+        "HOTEL_SPEECH_CONTROL_RECOVERY_ENABLED": "0" if mode == "replacement" else "1",
+        "HOTEL_STAGE_WORKERS": json.dumps(names),
     }
-    if restarting:
+    if mode:
         settings["HOTEL_STAGE_RESTART"] = "1"
+    if mode == "replacement":
+        settings["HOTEL_STAGE_REPLACEMENT"] = "1"
     if docker.source:
         settings["HOTEL_STAGE_MODE"] = "arm64-server"
-        env_file = fixture_dir.parent / ("admin-restart.env" if restarting else "admin.env")
+        env_file = fixture_dir.parent / ("admin-restart.env" if mode else "admin.env")
         descriptor = os.open(env_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         with os.fdopen(descriptor, "w", encoding="ascii") as stream:
             stream.writelines(f"{key}={value}\n" for key, value in settings.items())
@@ -447,7 +453,7 @@ def launch_admin(docker, image, fixture_dir, targets, names, port, token, django
         settings.update(GITHUB_ACTIONS="true", RUNNER_ENVIRONMENT="github-hosted")
         options = [item for key in settings for item in ("--env", key)]
         env = docker.env | settings
-    web = docker.create("restart-web" if restarting else "django", "--network", "host", "--user", f"{os.getuid()}:{os.getgid()}",
+    web = docker.create(f"{mode}-web" if mode else "django", "--network", "host", "--user", f"{os.getuid()}:{os.getgid()}",
         "--memory", str(WEB_MEMORY), "--memory-swap", str(WEB_MEMORY), "--tmpfs", "/tmp:rw,nosuid,nodev,size=32m",
         "--mount", f"type=bind,src={fixture_dir},dst=/fixture", *options, image,
         "python", "scripts/check_staged_speech_admin.py", env=env)
@@ -463,8 +469,83 @@ def snapshot_sqlite(source, destination):
         original.backup(copy)
 
 
+def replacement_workers_match(controls, names, selected):
+    return all(controls.inspect(name) == ("running" if name in selected else "exited")
+               for name in names.values())
+
+
+def rehearse_replacement(docker, image, directory, fixture_dir, archive, originals, backup,
+                         traffic_path, journal_path, controls, names, django_secret,
+                         manifest, targets, endpoint, token, env, final):
+    # Preserve the fixture's source-binding values before opening the copies.
+    source_stat = traffic_path.stat()
+    capture = directory / "replacement-capture.json"
+    capture.touch(mode=0o600, exist_ok=False)
+    capture.write_text(json.dumps(dict(
+        source_traffic_path=str(traffic_path), source_traffic_device=source_stat.st_dev,
+        source_traffic_inode=source_stat.st_ino, traffic_sha256=originals[traffic_path].hex(),
+        journal_sha256=originals[journal_path].hex(), targets=[asdict(target) for target in targets],
+    )), encoding="utf-8")
+    replacement = directory / "replacement-web"
+    replacement.mkdir(mode=0o700)
+    replacement_traffic = replacement / traffic_path.name
+    replacement_journal = directory / "replacement-controller.sqlite3"
+    replacement_manifest = directory / "replacement-runtime.json"
+    replacement_manifest.touch(mode=0o600, exist_ok=False)
+    config = json.loads(manifest.read_text(encoding="utf-8"))
+    config.update(traffic_path=str(replacement_traffic), journal_path=str(replacement_journal))
+    replacement_manifest.write_text(json.dumps(config), encoding="utf-8")
+    snapshot_sqlite(backup, replacement / "bookings.sqlite3")
+    drafts = replacement / "expected-drafts.json"
+    drafts.touch(mode=0o600, exist_ok=False)
+    drafts.write_bytes((fixture_dir / drafts.name).read_bytes())
+
+    routes = {tuple(slot): name for slot, name in final["state"]["routes"]}
+    selected = set(routes.values())
+    for name in sorted(selected):
+        controls.stop(name)
+    require(all(controls.inspect(name) == "exited" for name in names.values()),
+            "Replacement preparation expected all four staged workers stopped.")
+    state = prepare(str(replacement_manifest), token, traffic_path=archive / traffic_path.name,
+                    journal_path=archive / journal_path.name, capture_path=capture, audit_dir=directory,
+                    recovery_id="staged-replacement", reason="Disposable routed replacement rehearsal")
+    require(state.revision == final["state"]["revision"] and dict(state.routes) == routes,
+            "Replacement preparation did not recover the saved revision and routes.")
+    record = json.loads((directory / "staged-replacement.json").read_text(encoding="utf-8"))
+    require(record["status"] == "prepared" and record["source"]["completed_switches"] == 5
+            and record["source"]["completed_recoveries"] == 1
+            and record["source"]["journal_sha256"] == originals[journal_path].hex()
+            and record["replacement"]["traffic_sha256"] == digest(replacement_traffic).hex()
+            and record["replacement"]["journal_sha256"] == digest(replacement_journal).hex(),
+            "Replacement audit record did not preserve source history or output checksums.")
+    require(all(controls.inspect(name) == "exited" for name in names.values()),
+            "Replacement preparation started a staged worker.")
+
+    with closing(sqlite3.connect(replacement_journal.as_uri() + "?mode=ro", uri=True, timeout=1)) as db:
+        require(db.execute("SELECT 1 FROM operations UNION ALL SELECT 1 FROM reconciliations LIMIT 1").fetchone()
+                is None, "Replacement journal inherited archived request history.")
+    command = [sys.executable, "-m", "speech_controller.runtime", "--config", str(replacement_manifest)]
+    before = stopped_restart_state(replacement_traffic, replacement_journal, final["state"])
+    with runtime(command, env, boot_workers=True) as process:
+        require(ready(endpoint, token=token, timeout=90, process=process,
+                      check_health=docker.check_health) == final
+                and replacement_workers_match(controls, names, selected),
+                "Replacement startup changed the saved state or started an unselected worker.")
+        launch_admin(docker, image, replacement, targets, names, endpoint[1], token, django_secret,
+                     mode="replacement")
+        require(ready(endpoint, token=token, process=process, check_health=docker.check_health) == final
+                and replacement_workers_match(controls, names, selected),
+                "Replacement checks changed the saved routes or running workers.")
+    require(process.returncode == 0 and
+            stopped_restart_state(replacement_traffic, replacement_journal, final["state"]) == before,
+            "Replacement checks changed the store identities or new controller journal.")
+    require(all(digest(path) == value for path, value in originals.items()),
+            "Replacement checks changed an original source database.")
+    print("Replacement boot kept revision 4, original audit evidence and selected workers.", flush=True)
+
+
 def rehearse_rollback(docker, image, directory, fixture_dir, traffic_path, journal_path,
-                     controls, names, bindings, django_secret):
+                     controls, names, bindings, django_secret, manifest, targets, endpoint, token, env, final):
     # The stage has no remaining Django caller or controller. Preserve the
     # original routed stores and archive their bytes for offline inspection.
     with closing(sqlite3.connect(traffic_path.as_uri() + "?mode=ro", uri=True, timeout=1)) as traffic:
@@ -494,6 +575,10 @@ def rehearse_rollback(docker, image, directory, fixture_dir, traffic_path, journ
         "Booking snapshot or restored fixture failed SQLite verification.")
     backup_digest = digest(backup)
     print("Fixture SQLite backup and restore passed integrity, foreign-key and row-count checks.", flush=True)
+
+    rehearse_replacement(docker, image, directory, fixture_dir, archive, originals, backup,
+                         traffic_path, journal_path, controls, names, django_secret,
+                         manifest, targets, endpoint, token, env, final)
 
     for task in MEMORY:
         controls.stop(names[task + "-new"])

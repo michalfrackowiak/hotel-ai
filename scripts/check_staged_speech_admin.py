@@ -24,6 +24,7 @@ FIXTURE_ENV = {
     "HOTEL_SPEECH_CONTROL_HOST", "HOTEL_SPEECH_CONTROL_RECOVERY_ENABLED", "HOTEL_SPEECH_CONTROL_SWITCH_ENABLED",
     "HOTEL_SPEECH_CONTROL_TOKEN", "HOTEL_SPEECH_CONTROL_URL", "HOTEL_SPEECH_ROUTE_TARGETS",
     "HOTEL_SPEECH_TRAFFIC_DB", "HOTEL_STAGE_MODE", "HOTEL_STAGE_WORKERS", "HOTEL_STAGE_RESTART",
+    "HOTEL_STAGE_REPLACEMENT",
 }
 
 
@@ -42,7 +43,7 @@ def private_file(path):
             and info.st_nlink == 1 and info.st_uid == os.getuid())
 
 
-def fixture_configuration(*, restarting):
+def fixture_configuration(*, restarting, replacing):
     env = os.environ
     mode = env.get("HOTEL_STAGE_MODE")
     if mode == "arm64-server":
@@ -60,10 +61,11 @@ def fixture_configuration(*, restarting):
                 and env.get("RUNNER_ENVIRONMENT") == "github-hosted", "Hosted Linux CI is required.")
     require(not {key for key in env if key.startswith(("DJANGO_", "HOTEL_"))} - FIXTURE_ENV,
             "Unexpected Django or hotel environment settings.")
+    dispatch = "0" if replacing else "1"
     require(env.get("DJANGO_DB_PATH") == str(DATABASE) and env.get("HOTEL_SPEECH_TRAFFIC_DB") == str(TRAFFIC)
             and env.get("HOTEL_SPEECH_CONTROL_HOST") == "runtime-ci"
-            and env.get("HOTEL_SPEECH_CONTROL_SWITCH_ENABLED") == "1"
-            and env.get("HOTEL_SPEECH_CONTROL_RECOVERY_ENABLED") == "1"
+            and env.get("HOTEL_SPEECH_CONTROL_SWITCH_ENABLED") == dispatch
+            and env.get("HOTEL_SPEECH_CONTROL_RECOVERY_ENABLED") == dispatch
             and env.get("DJANGO_ALLOWED_HOSTS") == "testserver" and len(env.get("DJANGO_SECRET_KEY", "")) >= 32,
             "Invalid isolated Django configuration.")
     require(not Path("/var/run/docker.sock").exists() and not env.get("DOCKER_HOST"),
@@ -280,11 +282,38 @@ def check_restarted_drafts(operator, workers):
     print("Reopened Django verified live admin status, bilingual Piper/Vosk, drafts and audit history.", flush=True)
 
 
+def check_disabled_dispatch(operator):
+    from django.test import Client
+    from model_providers.models import SpeechRecoveryRequest, SpeechSwitchRequest
+
+    staff = Client(enforce_csrf_checks=True)
+    staff.force_login(operator)
+    require(staff.get("/").status_code == 200, "Could not obtain a fixture CSRF token.")
+    # This restored database is disposable. Model requests that were still
+    # retryable when the booking backup was captured, retaining their old IDs.
+    for model, flag, name, key, payload in (
+        (SpeechSwitchRequest, "closed", "switch_detail", "switch_id", {"action": "send", "confirmed": "on"}),
+        (SpeechRecoveryRequest, "completed", "recovery_detail", "recovery_id", {"confirmed": "on"}),
+    ):
+        record = model.objects.order_by("pk").first()
+        model.objects.filter(pk=record.pk).update(**{flag: False}, outcome=None)
+        before = list(model.objects.order_by("pk").values())
+        url = admin_url(name, **{key: record.pk})
+        response = staff.post(url, payload, **csrf(staff))
+        require(response.status_code == 403 and list(model.objects.order_by("pk").values()) == before,
+                "Disabled dispatch accepted or changed a stale admin request.")
+    print("Restored switch and recovery retries were denied with dispatch disabled.", flush=True)
+
+
 def main():
     restart_value = os.environ.get("HOTEL_STAGE_RESTART")
     require(restart_value in (None, "1"), "Unexpected fixture restart flag.")
     restarting = restart_value == "1"
-    workers = fixture_configuration(restarting=restarting)
+    replacement_value = os.environ.get("HOTEL_STAGE_REPLACEMENT")
+    require(replacement_value is None or (replacement_value == "1" and restarting),
+            "Replacement mode requires a restored fixture database.")
+    replacing = replacement_value == "1"
+    workers = fixture_configuration(restarting=restarting, replacing=replacing)
     os.environ["DJANGO_SETTINGS_MODULE"] = "config.settings"
     import django
 
@@ -307,6 +336,8 @@ def main():
         require(not migrations.migration_plan(migrations.loader.graph.leaf_nodes()), "Restart found pending migrations.")
         operator = get_user_model().objects.get(username="runtime-fixture-operator")
         check_restarted_drafts(operator, workers)
+        if replacing:
+            check_disabled_dispatch(operator)
         require(not Booking.objects.exists(), "The restart created a booking.")
         return
 

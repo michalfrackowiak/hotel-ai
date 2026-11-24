@@ -1,5 +1,21 @@
 # Session handoff
 
+## Disposable routed replacement boot
+
+Hosted native Linux stages the replacement pair at revision 4 from a disposable archived
+source, checks the preserved hashes and both audit histories, and boots only workers
+selected by the saved routes. Django reopens both fictional drafts and exercises Piper
+and Vosk in English and Polish. Restored switch and recovery POSTs with valid CSRF
+are refused while dispatch is disabled. The fixture checks the worker states and
+controller revision again after those requests.
+
+All 14 focused WSL tests and two Django admin permission tests passed locally.
+
+The fixture reuses its approved worker identities. Next action is a replacement-host
+acceptance run with newly provisioned and approved workers. Keep dispatch disabled
+until restored request IDs have been fenced and verified. TLS, DNS and elapsed recovery
+verification remain open. See [disposable boot rehearsal](routed-replacement-recovery.md#disposable-boot-rehearsal).
+
 ## Offline routed replacement preparation
 
 The preparation command validates the source evidence, checks the stopped replacement
