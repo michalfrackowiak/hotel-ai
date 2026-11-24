@@ -95,7 +95,7 @@ def _date_pattern(language):
     months = _alternatives(MONTHS[language])
     ordinals = _alternatives(ORDINALS[language]).replace(r"\ ", "[- ]")
     relative = _alternatives(RELATIVE_DATES[language])
-    numeric = r"[0-9]{4}[./-][0-9]{1,2}[./-][0-9]{1,2}|[0-9]{1,2}[./-][0-9]{1,2}(?:[./-][0-9]{2,4})?"
+    numeric = r"[0-9]{4}[./-][0-9]{1,2}[./-][0-9]{1,2}|[0-9]{1,2}[./-][0-9]{1,2}(?:[./-](?:[0-9]{4}|[0-9]{2}))?"
     if language == "en":
         ordinal = r"[0-9]{1,2}(?:st|nd|rd|th)"
         day = rf"(?:{ordinal}|[0-9]{{1,2}}|{ordinals})"
@@ -253,7 +253,7 @@ def _parse_date(value, language, check_in, today, *, calendar_anchor=None, confi
 
 
 def _numeric_date(value, language, today, config, calendar_anchor):
-    match = re.fullmatch(r"([0-9]{1,4})([./-])([0-9]{1,2})(?:\2([0-9]{2,4}))?", value)
+    match = re.fullmatch(r"([0-9]{4}|[0-9]{1,2})([./-])([0-9]{1,2})(?:\2([0-9]{1,4}))?", value)
     if not match:
         return None
     first, separator, second, year_text = match.groups()
@@ -263,7 +263,9 @@ def _numeric_date(value, language, today, config, calendar_anchor):
         "-": config["allow_dash_dates"],
     }[separator]
     if len(first) == 4:
-        if not config["allow_iso_dates"] or year_text is None or (separator != "-" and not allowed_separator):
+        if not year_text or len(year_text) > 2:
+            return None
+        if not config["allow_iso_dates"] or (separator != "-" and not allowed_separator):
             return None
         year, month, day = int(first), int(second), int(year_text)
     else:
@@ -271,8 +273,11 @@ def _numeric_date(value, language, today, config, calendar_anchor):
             return None
         if not year_text and not config["allow_yearless_dates"]:
             return None
-        if year_text and len(year_text) == 2 and not config["allow_two_digit_years"]:
-            return None
+        if year_text:
+            if len(year_text) not in (2, 4):
+                return None
+            if len(year_text) == 2 and not config["allow_two_digit_years"]:
+                return None
         day, month = (int(first), int(second)) if config["numeric_date_order"] == "dmy" else (int(second), int(first))
         if year_text:
             year = int(year_text)

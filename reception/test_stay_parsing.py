@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from django.test import TestCase
 
+from .models import ParserConfiguration
 from .parsing import StayDates, parse_stay_input
 
 
@@ -72,3 +73,34 @@ class NoisyStayParsingTests(TestCase):
         ):
             with self.subTest(text=text):
                 self.assertEqual(parse_stay_input("check_in", text, language), date(2026, 11, 16))
+
+    def test_numeric_component_widths_in_both_languages(self, _today):
+        for language, prefix, localized_short_year, localized_long_year, malformed_localized in (
+            ("en", "arriving", "2/3/27", "2/3/2027", "2/3/027"),
+            ("pl", "przyjadę", "3.2.27", "3.2.2027", "3.2.027"),
+        ):
+            for text in ("2027-2-3", "2027-02-03", localized_short_year, localized_long_year):
+                for reply in (text, f"{prefix} {text}"):
+                    with self.subTest(language=language, reply=reply):
+                        self.assertEqual(parse_stay_input("check_in", reply, language), date(2027, 2, 3))
+            for text in ("2027-02-003", "2027-02-0003", "2027-02/03", "002/03", malformed_localized):
+                for reply in (text, f"{prefix} {text}"):
+                    with self.subTest(language=language, reply=reply):
+                        self.assertIsNone(parse_stay_input("check_in", reply, language))
+
+    def test_numeric_width_changes_respect_date_configuration(self, _today):
+        for language, prefix, short_year in (
+            ("en", "arriving", "2/3/27"),
+            ("pl", "przyjadę", "3/2/27"),
+        ):
+            ParserConfiguration.objects.filter(language=language).update(
+                allow_iso_dates=False, allow_two_digit_years=False, allow_dash_dates=False,
+            )
+            for text in ("2027-2-3", short_year):
+                for reply in (text, f"{prefix} {text}"):
+                    with self.subTest(language=language, reply=reply):
+                        self.assertIsNone(parse_stay_input("check_in", reply, language))
+            ParserConfiguration.objects.filter(language=language).update(allow_iso_dates=True)
+            self.assertEqual(
+                parse_stay_input("check_in", f"{prefix} 2027-2-3", language), date(2027, 2, 3),
+            )

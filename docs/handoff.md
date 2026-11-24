@@ -1,5 +1,15 @@
 # Session handoff
 
+## Bilingual numeric date widths
+
+The date parser now validates numeric component widths by format. The bilingual
+regression cases cover direct replies and fragments inside booking sentences.
+Twelve regression subcases failed before the fix. All 18 focused parser tests
+passed after the fix.
+Keep auditing named dates and date configuration boundaries. The separate
+replacement-host rehearsal still requires a staging target.
+
+
 ## Disposable replacement dispatch rehearsal
 
 The hosted fixture checks restored switch and recovery retries with dispatch disabled
