@@ -186,7 +186,12 @@ def rehearse(chromium, browser, language, directory):
 
 
 def main():
-    if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("HOTEL_PARSER_TRAINING_ENABLED") != "1":
+    required_environment = {
+        "GITHUB_ACTIONS": "true",
+        "COMPOSE_PROJECT_NAME": "hotel-parser-ci",
+        "HOTEL_PARSER_TRAINING_ENABLED": "1",
+    }
+    if any(os.environ.get(name) != value for name, value in required_environment.items()):
         raise SystemExit("Run only against the disposable hosted Checks fixture")
     with tempfile.TemporaryDirectory(prefix="hotel-parser-fixtures-") as temporary, sync_playwright() as playwright:
         browser = playwright.chromium.launch()

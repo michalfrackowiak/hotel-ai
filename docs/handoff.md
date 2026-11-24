@@ -3,7 +3,8 @@
 ## Hosted browser parser rehearsal
 
 The Checks workflow runs the fictional English and Polish parser rehearsal in
-headless Chromium against its disposable Compose stack. Piper generates the
+headless Chromium on a separate Ubuntu 24.04 runner with a disposable Compose
+stack. Piper generates the
 WAV fixtures, Chromium captures them through a simulated microphone, and Vosk
 produces the review transcript. The harness checks typed parser corrections,
 clear replies, exact voice matches and committed correction events. A mismatch
