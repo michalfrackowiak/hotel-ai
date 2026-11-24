@@ -1,5 +1,17 @@
 # Session handoff
 
+## Disposable replacement dispatch rehearsal
+
+The hosted fixture checks restored switch and recovery retries with dispatch disabled
+and again with both flags enabled under a fresh generation. Two new English TTS switches
+exercise the replacement standby and restore the original route assignments at revision 6.
+The fixture checks the two journal outcomes, the replacement worker states and the
+original source evidence. Signed preview rejection remains covered by focused Django tests.
+
+Next action is acceptance on a separately provisioned replacement host with fresh worker
+approvals, credentialed TLS and DNS checks, and measured recovery. Keep dispatch off
+during operational recovery.
+
 ## Restored admin request fencing
 
 Django binds signed switch and recovery previews and saved requests to the configured
