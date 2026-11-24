@@ -159,6 +159,13 @@ def date_preview(request, model_admin, object_id):
     result = form.preview(configuration.language, today=today) if form.is_bound and form.is_valid() else None
     replay_form = CorrectionReplayForm(submitted if replay_submitted else None, language=configuration.language)
     replay = replay_form.replay(today=today) if replay_form.is_bound and replay_form.is_valid() else None
+    replay_summary = None if replay is None else {
+        "total": len(replay),
+        "baseline_matches": sum(row["baseline_matches"] for row in replay),
+        "effective_matches": sum(row["effective_matches"] for row in replay),
+        "improved": sum(not row["baseline_matches"] and row["effective_matches"] for row in replay),
+        "regressed": sum(row["baseline_matches"] and not row["effective_matches"] for row in replay),
+    }
     return TemplateResponse(request, "admin/reception/parserconfiguration/date_preview.html", {
         **model_admin.admin_site.each_context(request),
         "opts": model_admin.model._meta,
@@ -169,4 +176,5 @@ def date_preview(request, model_admin, object_id):
         "result": result,
         "replay_form": replay_form,
         "replay": replay,
+        "replay_summary": replay_summary,
     })

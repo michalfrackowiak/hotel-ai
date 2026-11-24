@@ -1,5 +1,14 @@
 # Session handoff
 
+## Fictional correction effectiveness
+
+The admin date replay summarizes baseline and proposed matches, improvements
+and regressions for the selected language's fictional corpus. These counts
+measure the submitted replay. Live correction effectiveness remains open.
+
+Separate-host recovery still requires a staging target.
+
+
 ## Fictional parser regression replay
 
 Private parser date preview can replay fictional examples against a proposed
