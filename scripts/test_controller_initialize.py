@@ -1,4 +1,6 @@
 """Real private SQLite provisioning with mocked Docker observations."""
+from dataclasses import asdict, replace
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -11,7 +13,10 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from speech_controller.docker_control import ControlUnavailable, DockerControls
-from speech_controller.initialize import initialize, main
+from speech_controller.initialize import create_private_stores, initialize, main
+from speech_controller.prepare_replacement import prepare
+from speech_controller.recovery_evidence import EvidenceRejected
+from speech_controller.routing import RoutedTrafficGate
 from speech_controller.runtime import open_runtime
 from speech_controller.runtime_config import RuntimeConfiguration, private_new_store
 
@@ -115,6 +120,99 @@ class InitializeTests(unittest.TestCase):
                 self.provision()
         self.assertFalse(self.traffic.exists())
         self.assertFalse(self.journal.exists())
+
+    def source_capture(self):
+        source = self.manifest.parent / "source"
+        source.mkdir(mode=0o700)
+        traffic, journal, capture = (source / filename for filename in ("traffic.db", "journal.db", "capture.json"))
+        config = RuntimeConfiguration.load_for_initialization(str(self.manifest), TOKEN)
+        routes = {
+            ("en", "stt"): "stt-standby", ("pl", "stt"): "stt-primary",
+            ("en", "tts"): "tts-primary", ("pl", "tts"): "tts-standby",
+        }
+        with patch.object(DockerControls, "verify_stopped_endpoint", return_value=True):
+            controls = DockerControls(config.docker_socket, config.daemon_id, config.approvals)
+            source_config = replace(config, traffic_path=str(traffic), journal_path=str(journal))
+            create_private_stores(source_config, controls, routes, revision=7)
+        path, device, inode, _ = RoutedTrafficGate(traffic, config.targets).binding
+        capture.write_text(json.dumps({
+            "traffic_sha256": hashlib.sha256(traffic.read_bytes()).hexdigest(),
+            "journal_sha256": hashlib.sha256(journal.read_bytes()).hexdigest(),
+            "source_traffic_path": path,
+            "source_traffic_device": device,
+            "source_traffic_inode": inode,
+            "targets": [asdict(target) for target in config.targets],
+        }), encoding="utf-8")
+        return routes, {
+            "traffic_path": traffic, "journal_path": journal, "capture_path": capture,
+            "audit_dir": self.manifest.parent, "recovery_id": "fixture-recovery", "reason": "Verify recovery",
+        }
+
+    def test_prepares_verified_mixed_routes_and_preserves_source_evidence(self):
+        routes, arguments = self.source_capture()
+        source = [arguments[key] for key in ("traffic_path", "journal_path", "capture_path")]
+        before = [path.read_bytes() for path in source]
+        replacements = [worker | {"container_id": str(i + 6) * 64}
+                        for i, worker in enumerate(self.configuration["deployments"])]
+        self.write_manifest(self.configuration | {"deployments": replacements})
+        audit_path = self.manifest.parent / "fixture-recovery.json"
+        with (
+            patch.object(DockerControls, "verify_stopped_endpoint", return_value=True) as verify,
+            patch.object(DockerControls, "start") as start,
+            patch.object(DockerControls, "stop") as stop,
+        ):
+            state = prepare(str(self.manifest), TOKEN, **arguments)
+        self.assertEqual(dict(state.routes), routes)
+        self.assertEqual(state.revision, 7)
+        for worker in replacements:
+            verify.assert_any_call(worker["name"], NETWORK_ID, worker["address"])
+        self.assertEqual(verify.call_count, 4)
+        start.assert_not_called()
+        stop.assert_not_called()
+        self.assertEqual(before, [path.read_bytes() for path in source])
+        record = json.loads(audit_path.read_text())
+        self.assertEqual(stat.S_IMODE(audit_path.stat().st_mode), 0o600)
+        self.assertEqual(record["status"], "prepared")
+        self.assertEqual(record["replacement"]["state"]["revision"], 7)
+        self.assertEqual(record["source"]["traffic_sha256"], hashlib.sha256(before[0]).hexdigest())
+        self.assertEqual(record["replacement"]["journal_sha256"], hashlib.sha256(self.journal.read_bytes()).hexdigest())
+        self.assertEqual(record["replacement"]["workers"][0]["container_id"], replacements[0]["container_id"])
+        replacement_config = RuntimeConfiguration.load(str(self.manifest), TOKEN)
+        with patch.object(DockerControls, "inspect", return_value="created"), open_runtime(replacement_config) as executor:
+            self.assertEqual(executor.state, state)
+            self.assertFalse(executor.recovery_status()["blocked"])
+
+    def test_refuses_before_reserving_outputs_and_fences_an_interrupted_id(self):
+        _, arguments = self.source_capture()
+        audit_path = self.manifest.parent / "fixture-recovery.json"
+        with patch.object(DockerControls, "verify_stopped_endpoint", return_value=False):
+            with self.assertRaisesRegex(ValueError, "endpoint"):
+                prepare(str(self.manifest), TOKEN, **arguments)
+        self.assertFalse(audit_path.exists())
+        self.assertFalse(self.traffic.exists())
+        self.assertFalse(self.journal.exists())
+        capture = arguments["capture_path"]
+        original = capture.read_bytes()
+        capture.write_text(json.dumps(json.loads(original) | {"traffic_sha256": "a" * 64}))
+        with patch.object(DockerControls, "verify_stopped_endpoint") as verify:
+            with self.assertRaises(EvidenceRejected):
+                prepare(str(self.manifest), TOKEN, **arguments)
+            verify.assert_not_called()
+        capture.write_bytes(original)
+        with (
+            patch.object(DockerControls, "verify_stopped_endpoint", return_value=True),
+            patch("speech_controller.initialize.initialize_routing", side_effect=OSError),
+        ):
+            with self.assertRaises(OSError):
+                prepare(str(self.manifest), TOKEN, **arguments)
+        reservation = audit_path.read_bytes()
+        self.assertEqual(json.loads(reservation)["status"], "preparing")
+        self.write_manifest(self.configuration | {"journal_path": str(self.journal.with_name("fresh.db"))})
+        with patch.object(DockerControls, "verify_stopped_endpoint") as verify:
+            with self.assertRaises(ValueError):
+                prepare(str(self.manifest), TOKEN, **arguments)
+            verify.assert_not_called()
+        self.assertEqual(audit_path.read_bytes(), reservation)
 
     def test_existing_store_sidecar_and_socket_in_shared_tree_are_rejected(self):
         self.journal.write_bytes(b"existing journal")
