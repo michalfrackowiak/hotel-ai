@@ -1,5 +1,19 @@
 # Session handoff
 
+## Routed speech state on a replacement filesystem
+
+The disposable controller test verified that startup refuses byte-identical copies of the
+traffic and journal databases even when the replacement configuration recognizes both new
+file identities. The original pair started with its selected routes. Refused startup did
+not inspect, start, stop or probe workers, and all four database files kept their contents.
+The local focused runtime suite passed with two existing Linux-only skips. Hosted Linux
+exercises the replacement manifest and its disposable Unix socket.
+
+Next action is an offline recovery design that preserves audit evidence and verifies the
+selected routes with new worker identities. A replacement-host boot and credentialed
+TLS, DNS and timing checks remain open. See [the recovery boundary](replacement-stack-rehearsal.md#routed-speech-state-on-a-replacement-filesystem).
+
+
 ## Replacement-stack recovery rehearsal
 
 The Windows x86-64 builds and fictional SQLite restore passed, including 37 tables, migration

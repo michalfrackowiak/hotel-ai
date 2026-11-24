@@ -65,3 +65,19 @@ The scoped cleanup verified that all rehearsal containers, volumes and the netwo
 removed. The eight pre-existing running containers kept their identities.
 
 The hosted Linux job exercises the full fixture with the already-built CI images.
+
+## Routed speech state on a replacement filesystem
+
+The routed lifecycle journal is bound to the traffic database's resolved path, device, inode,
+and approved target catalog. A new manifest can point to copied files and still fail runtime
+startup, because the journal in the copy retains its original binding. Keep the copied pair as
+recovery evidence. Avoid changing its journal fingerprint or assuming fresh paths substitute
+for operator verification.
+
+The disposable routed-state rehearsal uses fictional revision-zero stores and mocked worker
+observations. It covers the copied pair separately from the Gunicorn replacement fixture. It compares startup against the original fixture pair, then checks that
+the copied pair is refused before the runtime observes or starts workers. Both pairs retain
+their original bytes. On Linux the test loads a new private manifest with a disposable Unix
+socket and confirms both new file identities. A full replacement
+host needs a documented way to rebuild or adopt the selected routes with verified workers,
+reconcile unfinished operations, and retain the original journal for audit.
