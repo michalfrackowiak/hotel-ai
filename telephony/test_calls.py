@@ -131,7 +131,12 @@ class PhoneCallTests(TestCase):
         sample.save(update_fields=["corrected_result"])
         self.assertEqual(self.turn(checkout, speech="A weak."), retry)
         self.assertEqual(ParserSample.objects.filter(stage="check_out").count(), 1)
-        self.assertEqual(self.turn(retry, speech="A weak.").stage, "guests")
+        with self.assertLogs("reception.parser_corrections", level="INFO") as events:
+            with self.captureOnCommitCallbacks(execute=True):
+                self.assertEqual(self.turn(retry, speech="A weak.").stage, "guests")
+        self.assertEqual([event.getMessage() for event in events.records], [
+            "parser_correction_applied language=en stage=check_out source=voice original_result=missing",
+        ])
 
     def test_menu_defaults_to_polish_and_check_in_silence_requests_handover(self):
         start = start_call(CALL_SID)

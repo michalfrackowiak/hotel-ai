@@ -25,3 +25,7 @@ On the arrival step the parser can read both dates from one response. Examples i
 ## Replay a fictional date correction
 
 Open **Preview dates** for English or Polish, then use **Fictional correction replay**. Submit a proposed correction and compare the expected, built-in and effective result for each fictional reply. The replay uses the selected language's saved date format settings and keeps chat and voice corrections scoped separately.
+
+## Measure live correction use
+
+When a reviewed correction changes a committed booking reply, the service logs `parser_correction_applied` with the language, booking step, chat or voice source, and whether the original extraction was present. The original extraction can include a model fallback. The event contains no guest text, extracted value or identifier. These events measure use. Confirming accuracy requires separate guest or staff review.
