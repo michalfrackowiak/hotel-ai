@@ -166,6 +166,11 @@ def _journal_history(db, limit, state, deployments):
 
 def validate_evidence(traffic_path, journal_path, capture_path):
     """Verify a quiescent pair against independently retained capture data."""
+    result, _ = _validated_capture(traffic_path, journal_path, capture_path)
+    return result
+
+
+def _validated_capture(traffic_path, journal_path, capture_path):
     try:
         capture, source = _capture(capture_path)
         traffic = _verified_bytes(traffic_path, capture["traffic_sha256"])
@@ -187,7 +192,10 @@ def validate_evidence(traffic_path, journal_path, capture_path):
             if decode_state(json.loads(saved, object_pairs_hook=unique_keys), deployments) != state:
                 raise EvidenceRejected("Saved route and journal states disagree.")
             operations, recoveries = _journal_history(db, limit, state, deployments)
-        return {"state": asdict(state), "completed_switches": operations, "completed_recoveries": recoveries}
+        return (
+            {"state": asdict(state), "completed_switches": operations, "completed_recoveries": recoveries},
+            capture,
+        )
     except EvidenceRejected:
         raise
     except (OSError, sqlite3.Error, ValueError, TypeError, KeyError, OverflowError, RecursionError):

@@ -9,8 +9,9 @@ evidence. See the [copied-state rehearsal](replacement-stack-rehearsal.md#routed
 The current [initializer](speech-pilot-initialization.md) prepares new revision-zero stores
 with one bilingual primary for each task. It cannot preserve a prior revision or mixed
 assignments. The [routed-switch recovery API](routed-switch-recovery.md) requires an already
-bound store pair and resolves interrupted switches in that pair. A replacement-host
-recovery command remains to be implemented and rehearsed.
+bound store pair and resolves interrupted switches in that pair. The offline tools below
+validate captured evidence and prepare a replacement pair. Boot and replay fencing still
+need a separate rehearsal.
 
 ## Preserve and verify the source evidence
 
@@ -73,8 +74,8 @@ offline refusal and preserve the source evidence for review.
    newly reviewed manifest. Verify every approved worker is stopped. Check compatibility
    with each saved language/task route. If a provider identity needs to change, require an
    explicitly reviewed mapping and a separate acceptance decision.
-2. Propose a prepare command that validates the evidence and replacement manifest, then
-   exclusively creates both files in a new owner-private staging directory. Reuse the
+2. Run offline preparation to validate the evidence and replacement manifest, then
+   exclusively create both files in a new owner-private staging directory. Reuse the
    store constructors to seed the exact recorded revision and route map and bind the new
    journal to the new traffic file. Preserve the source journal as a separate immutable
    audit artifact. The new journal begins a new history at the recovered revision and
@@ -87,6 +88,33 @@ offline refusal and preserve the source evidence for review.
    A retry after incomplete staging uses fresh private output paths. If the ID already
    has a completed recovery record, verify it against the same evidence before accepting
    the prior result. Never point runtime configuration at a partially written generation.
+
+### Run offline preparation
+
+Use the dedicated native Linux controller account with both hosts fenced. Keep the source
+evidence and the new manifest in private directories. The manifest must name fresh store
+paths and the exact approved providers by their saved names and language/task capabilities.
+Use the same canonical host-only audit directory for all attempts, outside the traffic mount.
+Supply the existing controller token through private environment configuration.
+
+```sh
+python3 -m speech_controller.prepare_replacement \
+  --config /private/replacement/controller.json \
+  --traffic /private/recovery/traffic.sqlite3 \
+  --journal /private/recovery/journal.sqlite3 \
+  --capture /private/retained-capture.json \
+  --audit-dir /private/replacement/audit \
+  --recovery-id replacement-rehearsal-001 --reason "Disposable recovery rehearsal"
+```
+
+A successful invocation preserves the saved revision and all four selections in newly bound
+stores and writes a recovery record under the supplied ID. Its journal starts new audit history.
+The command verifies approved stopped workers and leaves them stopped. Keep the manifest outside
+runtime configuration until the separate boot and replay checks are complete. A successful
+record has status `prepared`. Keep incomplete or malformed records and their stores offline
+for inspection. Use a fresh recovery ID and fresh output paths for a new attempt. To verify
+an already prepared generation, compare the prior record and output hashes. The command
+rejects reuse of a recovery ID, and runtime startup does not enforce the audit record.
 
 ## Verify readiness and rehearse failure
 

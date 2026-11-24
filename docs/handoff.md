@@ -1,5 +1,21 @@
 # Session handoff
 
+## Offline routed replacement preparation
+
+The preparation command validates the source evidence, checks the stopped replacement
+workers against the reviewed manifest, and stages a private traffic store and journal at
+the saved revision. The new journal starts a separate history. A recovery record links
+the new generation to independently retained source evidence and replacement identities.
+The command leaves the workers stopped and the manifest unpublished. See [offline
+preparation](routed-replacement-recovery.md#run-offline-preparation).
+
+All eight focused tests passed on the Ubuntu WSL filesystem, including reopening revision
+7 with mixed routes, rejected worker checks, exclusivity and the initializer regressions.
+
+Next action is an isolated boot and stale-request rehearsal using the staged generation.
+Check all four readiness paths, preserve the original history, and confirm that old
+requests cannot change the routes or workers. Credentialed recovery remains open.
+
 ## Offline routed recovery evidence validator
 
 The offline validator checks the trusted capture hashes, source traffic identity and
