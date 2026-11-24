@@ -1,5 +1,21 @@
 # Session handoff
 
+## Browser parser rehearsal preflight
+
+A loopback Django instance used a fresh seeded SQLite database and fictional
+inputs. Cached Piper and Vosk containers exposed only loopback ports. Direct
+Vosk recognition of the first English synthetic WAV returned wording different
+from the planned noisy transcript. The clear English control returned the
+expected wording. The Polish synthesis request timed out on the local host.
+The Chromium launch and headless retry produced no page request before the
+local attempt ended. Docker Desktop returned an API error during teardown, so
+removal of the two disposable containers remains unverified. All browser cases
+remain unmeasured. On a quiet isolated staging host, preflight the WAVs and run
+the documented chat and voice comparisons with fresh drafts. Record a mismatch
+as indeterminate and report an adapted transcript comparison separately.
+
+All 15 focused parser tests passed. The temporary fixture directory contains only fictional data and still existed at independent review. Docker container removal remains unverified.
+
 ## Parser accuracy rehearsal
 
 The [rehearsal protocol](parser-accuracy-rehearsal.md) defines four fictional
