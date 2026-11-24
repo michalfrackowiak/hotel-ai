@@ -1,5 +1,15 @@
 # Session handoff
 
+## Hosted browser parser rehearsal
+
+The Checks workflow runs the fictional English and Polish parser rehearsal in
+headless Chromium against its disposable Compose stack. Piper generates the
+WAV fixtures, Chromium captures them through a simulated microphone, and Vosk
+produces the review transcript. The harness checks typed parser corrections,
+clear replies, exact voice matches and committed correction events. A mismatch
+leaves the corresponding voice comparison indeterminate. Physical microphone
+checks and guest-confirmed accuracy remain open.
+
 ## Browser parser rehearsal preflight
 
 A loopback Django instance used a fresh seeded SQLite database and fictional
@@ -14,7 +24,8 @@ remain unmeasured. On a quiet isolated staging host, preflight the WAVs and run
 the documented chat and voice comparisons with fresh drafts. Record a mismatch
 as indeterminate and report an adapted transcript comparison separately.
 
-All 15 focused parser tests passed. The temporary fixture directory contains only fictional data and still existed at independent review. Docker container removal remains unverified.
+All 15 focused parser tests passed. A later check confirmed removal of the
+temporary fixture files and the disposable Vosk container.
 
 ## Parser accuracy rehearsal
 
