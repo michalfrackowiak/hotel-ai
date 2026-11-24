@@ -29,3 +29,5 @@ Open **Preview dates** for English or Polish, then use **Fictional correction re
 ## Measure live correction use
 
 When a reviewed correction changes a committed booking reply, the service logs `parser_correction_applied` with the language, booking step, chat or voice source, and whether the original extraction was present. The original extraction can include a model fallback. The event contains no guest text, extracted value or identifier. These events measure use. Confirming accuracy requires separate guest or staff review.
+
+Use the [parser accuracy rehearsal](parser-accuracy-rehearsal.md) to compare the same fictional booking reply with the correction paused and enabled.
