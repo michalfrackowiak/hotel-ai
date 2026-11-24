@@ -454,6 +454,36 @@ class ReceptionHandoverTests(TestCase):
                 {waiting.pk: "Awaiting reply", closed.pk: "Closed without reply", answered.pk: "0:01:30"},
             )
 
+    def test_admin_filter_combines_first_staff_response_with_language_and_closed(self):
+        waiting_en, waiting_pl, replied_open, replied_closed, closed_unanswered = [
+            StaffHandover.objects.create(
+                conversation=Conversation.objects.create(conversation_id=uuid4().hex, state={}),
+                language=language,
+                closed=closed,
+            )
+            for language, closed in (("en", False), ("pl", False), ("en", False), ("pl", True), ("en", True))
+        ]
+        waiting_en.messages.create(text="Fictional guest message.")
+        replied_open.messages.create(staff=True, text="Fictional first reply.")
+        replied_open.messages.create(staff=True, text="Fictional second reply.")
+        replied_closed.messages.create(staff=True, text="Fictional staff reply.")
+
+        operator = get_user_model().objects.create_superuser(username="handover-filter-operator")
+        self.client.force_login(operator)
+        inbox_path = reverse("admin:reception_staffhandover_changelist")
+        cases = (
+            ({"first_response": "awaiting"}, [waiting_en, waiting_pl]),
+            ({"first_response": "replied"}, [replied_open, replied_closed]),
+            ({"first_response": "closed_without_reply"}, [closed_unanswered]),
+            ({"first_response": "awaiting", "language__exact": "pl"}, [waiting_pl]),
+            ({"first_response": "replied", "closed__exact": "1"}, [replied_closed]),
+        )
+        for filters, expected in cases:
+            with self.subTest(filters=filters):
+                response = self.client.get(inbox_path, filters)
+                self.assertEqual(response.status_code, 200)
+                self.assertCountEqual(response.context["cl"].result_list, expected)
+
     def post(self, **payload):
         return self.client.post(reverse("reception-message"), {"language": "en", **payload}, content_type="application/json")
 

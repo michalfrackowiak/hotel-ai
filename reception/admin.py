@@ -33,13 +33,35 @@ class HandoverTranscript(admin.TabularInline):
         return False
 
 
+class FirstStaffResponseFilter(admin.SimpleListFilter):
+    title = "first staff response"
+    parameter_name = "first_response"
+
+    def lookups(self, request, model_admin):
+        return (
+            ("awaiting", "Awaiting reply"),
+            ("replied", "Replied"),
+            ("closed_without_reply", "Closed without reply"),
+        )
+
+    def queryset(self, request, queryset):
+        status = self.value()
+        if status == "awaiting":
+            return queryset.filter(closed=False, first_staff_reply_at__isnull=True)
+        if status == "replied":
+            return queryset.filter(first_staff_reply_at__isnull=False)
+        if status == "closed_without_reply":
+            return queryset.filter(closed=True, first_staff_reply_at__isnull=True)
+        return queryset
+
+
 @admin.register(StaffHandover)
 class StaffHandoverAdmin(admin.ModelAdmin):
     form = StaffHandoverForm
     fields = ("created_at", "language", "first_staff_response", "closed", "reply")
     readonly_fields = ("created_at", "language", "first_staff_response")
     list_display = ("id", "created_at", "language", "closed", "first_staff_response")
-    list_filter = ("closed", "language")
+    list_filter = (FirstStaffResponseFilter, "closed", "language")
     ordering = ("closed", "-created_at")
     inlines = (HandoverTranscript,)
 
