@@ -19,3 +19,7 @@ For browser voice, use the microphone and accept the transcript as shown on the 
 The rehearsal passes when all four language-and-channel comparisons transition from a retry with no count and no correction event to room offers with the intended count and exactly one correction event. The clear controls must still yield the intended count and the other-channel scope checks must stay at the guest-count step. Report pass, fail or indeterminate and the reason for each case. Keep only aggregate counts and fictional case labels in shared evidence. Clean up the disposable database and its logs after the run.
 
 The event shows that the correction changed a committed turn. The tester's comparison with predefined intent supplies accuracy evidence for this fixture. Real guest intent needs separate evidence.
+
+## English wording observed in Vosk
+
+The hosted harness repeats the English noisy synthetic clip in two fresh voice drafts. It checks a separate, predefined correction for `to guess`, the wording Vosk returned during the local preflight. A matching baseline must leave the guest count empty. The corrected reply must show two guests and produce one committed correction event. While the rule is active, submitting `to guess` in chat must leave the guest count empty with no correction event. If the transcript differs or the baseline already produces a result, the harness reports the comparison as indeterminate. The original `two guess` comparison retains its own result.

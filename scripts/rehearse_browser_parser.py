@@ -19,6 +19,7 @@ FIXTURES = {
     "pl": ("jutro", "na tydzień", "załoga bez liczby", "dwie osoby", "Goście"),
 }
 EXPECTED_COUNT = 2
+OBSERVED_ENGLISH_TRANSCRIPT = "to guess"
 
 
 def compose(*args):
@@ -114,7 +115,7 @@ def chat_case(browser, language, phrase, corrected):
         assert_result(page, result, language, corrected)
 
 
-def voice_case(chromium, language, wav_path, expected, corrected):
+def voice_case(chromium, language, wav_path, expected, corrected, *, allow_baseline_drift=False):
     browser = chromium.launch(args=[
         "--use-fake-device-for-media-stream",
         "--use-fake-ui-for-media-stream",
@@ -131,18 +132,52 @@ def voice_case(chromium, language, wav_path, expected, corrected):
             response = upload.value
             assert response.ok, f"Transcription failed ({response.status})"
             transcript = response.json()["text"]
-            if not transcript:
-                return False
-            expect(page.locator("#voice-answer-review")).to_be_visible()
-            expect(page.locator("#chat-message")).to_have_value(transcript)
+            if transcript:
+                expect(page.locator("#voice-answer-review")).to_be_visible()
+                expect(page.locator("#chat-message")).to_have_value(transcript)
             if transcript != expected:
+                if allow_baseline_drift:
+                    print("en observed wording baseline indeterminate (transcript mismatch)")
                 return False
             result, request = submit(page)
             assert request.get("transcript") is True
+            if allow_baseline_drift and (
+                result["stage"] != "guests" or "guests" in result["booking_summary"]
+            ):
+                print("en observed wording baseline indeterminate (parser result changed)")
+                return False
             assert_result(page, result, language, corrected)
             return True
     finally:
         browser.close()
+
+
+def rehearse_observed_english(chromium, browser, noisy_wav):
+    # This wording came from the local Vosk preflight, before the hosted run.
+    observed = OBSERVED_ENGLISH_TRANSCRIPT
+    voice_before = event_count("en", "voice")
+    baseline_matched = voice_case(
+        chromium, "en", noisy_wav, observed, corrected=False, allow_baseline_drift=True,
+    )
+    assert event_count("en", "voice") == voice_before
+    if not baseline_matched:
+        print("en observed wording comparison indeterminate (baseline unavailable)")
+        return
+
+    change_rule("en", "voice", observed, active=True)
+    try:
+        corrected = voice_case(chromium, "en", noisy_wav, observed, corrected=True)
+        expected_events = voice_before + int(corrected)
+        assert event_count("en", "voice") == expected_events
+        chat_before = event_count("en", "chat")
+        chat_case(browser, "en", observed, corrected=False)
+        assert event_count("en", "chat") == chat_before
+        assert event_count("en", "voice") == expected_events
+    finally:
+        change_rule("en", "voice", observed, active=False)
+
+    outcome = "passed" if corrected else "indeterminate (replay transcript mismatch)"
+    print(f"en observed wording comparison {outcome}; opposite-channel scope passed")
 
 
 def rehearse(chromium, browser, language, directory):
@@ -183,6 +218,8 @@ def rehearse(chromium, browser, language, directory):
         change_rule(language, "voice", noisy, active=False)
     print(f"{language} voice exact correction {'passed' if corrected else 'indeterminate (transcript mismatch)'}; "
           f"clear control {'passed' if clear_match else 'indeterminate (transcript mismatch)'}")
+    if language == "en":
+        rehearse_observed_english(chromium, browser, noisy_wav)
 
 
 def main():
