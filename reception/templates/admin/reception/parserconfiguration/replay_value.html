@@ -1,0 +1,1 @@
+{% if value.check_in %}{{ value.check_in|date:"Y-m-d" }} → {{ value.check_out|date:"Y-m-d" }}{% elif value is not None %}{{ value|date:"Y-m-d" }}{% else %}No date{% endif %}
