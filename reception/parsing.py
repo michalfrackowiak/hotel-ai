@@ -247,11 +247,11 @@ def _parse_date(value, language, check_in, today, *, calendar_anchor=None, confi
     if offset and (amount := _number(offset[1], language)) is not None:
         days = amount * (7 if offset[2] in WEEK_UNITS else 1)
     if days is not None:
-        return today + timedelta(days=days)
+        return _add_days(today, days)
     if check_in and value not in {"a", "an"}:
         nights = _number(value, language) if len(value) <= 12 else None
         if nights is not None:
-            return check_in + timedelta(days=nights) if nights else None
+            return _add_days(check_in, nights) if nights else None
     duration = re.fullmatch(DURATIONS[language], value) if check_in else None
     if duration:
         amount = _number(duration[1], language) if duration[1] else 1
@@ -312,13 +312,21 @@ def _numeric_date(value, language, config, anchor, check_in):
         return None
 
 
+def _add_days(start, days):
+    if days > (date.max - start).days:
+        return None
+    return start + timedelta(days=days)
+
+
 def _add_duration(check_in, amount, unit):
     if unit in MONTH_UNITS:
         year, month_index = divmod(check_in.month - 1 + amount, 12)
         year += check_in.year
+        if year > date.max.year:
+            return None
         month = month_index + 1
         return date(year, month, min(check_in.day, monthrange(year, month)[1]))
-    return check_in + timedelta(days=amount * (7 if unit in WEEK_UNITS else 1))
+    return _add_days(check_in, amount * (7 if unit in WEEK_UNITS else 1))
 
 
 def _year_for_month(month, anchor, check_in):
