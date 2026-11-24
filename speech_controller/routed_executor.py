@@ -7,6 +7,10 @@ from .lifecycle import State, SwitchResult
 from .routed_recovery import recover, recovery_status
 
 
+def routed_journal_identity(catalog, binding):
+    return dict(mode="routed-v1", catalog=catalog, traffic=binding)
+
+
 class RoutedLifecycleExecutor(DurableLifecycleExecutor):
     _routed_execution = True
 
@@ -22,7 +26,7 @@ class RoutedLifecycleExecutor(DurableLifecycleExecutor):
         super().__init__(backend, deployments, routes, path, revision=revision, journal_limit=journal_limit)
 
     def _journal_identity(self, catalog):
-        return dict(mode="routed-v1", catalog=catalog, traffic=self._traffic.binding)
+        return routed_journal_identity(catalog, self._traffic.binding)
 
     def reconcile(self, *args, **kwargs):
         raise JournalUnavailable("Routed recovery requires coordinated route and traffic reconciliation.")

@@ -15,6 +15,13 @@ from .lifecycle import LifecycleExecutor, State, SwitchRequest, SwitchResult, id
 from .file_lock import exclusive_lock
 
 
+JOURNAL_SCHEMA = {
+    'metadata': 'CREATE TABLE metadata (id INTEGER PRIMARY KEY CHECK(id=1), fingerprint TEXT NOT NULL, journal_limit INTEGER NOT NULL, state TEXT NOT NULL, blocked INTEGER NOT NULL CHECK(blocked IN (0,1)))',
+    'operations': 'CREATE TABLE operations (request_id TEXT PRIMARY KEY, request TEXT NOT NULL, outcome TEXT)',
+    'reconciliations': 'CREATE TABLE reconciliations (recovery_id TEXT PRIMARY KEY, request TEXT NOT NULL, outcome TEXT NOT NULL, recorded_at TEXT NOT NULL, prior_state TEXT NOT NULL, pending_requests TEXT NOT NULL)',
+}
+
+
 class JournalUnavailable(Exception):
     pass
 
@@ -22,6 +29,27 @@ class JournalUnavailable(Exception):
 def encode(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
+
+def journal_fingerprint(identity):
+    return hashlib.sha256(encode(identity).encode()).hexdigest()
+
+
+def decode_state(value, deployments, backend=None):
+    if not isinstance(value, dict) or set(value) != {"revision", "routes"}:
+        raise ValueError
+    routes = value["routes"]
+    if not isinstance(routes, list) or len(routes) != 4:
+        raise ValueError
+    mapping = {tuple(slot): target for slot, target in routes}
+    return LifecycleExecutor(backend, deployments, mapping,
+                             revision=value["revision"]).state
+
+def decode_outcome(value, deployments, backend=None):
+    if (not isinstance(value, dict) or set(value) != {"status", "reason", "state"}
+            or value["status"] not in {"succeeded", "unchanged", "rejected", "rolled_back", "recovery_required", "cleanup_required", "reconciled"}
+            or not identifier(value["reason"])):
+        raise ValueError
+    return SwitchResult(value["status"], value["reason"], decode_state(value["state"], deployments, backend))
 
 class DurableLifecycleExecutor:
     _routed_execution = False
@@ -39,18 +67,18 @@ class DurableLifecycleExecutor:
         self._path = self._path.resolve()
         self._limit = journal_limit
         catalog = sorted((item.name, item.task, sorted(item.languages)) for item in self._deployments)
-        self._fingerprint = hashlib.sha256(encode(self._journal_identity(catalog)).encode()).hexdigest()
+        self._fingerprint = journal_fingerprint(self._journal_identity(catalog))
         with self._transaction() as db:
             tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if not tables:
-                db.execute("CREATE TABLE metadata (id INTEGER PRIMARY KEY CHECK(id=1), fingerprint TEXT NOT NULL, journal_limit INTEGER NOT NULL, state TEXT NOT NULL, blocked INTEGER NOT NULL CHECK(blocked IN (0,1)))")
-                db.execute("CREATE TABLE operations (request_id TEXT PRIMARY KEY, request TEXT NOT NULL, outcome TEXT)")
+                db.execute(JOURNAL_SCHEMA["metadata"])
+                db.execute(JOURNAL_SCHEMA["operations"])
                 db.execute("INSERT INTO metadata VALUES (1,?,?,?,0)",
                            (self._fingerprint, self._limit, encode(asdict(initial))))
             elif tables not in ({"metadata", "operations"}, {"metadata", "operations", "reconciliations"}):
                 raise ValueError("Unrecognized journal.")
             self._load(db)
-            db.execute("CREATE TABLE IF NOT EXISTS reconciliations (recovery_id TEXT PRIMARY KEY, request TEXT NOT NULL, outcome TEXT NOT NULL, recorded_at TEXT NOT NULL, prior_state TEXT NOT NULL, pending_requests TEXT NOT NULL)")
+            db.execute(JOURNAL_SCHEMA["reconciliations"].replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS", 1))
 
     def _journal_identity(self, catalog):
         return catalog
@@ -85,14 +113,7 @@ class DurableLifecycleExecutor:
                 db.close()
 
     def _state_from(self, value):
-        if not isinstance(value, dict) or set(value) != {"revision", "routes"}:
-            raise ValueError
-        routes = value["routes"]
-        if not isinstance(routes, list) or len(routes) != 4:
-            raise ValueError
-        mapping = {tuple(slot): target for slot, target in routes}
-        return LifecycleExecutor(self._backend, self._deployments, mapping,
-                                 revision=value["revision"]).state
+        return decode_state(value, self._deployments, self._backend)
 
     def _load(self, db):
         rows = db.execute("SELECT id,fingerprint,journal_limit,state,blocked FROM metadata").fetchall()
@@ -104,12 +125,7 @@ class DurableLifecycleExecutor:
         return self._state_from(json.loads(state)), bool(blocked)
 
     def _outcome(self, raw):
-        value = json.loads(raw)
-        if (not isinstance(value, dict) or set(value) != {"status", "reason", "state"}
-                or value["status"] not in {"succeeded", "unchanged", "rejected", "rolled_back", "recovery_required", "cleanup_required", "reconciled"}
-                or not identifier(value["reason"])):
-            raise ValueError
-        return SwitchResult(value["status"], value["reason"], self._state_from(value["state"]))
+        return decode_outcome(json.loads(raw), self._deployments, self._backend)
 
     @property
     def state(self):
