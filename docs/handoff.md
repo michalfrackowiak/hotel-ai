@@ -1,5 +1,18 @@
 # Session handoff
 
+## Replacement-stack recovery rehearsal
+
+The Windows x86-64 builds and fictional SQLite restore passed, including 37 tables, migration
+compatibility and booking replay. Gunicorn started. Low Windows memory interrupted the
+simultaneous HTTP and speech checks. The fixture now checks for 2 GiB of available Windows
+memory before setup and before starting workers. Hosted CI runs the complete fixture on Linux.
+The previous real off-host database-only drill is recorded separately.
+
+Next action is a full run on a quiet replacement host with enough memory and then a
+credentialed recovery window to check routed state, TLS, DNS and recovery time.
+See [replacement-stack checks](replacement-stack-rehearsal.md).
+
+
 ## Voice receptionist handover
 
 The dedicated voice page offers a bilingual **Message reception** button before booking. It stops playback and releases the microphone, then moves focus to the typed composer for the existing staff inbox. Staff reply and close the thread through the existing admin workflow. The guest can switch to chat and resume the same thread.
