@@ -1,5 +1,16 @@
 # Session handoff
 
+## Bilingual date configuration boundaries
+
+The date parser audit covers each numeric format switch in English and Polish
+direct replies, embedded dates and stay ranges. Admin help explains the
+separate ISO and localized dash settings and the scope of the numeric format
+switches.
+
+Next parser audit: same-month rollover. Separate-host recovery still requires
+a staging target.
+
+
 ## Bilingual month abbreviations
 
 The booking date parser recognizes common English and Polish month abbreviations

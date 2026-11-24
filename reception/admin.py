@@ -186,6 +186,8 @@ class ParserConfigurationAdmin(admin.ModelAdmin):
             "description": "The ISO switch enables year-first dates such as 2027-04-05. "
             "Year-first dates with slashes or dots also require the corresponding separator switch. "
             "The hyphen switch controls dates that begin with a day or month. "
+            "The yearless switch controls numeric dates such as 04/05. "
+            "Written month names, relative dates and stay durations follow separate rules. "
             "Two-digit years use a 00–68 → 2000–2068, 69–99 → 1969–1999 cutoff.",
         }),
     )
