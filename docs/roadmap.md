@@ -167,6 +167,7 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 - [x] Staff handover and confirmation delivery. Route browser handovers to the reception inbox and enable configured phone transfers. Queue confirmation requests atomically with the booking and dispatch them through SMTP or Twilio.
 - [x] 0.9 reception inbox first reply: show elapsed time from handover creation to the first staff reply and distinguish open and closed handovers without a reply.
 - [x] 0.9 reception inbox filter: find handovers awaiting a first reply, replied handovers, and threads closed without a reply. Combine the filter with language and closure status.
+- [x] 0.9 reception inbox assignment: assign or unassign a staff owner in the private admin and filter the inbox by assignee.
 - [x] Match the Resort Neptun scenario prompts and timing. Open with a bilingual greeting and a two-second language window, wait ten seconds for an arrival date, quote room prices before consent, and use the selected delivery closing after provider acceptance.
 - [x] Start English web chat and browser voice with a Neptun Resort greeting followed immediately by Step 2.b.
 - [ ] Configure live SMTP, Twilio SMS, and the staff phone transfer destination. Verify each live destination with a controlled test.

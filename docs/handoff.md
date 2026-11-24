@@ -1,5 +1,15 @@
 # Session handoff
 
+## Reception inbox staff assignment
+
+Staff with handover change permission can assign, reassign or clear an owner in
+the private admin. The inbox displays and filters by assignee. New assignments
+require active staff with handover change permission. Existing assignments can
+be retained after an account is deactivated or loses that permission. Migration
+0012 makes the field optional, so older handovers start unassigned. Staff
+assignment stays in admin. Unread tracking is the next inbox improvement.
+All nine handover tests passed, including the guest payload and permission checks.
+
 ## Reception inbox first response filter
 
 The staff handover list filters by first response status alongside language and
