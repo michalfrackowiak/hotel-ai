@@ -138,3 +138,29 @@ class NoisyStayParsingTests(TestCase):
         ):
             with self.subTest(language=language, reply=reply):
                 self.assertEqual(parse_stay_input("check_in", reply, language), expected)
+
+    def test_bilingual_month_abbreviations_and_noisy_ranges(self, _today):
+        for language, reply, expected in (
+            ("en", "Oct. 5, 2027", date(2027, 10, 5)),
+            ("en", "5 Sept 2027", date(2027, 9, 5)),
+            ("pl", "5 paź. 2027 r.", date(2027, 10, 5)),
+            ("pl", "5 wrz.", date(2027, 9, 5)),
+            ("en", "um, from 29 Dec. to Jan. 2 thanks", StayDates(date(2026, 12, 29), date(2027, 1, 2))),
+            ("pl", "yyy od 29 gru. do 2 sty., dziękuję", StayDates(date(2026, 12, 29), date(2027, 1, 2))),
+            ("en", "arriving Dec. 5 for two nights", StayDates(date(2026, 12, 5), date(2026, 12, 7))),
+            ("pl", "przyjadę 5 gru. na dwie noce", StayDates(date(2026, 12, 5), date(2026, 12, 7))),
+        ):
+            with self.subTest(language=language, reply=reply):
+                self.assertEqual(parse_stay_input("check_in", reply, language), expected)
+
+    def test_month_abbreviations_preserve_year_and_ambiguity_validation(self, _today):
+        for language, reply in (
+            ("en", "from Dec. 5 027 to Dec. 7"),
+            ("pl", "od 5 gru. 027 do 7 gru."),
+            ("en", "arriving Dec. 5 or Jan. 2"),
+            ("pl", "od 5 gru. albo 2 sty."),
+            ("en", "arriving Decc 5"),
+            ("pl", "przyjadę 5 gruu"),
+        ):
+            with self.subTest(language=language, reply=reply):
+                self.assertIsNone(parse_stay_input("check_in", reply, language))
