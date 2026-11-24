@@ -10,8 +10,8 @@ The current [initializer](speech-pilot-initialization.md) prepares new revision-
 with one bilingual primary for each task. It cannot preserve a prior revision or mixed
 assignments. The [routed-switch recovery API](routed-switch-recovery.md) requires an already
 bound store pair and resolves interrupted switches in that pair. The offline tools below
-validate captured evidence and prepare a replacement pair. Boot and replay fencing still
-need a separate rehearsal.
+validate captured evidence and prepare a replacement pair. The disposable boot rehearsal
+checks startup and verifies the disabled-dispatch boundary below.
 
 ## Preserve and verify the source evidence
 
@@ -144,3 +144,18 @@ rejects reuse of a recovery ID, and runtime startup does not enforce the audit r
    document recovery elapsed time, backup age at recovery and the tested limits. Plan a
    separate approved window for certificate issuance and renewal, DNS and ingress cutover,
    and any credentialed integration checks.
+
+
+## Disposable boot rehearsal
+
+The hosted native-Linux fixture captures the stopped source store pair, preserves its audit
+history, and prepares new databases at the saved revision. It uses the same approved
+disposable worker identities for this pass. The controller must reopen the new generation
+and start only the workers selected by the saved routes. Django resumes fictional drafts
+and exercises English and Polish speech through the new traffic store.
+
+With switch and recovery dispatch disabled, attempts to submit old requests must leave
+the controller state and workers unchanged. This check covers the disabled cutover state.
+Before enabling dispatch on a replacement host, review and fence restored requests
+independently of this fixture. Approval of newly provisioned worker identities, a quiet
+replacement host, and credentialed TLS, DNS and timing checks remain separate.
