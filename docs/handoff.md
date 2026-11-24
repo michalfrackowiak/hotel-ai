@@ -1,5 +1,14 @@
 # Session handoff
 
+## Reception inbox first response filter
+
+The staff handover list filters by first response status alongside language and
+closure. Awaiting reply covers open threads without a staff reply, Replied
+covers any thread with a staff reply, and Closed without reply covers unanswered
+closed threads. The filter uses existing handover and message records. Staff
+assignment and unread tracking remain open.
+All eight handover tests passed. Django reported no migration changes.
+
 ## Reception inbox first staff response
 
 The staff handover list and detail show the elapsed time from opening the
