@@ -38,6 +38,32 @@ recovery command remains to be implemented and rehearsed.
    path only if the original bound stores can be restored and its preconditions hold.
    A new ID or a replacement filesystem does not resolve a prior uncertain operation.
 
+## Validate the captured evidence
+
+Run the read-only validator against the private, transferred database copies and a trusted
+capture record retained independently of those copies.
+
+```sh
+python3 -m speech_controller.recovery_evidence \
+  --traffic /private/recovery/traffic.sqlite3 \
+  --journal /private/recovery/journal.sqlite3 \
+  --capture /private/retained-capture.json
+```
+
+The capture JSON supplies `traffic_sha256`, `journal_sha256`, `source_traffic_path`,
+`source_traffic_device`, `source_traffic_inode` and `targets`. Use the original canonical
+absolute Linux traffic path and the original numeric device and inode. Copy the approved
+`targets` list from the source manifest. Keep the capture record and its provenance under
+operator control. The validator checks the supplied evidence, while source fencing and
+establishing the capture record's provenance remain operator responsibilities.
+
+A successful result reports the verified revision, four route selections and audit counts.
+The validator opens no controller listener, calls no workers and initializes no SQLite stores.
+Use a Python build with SQLite deserialization available. Inputs are limited to 32 KiB for the
+capture record and 16 MiB per database. Provide standalone SQLite copies in rollback journal
+format with no adjacent journal, WAL or shared-memory sidecars. Treat a failed result as an
+offline refusal and preserve the source evidence for review.
+
 ## Prepare an isolated replacement pair
 
 1. Keep the replacement controller listener, web writers and public ingress offline.

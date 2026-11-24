@@ -1,5 +1,17 @@
 # Session handoff
 
+## Offline routed recovery evidence validator
+
+The offline validator checks the trusted capture hashes, source traffic identity and
+journal binding, SQLite integrity, route and revision agreement, and settled work.
+The result reports the revision, four route selections and audit counts without opening
+a listener, contacting workers or creating replacement stores. Source custody and
+fencing are operator prerequisites. See [validator usage](routed-replacement-recovery.md#validate-the-captured-evidence).
+
+Next action is preparing a new private store generation from verified evidence and
+verified stopped replacement workers. A disposable boot and stale request replay test
+must precede credentialed replacement-host recovery.
+
 ## Offline routed recovery design
 
 The [replacement recovery runbook](routed-replacement-recovery.md) defines source
