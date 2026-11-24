@@ -5,7 +5,7 @@
 The date parser now validates numeric component widths by format. The bilingual
 regression cases cover direct replies and fragments inside booking sentences.
 Twelve regression subcases failed before the fix. All 18 focused parser tests
-passed after the fix.
+passed after the fix. Independent review found a malformed-range case that could mistake departure for arrival. The added range regression passed with all 155 reception tests.
 Keep auditing named dates and date configuration boundaries. The separate
 replacement-host rehearsal still requires a staging target.
 
