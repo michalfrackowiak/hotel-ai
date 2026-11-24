@@ -1,5 +1,19 @@
 # Session handoff
 
+## Offline routed recovery design
+
+The [replacement recovery runbook](routed-replacement-recovery.md) defines source
+fencing and evidence capture, matched route and journal checks, replacement worker
+verification, an audited new store generation, and bilingual boot and rollback gates.
+The original journal remains archived and its operation IDs stay fenced from the
+new runtime. The procedure is a design for implementation and disposable validation.
+
+Next action is the offline source evidence validator. Exercise a nonzero saved
+revision, mixed route selections and completed audit records. Refuse unsettled work
+or a provenance mismatch before building a replacement pair. Production cutover,
+TLS, DNS and measured recovery remain pending.
+
+
 ## Routed speech state on a replacement filesystem
 
 The disposable controller test verified that startup refuses byte-identical copies of the
