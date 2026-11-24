@@ -483,8 +483,8 @@ def rehearse_replacement(docker, image, directory, fixture_dir, archive, origina
     capture.touch(mode=0o600, exist_ok=False)
     capture.write_text(json.dumps(dict(
         source_traffic_path=str(traffic_path), source_traffic_device=source_stat.st_dev,
-        source_traffic_inode=source_stat.st_ino, traffic_sha256=originals[traffic_path],
-        journal_sha256=originals[journal_path], targets=[asdict(target) for target in targets],
+        source_traffic_inode=source_stat.st_ino, traffic_sha256=originals[traffic_path].hex(),
+        journal_sha256=originals[journal_path].hex(), targets=[asdict(target) for target in targets],
     )), encoding="utf-8")
     replacement = directory / "replacement-web"
     replacement.mkdir(mode=0o700)
@@ -514,9 +514,9 @@ def rehearse_replacement(docker, image, directory, fixture_dir, archive, origina
     record = json.loads((directory / "staged-replacement.json").read_text(encoding="utf-8"))
     require(record["status"] == "prepared" and record["source"]["completed_switches"] == 5
             and record["source"]["completed_recoveries"] == 1
-            and record["source"]["journal_sha256"] == originals[journal_path]
-            and record["replacement"]["traffic_sha256"] == digest(replacement_traffic)
-            and record["replacement"]["journal_sha256"] == digest(replacement_journal),
+            and record["source"]["journal_sha256"] == originals[journal_path].hex()
+            and record["replacement"]["traffic_sha256"] == digest(replacement_traffic).hex()
+            and record["replacement"]["journal_sha256"] == digest(replacement_journal).hex(),
             "Replacement audit record did not preserve source history or output checksums.")
     require(all(controls.inspect(name) == "exited" for name in names.values()),
             "Replacement preparation started a staged worker.")
