@@ -67,6 +67,16 @@ class ParserSamples(models.QuerySet):
             )
         )
 
+    def enabled_corrections(self, now=None):
+        return self.unexpired(now).filter(correction_enabled=True).exclude(corrected_result="")
+
+    def with_correction_conflicts(self, now=None):
+        competing = self.model.objects.enabled_corrections(now).filter(
+            language=models.OuterRef("language"), stage=models.OuterRef("stage"),
+            source=models.OuterRef("source"), rule_key=models.OuterRef("rule_key"),
+        ).exclude(corrected_result=models.OuterRef("corrected_result"))
+        return self.annotate(correction_conflicts=models.Exists(competing))
+
 
 class ParserSample(models.Model):
     language = models.CharField(max_length=2, choices=(("pl", "Polish"), ("en", "English")))

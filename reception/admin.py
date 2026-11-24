@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib import admin
 from django.urls import path, reverse
+from django.utils import timezone
 from django.utils.html import format_html
 
 from . import scenario_admin
@@ -102,7 +103,7 @@ class ParserSampleForm(forms.ModelForm):
         help_texts = {
             "corrected_result": "Matching future turns can use this correction if it is unambiguous and still valid. "
             "Clear the field to remove it.",
-            "correction_enabled": "Turn off to keep the correction for review without applying it to future turns.",
+            "correction_enabled": "Turn off to retain the correction without applying it. An eligible correction has no conflicting reviewed value and must still pass booking checks.",
         }
 
     def __init__(self, *args, **kwargs):
@@ -149,8 +150,9 @@ class ParserSampleReviewFilter(admin.SimpleListFilter):
 class ParserSampleAdmin(admin.ModelAdmin):
     form = ParserSampleForm
     fields = ("created_at", "language", "stage", "source", "text", "succeeded", "parsed_result", "corrected_result",
-              "correction_enabled")
-    readonly_fields = ("created_at", "language", "stage", "source", "text", "succeeded", "parsed_result")
+              "correction_enabled", "correction_status")
+    readonly_fields = ("created_at", "language", "stage", "source", "text", "succeeded", "parsed_result",
+                       "correction_status")
     list_display = ("created_at", "language", "stage", "source", "input_excerpt", "parsed_result", "succeeded",
                     "correction_status")
     list_filter = ("language", "stage", "source", "succeeded", ParserSampleReviewFilter)
@@ -161,7 +163,8 @@ class ParserSampleAdmin(admin.ModelAdmin):
         return False
 
     def get_queryset(self, request):
-        return super().get_queryset(request).unexpired()
+        now = timezone.now()
+        return super().get_queryset(request).unexpired(now).with_correction_conflicts(now)
 
     @admin.display(description="Parser input")
     def input_excerpt(self, sample):
@@ -171,7 +174,11 @@ class ParserSampleAdmin(admin.ModelAdmin):
     def correction_status(self, sample):
         if not sample.corrected_result:
             return "No correction"
-        return "Enabled" if sample.correction_enabled else "Disabled"
+        if not sample.correction_enabled:
+            return "Disabled"
+        if sample.correction_conflicts:
+            return "Conflicting"
+        return "Eligible"
 
 
 @admin.register(ParserConfiguration)

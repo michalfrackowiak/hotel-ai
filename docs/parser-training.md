@@ -8,6 +8,8 @@ Examples include numeric dates in ISO, slash, dot, or dash formats; a stay such 
 
 Approved corrections apply when the same input recurs in the same language, source, and booking step. The parser checks the result against the current dates and offered rooms. Conflicting enabled corrections leave the original parser in control. Paused corrections do not participate in conflicts. Explicit dates, counts, and available room choices keep their direct meaning.
 
+Use **Correction status** on the list or sample detail to identify conflicting rules. An eligible correction has a single reviewed value in its exact match scope. The current booking details still determine whether it applies.
+
 ## Enable and maintain the queue
 
 Set `HOTEL_PARSER_TRAINING_ENABLED=1` in the ignored deployment `.env` and recreate the reception web service. If the deployment also runs the phone service, recreate it with the same setting. The web page displays a review notice while collection is enabled.
