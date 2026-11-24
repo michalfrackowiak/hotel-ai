@@ -1,5 +1,14 @@
 # Session handoff
 
+## Booking date arithmetic limits
+
+A stay duration that exceeds the supported calendar leaves a valid arrival
+available in English and Polish. Two bilingual baseline cases reproduced the
+loss of arrival. All 26 focused parser and admin preview tests passed.
+
+Separate-host recovery still requires a staging target.
+
+
 ## Fractional relative-date offsets
 
 The built-in English and Polish parser rejects fractional relative-date

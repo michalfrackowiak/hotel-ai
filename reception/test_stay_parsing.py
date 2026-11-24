@@ -265,3 +265,25 @@ class NoisyStayParsingTests(TestCase):
                 self.assertEqual(
                     parse_stay_input("check_in", f"{arrival} {valid}", language), date(2026, 11, 18),
                 )
+
+    def test_unrepresentable_duration_keeps_valid_arrival(self, _today):
+        for language, prefix, duration in (
+            ("en", "from", "for one night"),
+            ("pl", "od", "na jedną noc"),
+        ):
+            with self.subTest(language=language):
+                self.assertEqual(
+                    parse_stay_input("check_in", f"{prefix} 9999-12-31 {duration}", language), date.max,
+                )
+                self.assertIsNone(parse_stay_input("check_out", duration, language, check_in=date.max))
+                self.assertIsNone(parse_stay_input("check_out", "1", language, check_in=date.max))
+                self.assertEqual(parse_stay_input("check_out", duration, language, check_in=date(9999, 12, 30)), date.max)
+
+    def test_date_arithmetic_rejects_invalid_year_without_raising(self, _today):
+        for language, month_duration, relative in (
+            ("en", "for one month", "tomorrow"),
+            ("pl", "na jeden miesiąc", "jutro"),
+        ):
+            with self.subTest(language=language):
+                self.assertIsNone(parse_stay_input("check_out", month_duration, language, check_in=date.max))
+                self.assertIsNone(parse_stay_input("check_in", relative, language, today=date.max))
