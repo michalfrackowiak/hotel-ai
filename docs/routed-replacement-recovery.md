@@ -81,10 +81,11 @@ recovery command remains to be implemented and rehearsed.
    for audit and prevent replay against the replacement pair.
 3. The first disposable proof should use a nonzero revision and mixed assignments with
    completed audit records. Demonstrate refusal for a changed hash or fingerprint, store
-   disagreement, retained claim, pending operation, wrong worker binding, interrupted
-   staging and stale request replay against the new pair. For each refusal, verify unchanged source hashes and no worker starts or
-   published configuration. For success, verify the recovered revision, exact four
-   selections, archived history, selected-only boot, bilingual readiness and cleanup.
+   disagreement, retained claim, pending operation, wrong worker binding and interrupted
+   staging. For each offline refusal, verify unchanged source hashes and no worker starts
+   or published configuration. After successful boot, verify the recovered revision,
+   exact four selections, archived history, selected-only boot and bilingual readiness.
+   Verify stale request replay causes no route or worker changes, then check cleanup.
 4. Before production use, perform the full rehearsal on a quiet replacement host and
    document recovery elapsed time, backup age at recovery and the tested limits. Plan a
    separate approved window for certificate issuance and renewal, DNS and ingress cutover,
