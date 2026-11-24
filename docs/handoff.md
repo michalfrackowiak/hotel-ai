@@ -1,5 +1,18 @@
 # Session handoff
 
+## Observed English voice wording
+
+The [hosted comparison](https://github.com/michalfrackowiak/hotel-ai/actions/runs/45494491981/job/138801232687)
+recognized `to guess` in both English synthetic microphone drafts. The baseline
+left the guest count empty. The voice correction recovered the intended count
+of two and emitted one committed event. The same text in chat still required a
+guest count while the voice rule was active. Both chat corrections, all four
+clear controls and the Polish voice correction passed. The original English
+`two guess` comparison and its chat-to-voice probe remain indeterminate.
+All 15 focused parser tests passed locally. Next, use an independently recorded
+fictional English clip on an isolated staging target and run the physical
+microphone rehearsal. Guest-confirmed accuracy remains open.
+
 ## Hosted browser parser rehearsal
 
 The Checks workflow runs the fictional English and Polish parser rehearsal in
