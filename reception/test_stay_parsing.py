@@ -248,3 +248,20 @@ class NoisyStayParsingTests(TestCase):
                     parse_stay_input("check_out", reply, language, check_in=date(2028, 2, 10)), date(2028, 2, 29),
                 )
                 self.assertIsNone(parse_stay_input("check_out", reply, language, check_in=date(2027, 2, 10)))
+
+    def test_fractional_relative_offsets_do_not_become_calendar_dates(self, _today):
+        for language, offset, arrival, departure, range_end, valid in (
+            ("en", "in 12.5 days", "arriving", "departing", "to December 8", "in three days"),
+            ("pl", "za 5.12 dnia", "przyjadę", "wyjadę", "do 8 grudnia", "za trzy dni"),
+        ):
+            with self.subTest(language=language):
+                for reply in (offset, f"{arrival} {offset}", f"{arrival} {offset} {range_end}"):
+                    self.assertIsNone(parse_stay_input("check_in", reply, language))
+                self.assertIsNone(parse_stay_input(
+                    "check_out", f"{departure} {offset}", language, check_in=date(2026, 11, 16),
+                ))
+                for punctuation_variant in (offset.replace(".", ","), offset.replace(" ", " +", 1)):
+                    self.assertIsNone(parse_stay_input("check_in", f"{arrival} {punctuation_variant}", language))
+                self.assertEqual(
+                    parse_stay_input("check_in", f"{arrival} {valid}", language), date(2026, 11, 18),
+                )

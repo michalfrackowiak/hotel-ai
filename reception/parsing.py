@@ -28,6 +28,11 @@ RELATIVE_OFFSETS = {
     "en": r"in ([0-9]{1,5}|[a-z]+) (day|days|week|weeks)",
     "pl": r"za ([0-9]{1,5}|[a-ząćęłńóśźż]+) (dzień|dni|tydzień|tygodnie|tygodni)",
 }
+# Keep unsupported fractions together so their amount cannot become a calendar date.
+FRACTIONAL_OFFSETS = {
+    "en": r"in [+-]?[0-9]+[.,][0-9]+ (?:days?|weeks?)",
+    "pl": r"za [+-]?[0-9]+[.,][0-9]+ (?:dzień|dni|dnia|tydzień|tygodnia|tygodnie|tygodni)",
+}
 WEEK_UNITS = {"week", "weeks", "tydzień", "tygodnie", "tygodni"}
 DURATIONS = {
     "en": r"(?:for )?(?:([0-9]{1,5}|[a-z]+) )?(night|nights|day|days|week|weeks|month|months)",
@@ -118,7 +123,7 @@ def _date_pattern(language):
         day = rf"(?:[0-9]{{1,2}}|{ordinals})"
         named = rf"{day} (?:{months})(?:(?:, ?| ){year}(?: roku| r\.?)?)?"
         ordinal = ordinals
-    return re.compile(rf"(?<![\w./-])(?:{numeric}|{named}|{relative}|{RELATIVE_OFFSETS[language]}|{ordinal})(?![\w/-]|\.[0-9])")
+    return re.compile(rf"(?<![\w./-])(?:{FRACTIONAL_OFFSETS[language]}|{numeric}|{named}|{relative}|{RELATIVE_OFFSETS[language]}|{ordinal})(?![\w/-]|\.[0-9])")
 
 
 DATE_FRAGMENTS = {language: _date_pattern(language) for language in MONTHS}

@@ -1,5 +1,14 @@
 # Session handoff
 
+## Fractional relative-date offsets
+
+The built-in English and Polish parser rejects fractional relative-date
+expressions instead of extracting a calendar date from their digits.
+Whole-day and whole-week offsets remain supported.
+
+Separate-host recovery still requires a staging target.
+
+
 ## Yearless checkout inference
 
 English and Polish checkout replies infer the year from the recorded arrival
