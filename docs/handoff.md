@@ -1,5 +1,18 @@
 # Session handoff
 
+## Parser accuracy rehearsal
+
+The [rehearsal protocol](parser-accuracy-rehearsal.md) defines four fictional
+guest-count comparisons against intent recorded before each trial. A disposable
+Django test client run exercised all four pairs, clear replies, cross-channel
+scope and the committed event. All four passed with deterministic transcript
+payloads. Next action is to run the microphone and browser review portions on an
+isolated staging target. Guest-confirmed accuracy remains open.
+
+All 15 focused parser tests passed. The broader local Windows run passed 201 of
+202 reception and telephony tests. The speech traffic slot drain test also
+failed when rerun on its own.
+
 ## Live parser correction usage
 
 A committed booking turn emits a bounded event when an exact reviewed correction
