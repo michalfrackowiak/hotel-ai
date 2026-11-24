@@ -104,3 +104,13 @@ class NoisyStayParsingTests(TestCase):
             self.assertEqual(
                 parse_stay_input("check_in", f"{prefix} 2027-2-3", language), date(2027, 2, 3),
             )
+
+    def test_malformed_arrival_does_not_become_a_checkout_date(self, _today):
+        for language, prefix, checkout, malformed_localized in (
+            ("en", "from", "to tomorrow", "2/3/027"),
+            ("pl", "od", "do jutra", "3.2.027"),
+        ):
+            for arrival in (malformed_localized, "2027-02-003", "2027-02/03", "002/03"):
+                reply = f"{prefix} {arrival} {checkout}"
+                with self.subTest(language=language, reply=reply):
+                    self.assertIsNone(parse_stay_input("check_in", reply, language))

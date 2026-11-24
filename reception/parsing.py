@@ -95,7 +95,9 @@ def _date_pattern(language):
     months = _alternatives(MONTHS[language])
     ordinals = _alternatives(ORDINALS[language]).replace(r"\ ", "[- ]")
     relative = _alternatives(RELATIVE_DATES[language])
-    numeric = r"[0-9]{4}[./-][0-9]{1,2}[./-][0-9]{1,2}|[0-9]{1,2}[./-][0-9]{1,2}(?:[./-](?:[0-9]{4}|[0-9]{2}))?"
+    # Keep malformed numeric candidates visible so an invalid arrival does not
+    # disappear from a range and leave its departure looking like a single date.
+    numeric = r"[0-9]+[./-][0-9]+[./-][0-9]+|[0-9]{1,4}[./-][0-9]{1,2}"
     if language == "en":
         ordinal = r"[0-9]{1,2}(?:st|nd|rd|th)"
         day = rf"(?:{ordinal}|[0-9]{{1,2}}|{ordinals})"
@@ -256,19 +258,20 @@ def _numeric_date(value, language, today, config, calendar_anchor):
     match = re.fullmatch(r"([0-9]{4}|[0-9]{1,2})([./-])([0-9]{1,2})(?:\2([0-9]{1,4}))?", value)
     if not match:
         return None
-    first, separator, second, year_text = match.groups()
+    first, separator, second, trailing = match.groups()
     allowed_separator = {
         "/": config["allow_slash_dates"],
         ".": config["allow_dot_dates"],
         "-": config["allow_dash_dates"],
     }[separator]
     if len(first) == 4:
-        if not year_text or len(year_text) > 2:
+        if not trailing or len(trailing) > 2:
             return None
         if not config["allow_iso_dates"] or (separator != "-" and not allowed_separator):
             return None
-        year, month, day = int(first), int(second), int(year_text)
+        year, month, day = int(first), int(second), int(trailing)
     else:
+        year_text = trailing
         if not allowed_separator:
             return None
         if not year_text and not config["allow_yearless_dates"]:
