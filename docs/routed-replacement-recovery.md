@@ -161,3 +161,30 @@ the controller state and workers unchanged. This check covers the disabled cutov
 Before enabling dispatch on a replacement host, review and fence restored requests
 independently of this fixture. An independently provisioned replacement host and credentialed TLS, DNS and timing checks
 remain separate.
+
+
+## Fence restored admin requests
+
+Keep both dispatch flags off during recovery. Before considering re-enabling either
+flag, set `HOTEL_SPEECH_CONTROL_GENERATION` to a new, unique identifier for this
+controller generation. Use 1 to 64 ASCII letters, digits, underscores or hyphens.
+Apply the migrations and configure the same value on every Django process that can
+write to the restored booking database. Stop older instances before the cutover.
+
+The value binds signed switch and recovery previews and their saved requests to the
+Django dispatch generation. Existing records remain available for audit. A preview or
+request from a different generation cannot dispatch and does not block new requests.
+Verify denial of a restored preview and saved request for both workflows, then verify
+a newly reviewed request on the disposable controller.
+
+Keep the generation value with the replacement configuration. An unset value preserves
+the original behavior for older installations. Do not clear the setting or reuse an
+earlier generation when restoring the same database. This setting fences Django admin
+dispatch. Keep the private controller listener and credentials restricted to approved
+processes, and review any other dispatch callers before enabling writes.
+
+Keep dispatch disabled and retain the new schema during application rollback. Older
+application versions ignore the generation. The earlier uniqueness constraint allows
+only one unfinished request per controller URL and cannot represent unfinished requests
+from multiple generations. Plan a separate schema rollback with dispatch disabled and
+preserve the original request records.

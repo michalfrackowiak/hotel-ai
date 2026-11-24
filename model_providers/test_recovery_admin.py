@@ -18,7 +18,8 @@ from .test_control_status import TOKEN, snapshot
 
 
 @override_settings(HOTEL_SPEECH_CONTROL_RECOVERY_ENABLED=True,
-                   HOTEL_SPEECH_CONTROL_URL="http://127.0.0.1:8093", HOTEL_SPEECH_CONTROL_TOKEN=TOKEN)
+                   HOTEL_SPEECH_CONTROL_URL="http://127.0.0.1:8093", HOTEL_SPEECH_CONTROL_TOKEN=TOKEN,
+                   HOTEL_SPEECH_CONTROL_GENERATION="")
 class RecoveryAdminTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user("recovery-operator", is_staff=True)
@@ -68,6 +69,41 @@ class RecoveryAdminTests(TestCase):
             self.assertEqual(send.call_count, 1)
         saved.refresh_from_db()
         self.assertTrue(saved.completed)
+
+    def test_replacement_generation_fences_old_recovery_previews_and_requests(self):
+        old_preview = self.preview().context["form"].initial["preview"]
+        saved, detail = self.prepare()
+        legacy = signing.loads(old_preview, salt=SALT)
+        del legacy["generation"]
+        legacy_token = signing.dumps(legacy, salt=SALT)
+        form = {"reason": "Verified workers", "confirmed": "on"}
+        with self.settings(HOTEL_SPEECH_CONTROL_GENERATION="replacement-1"), \
+                patch("model_providers.recovery_admin.submit_recovery", return_value=self.result(saved)) as submit:
+            for token in (old_preview, legacy_token):
+                self.assertContains(self.client.post(self.url, form | {"preview": token}), "expired or is invalid")
+            self.assertNotContains(self.client.get(detail), "Confirm and send recovery")
+            self.assertContains(self.client.post(detail, {"confirmed": "on"}), "retained for audit")
+            submit.assert_not_called()
+            saved.refresh_from_db()
+            self.assertIsNone(saved.attempted_at)
+            self.assertIsNone(saved.outcome)
+            self.assertFalse(saved.completed)
+            preview = self.preview().context["form"].initial["preview"]
+            response = self.client.post(self.url, form | {"preview": preview})
+            self.assertEqual(response.status_code, 302)
+            fresh = SpeechRecoveryRequest.objects.get(dispatch_generation="replacement-1")
+            self.assertEqual(fresh.controller_url, saved.controller_url)
+            self.assertEqual(fresh.payload["expected_revision"], saved.payload["expected_revision"])
+            self.assertContains(self.client.post(response.url, {"confirmed": "on"}), "Recovery confirmed")
+            submit.assert_called_once_with(fresh.payload)
+
+    def test_legacy_preview_without_generation_is_valid_on_legacy_configuration(self):
+        preview = signing.loads(self.preview().context["form"].initial["preview"], salt=SALT)
+        del preview["generation"]
+        response = self.client.post(self.url, {"preview": signing.dumps(preview, salt=SALT),
+                                              "reason": "Verified workers", "confirmed": "on"})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(SpeechRecoveryRequest.objects.get().dispatch_generation, "")
 
     def test_timeout_retry_keeps_original_payload_and_clears_old_rejection(self):
         saved, detail = self.prepare()

@@ -1,5 +1,19 @@
 # Session handoff
 
+## Restored admin request fencing
+
+Django binds signed switch and recovery previews and saved requests to the configured
+dispatch generation. Older rows stay available for audit, and do not block new readiness
+reviews. A stale request is refused before contacting the controller. Empty configuration
+preserves legacy behavior. See [fencing during recovery](routed-replacement-recovery.md#fence-restored-admin-requests).
+
+All 26 focused admin tests and six Compose checks passed. Django system and migration
+drift checks passed. Independent review confirmed stale preview and saved request coverage.
+
+Next action is validating the configuration and the stale and fresh request paths with a
+freshly provisioned replacement host. Production TLS, DNS, and measured recovery remain
+open. Keep both dispatch flags off during recovery.
+
 ## Fresh routed replacement workers
 
 The hosted fixture prepares and boots the restored routes with fresh container and bridge

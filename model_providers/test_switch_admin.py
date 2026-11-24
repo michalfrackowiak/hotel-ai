@@ -17,7 +17,8 @@ from .test_control_status import TOKEN, snapshot
 
 
 @override_settings(HOTEL_SPEECH_CONTROL_SWITCH_ENABLED=True, HOTEL_SPEECH_CONTROL_HOST="fixture-host",
-                   HOTEL_SPEECH_CONTROL_URL="http://127.0.0.1:8093", HOTEL_SPEECH_CONTROL_TOKEN=TOKEN)
+                   HOTEL_SPEECH_CONTROL_URL="http://127.0.0.1:8093", HOTEL_SPEECH_CONTROL_TOKEN=TOKEN,
+                   HOTEL_SPEECH_CONTROL_GENERATION="")
 class SwitchAdminTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user("switch-operator", is_staff=True)
@@ -87,6 +88,39 @@ class SwitchAdminTests(TestCase):
         self.assertTrue(saved.closed)
         self.selection.refresh_from_db()
         self.assertEqual(self.selection.deployment_id, self.deployment.pk)
+
+    def test_replacement_generation_fences_old_switch_previews_and_requests(self):
+        old_preview = self.preview()
+        saved, detail = self.prepare()
+        legacy = signing.loads(old_preview, salt=SALT)
+        del legacy["generation"]
+        legacy_token = signing.dumps(legacy, salt=SALT)
+        with self.settings(HOTEL_SPEECH_CONTROL_GENERATION="replacement-1"), \
+                patch("model_providers.switch_admin.submit_switch", return_value=self.result()) as submit:
+            for token in (old_preview, legacy_token):
+                self.assertContains(self.client.post(self.url, {"preview": token}), "plan or preview changed")
+            self.assertNotContains(self.client.get(detail), "Confirm and send switch")
+            self.assertContains(self.send(detail), "retained for audit")
+            self.client.post(detail, {"action": "cancel"})
+            submit.assert_not_called()
+            saved.refresh_from_db()
+            self.assertIsNone(saved.attempted_at)
+            self.assertIsNone(saved.outcome)
+            self.assertFalse(saved.closed)
+            response = self.client.post(self.url, {"preview": self.preview()})
+            self.assertEqual(response.status_code, 302)
+            fresh = SpeechSwitchRequest.objects.get(dispatch_generation="replacement-1")
+            self.assertEqual(fresh.controller_url, saved.controller_url)
+            self.assertEqual(fresh.payload["expected_revision"], saved.payload["expected_revision"])
+            self.assertContains(self.send(response.url), "reported a successful switch")
+            submit.assert_called_once_with(fresh.payload)
+
+    def test_legacy_preview_without_generation_is_valid_on_legacy_configuration(self):
+        preview = signing.loads(self.preview(), salt=SALT)
+        del preview["generation"]
+        response = self.client.post(self.url, {"preview": signing.dumps(preview, salt=SALT)})
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(SpeechSwitchRequest.objects.get().dispatch_generation, "")
 
     def test_pending_or_disagreeing_controller_has_no_preview(self):
         status = self.snapshot

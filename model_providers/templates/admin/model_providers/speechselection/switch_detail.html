@@ -23,11 +23,11 @@
 {% elif saved.outcome.status == "rejected" %}<p>The controller rejected the attempt.</p>{% endif %}
 <p>{{ saved.outcome.status }} · {{ saved.outcome.reason }} · Revision {{ saved.outcome.state.revision }}. This result describes the recorded attempt.</p>
 {% elif saved.attempted_at %}
-<p>The last attempt has an unconfirmed outcome. Check live controller status before retrying.</p>
-{% else %}
+<p>The last attempt has an unconfirmed outcome.{% if dispatch_allowed %} Check live controller status before retrying.{% endif %}</p>
+{% elif dispatch_allowed %}
 <p>This switch is saved and ready for confirmation.</p>
 {% endif %}
-{% if not saved.closed %}
+{% if not saved.closed and dispatch_allowed %}
 <form method="post">
 {% csrf_token %}
 <input type="hidden" name="action" value="send">
