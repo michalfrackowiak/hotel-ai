@@ -11,6 +11,14 @@ clear replies, exact voice matches and committed correction events. A mismatch
 leaves the corresponding voice comparison indeterminate. Physical microphone
 checks and guest-confirmed accuracy remain open.
 
+The [first successful hosted run](https://github.com/michalfrackowiak/hotel-ai/actions/runs/45492010347/job/138792511805)
+passed both typed chat corrections and all four clear controls. Polish voice
+applied the exact correction and both Polish channel isolation checks passed.
+The English noisy voice transcript differed from the fixture, leaving its
+exact correction and the English chat-to-voice isolation probe indeterminate.
+Next, reproduce the English mismatch with an independently recorded fictional
+clip and run an adapted comparison separately if the observed wording is stable.
+
 ## Browser parser rehearsal preflight
 
 A loopback Django instance used a fresh seeded SQLite database and fictional
