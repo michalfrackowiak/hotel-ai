@@ -11,6 +11,7 @@ from django.urls import reverse
 from bookings.models import Booking
 
 from .models import ParserConfiguration, ParserSample
+from .parsing import parse_stay_input
 
 
 class ParserDatePreviewTests(TestCase):
@@ -103,7 +104,10 @@ class ParserDatePreviewTests(TestCase):
                 response = self.client.post(self.url(configuration), {
                     "action": "replay", "example": "voice-arrival", "correction": correction,
                 })
-                self.assertContains(response, "With proposed correction")
+                self.assertContains(response, "Matches with proposed correction")
+                self.assertEqual(response.context["replay_summary"], {
+                    "total": 5, "baseline_matches": 3, "effective_matches": 4, "improved": 1, "regressed": 0,
+                })
                 rows = {row["case"].key: row for row in response.context["replay"]}
                 voice = rows["voice-arrival"]
                 self.assertEqual(voice["expected"], date(2027, 4, 3))
@@ -142,3 +146,24 @@ class ParserDatePreviewTests(TestCase):
                 self.assertIsNone(rows["voice-departure"]["baseline"])
                 self.assertEqual(rows["voice-departure"]["effective"], date(2027, 4, 5))
                 self.assertEqual(rows["checkout"]["effective"], date(2027, 4, 5))
+
+    @patch("django.utils.timezone.localdate", return_value=date(2027, 4, 1))
+    def test_fictional_replay_counts_only_changes_in_expected_matches(self, _date):
+        self.client.force_login(self.viewer)
+        payload = {"action": "replay", "example": "voice-arrival", "correction": "in three days"}
+        response = self.client.post(self.url(self.en), payload)
+        self.assertEqual(response.context["replay_summary"], {
+            "total": 5, "baseline_matches": 3, "effective_matches": 3, "improved": 0, "regressed": 0,
+        })
+
+        def improved_builtin(stage, reply, language, **kwargs):
+            if reply == "we can arrive the day after to marrow":
+                return date(2027, 4, 3)
+            return parse_stay_input(stage, reply, language, **kwargs)
+
+        # The built-in parser reads the same reply in both sources, but the proposal only changes voice.
+        with patch("reception.parser_admin_preview.parse_stay_input", side_effect=improved_builtin):
+            response = self.client.post(self.url(self.en), payload)
+        self.assertEqual(response.context["replay_summary"], {
+            "total": 5, "baseline_matches": 3, "effective_matches": 2, "improved": 0, "regressed": 1,
+        })
