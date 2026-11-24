@@ -217,7 +217,7 @@ def _extract_dates(stage, value, language, check_in, today, config):
             return arrival
     remainder = f"{value[:first.start()]} {value[first.end():]}"
     if DATE_CONTEXT[stage][language].search(remainder) or not DATE_FILLERS[language].sub("", remainder).strip(" ,.!?"):
-        return _parse_date(first[0], language, None, today, config=config)
+        return _parse_date(first[0], language, check_in, today, config=config)
     return None
 
 
@@ -256,17 +256,18 @@ def _parse_date(value, language, check_in, today, *, calendar_anchor=None, confi
     if language == "en":
         value = re.sub(r"(?<=[0-9])(?:st|nd|rd|th)\b", "", value)
         value = value.removeprefix("the ").replace(" of ", " ")
-    if parsed := _numeric_date(value, language, today, config, calendar_anchor):
+    anchor = calendar_anchor or today
+    if parsed := _numeric_date(value, language, config, anchor, check_in):
         return parsed
     for fmt in DATE_FORMATS[language]:
         try:
             return datetime.strptime(value, fmt).date()
         except ValueError:
             continue
-    return _calendar_date(value, language, calendar_anchor or today)
+    return _calendar_date(value, language, anchor, check_in)
 
 
-def _numeric_date(value, language, today, config, calendar_anchor):
+def _numeric_date(value, language, config, anchor, check_in):
     match = re.fullmatch(r"([0-9]{4}|[0-9]{1,2})([./-])([0-9]{1,2})(?:\2([0-9]{1,4}))?", value)
     if not match:
         return None
@@ -299,8 +300,7 @@ def _numeric_date(value, language, today, config, calendar_anchor):
             if len(year_text) == 2:
                 year += 2000 if year <= 68 else 1900
         else:
-            anchor = calendar_anchor or today
-            year = anchor.year + (month < anchor.month)
+            year = _year_for_month(month, anchor, check_in)
     try:
         return date(year, month, day)
     except ValueError:
@@ -316,7 +316,13 @@ def _add_duration(check_in, amount, unit):
     return check_in + timedelta(days=amount * (7 if unit in WEEK_UNITS else 1))
 
 
-def _calendar_date(value, language, anchor):
+def _year_for_month(month, anchor, check_in):
+    if check_in and month == check_in.month:
+        return check_in.year
+    return anchor.year + (month is not None and month < anchor.month)
+
+
+def _calendar_date(value, language, anchor, check_in):
     year = re.search(r"(?:,\s*|\s+)([0-9]{4})(?:\s+(?:r\.?|roku))?$", value)
     if year:
         value = value[:year.start()].rstrip(", ")
@@ -330,5 +336,5 @@ def _calendar_date(value, language, anchor):
     day = int(day_text) if re.fullmatch(r"[0-9]{1,2}", day_text) else ORDINALS[language].get(day_text)
     if day is None or (year and month is None):
         return None
-    month = month or anchor.month
-    return date(int(year[1]) if year else anchor.year + (month < anchor.month), month, day)
+    parsed_year = int(year[1]) if year else _year_for_month(month, anchor, check_in)
+    return date(parsed_year, month or anchor.month, day)

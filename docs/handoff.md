@@ -1,5 +1,16 @@
 # Session handoff
 
+## Yearless checkout inference
+
+English and Polish checkout replies infer the year from the recorded arrival
+when both dates fall in the same month, matching complete stay ranges. A yearless checkout
+earlier in the arrival month still requires correction through booking
+validation. Relative expressions keep using the conversation date.
+
+Next parser audit: relative expression boundaries. Separate-host recovery still
+requires a staging target.
+
+
 ## Bilingual date configuration boundaries
 
 The date parser audit covers each numeric format switch in English and Polish

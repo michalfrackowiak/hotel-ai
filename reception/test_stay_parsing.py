@@ -215,3 +215,36 @@ class NoisyStayParsingTests(TestCase):
                             parse_stay_input("check_in", f"{prefix} {numeric}", language),
                             expected if iso and localized else None,
                         )
+
+    def test_yearless_checkout_uses_the_arrival_year_in_both_languages(self, _today):
+        arrival = date(2027, 12, 10)
+        for language, standalone, embedded, pair in (
+            ("en", "December 20", "checking out 12/20", "from December 10 2027 to December 20"),
+            ("pl", "20 grudnia", "wyjadę 20.12", "od 10 grudnia 2027 do 20 grudnia"),
+        ):
+            for reply in (standalone, embedded):
+                with self.subTest(language=language, reply=reply):
+                    self.assertEqual(
+                        parse_stay_input("check_out", reply, language, check_in=arrival), date(2027, 12, 20),
+                    )
+            self.assertEqual(parse_stay_input("check_in", pair, language), StayDates(arrival, date(2027, 12, 20)))
+
+    def test_checkout_anchor_preserves_day_order_and_explicit_or_relative_dates(self, _today):
+        arrival = date(2027, 12, 10)
+        for language, earlier, new_year, explicit, relative in (
+            ("en", "December 9", "January 2", "December 20 2026", "checking out tomorrow"),
+            ("pl", "9 grudnia", "2 stycznia", "20 grudnia 2026", "wyjadę jutro"),
+        ):
+            with self.subTest(language=language):
+                self.assertEqual(parse_stay_input("check_out", earlier, language, check_in=arrival), date(2027, 12, 9))
+                self.assertEqual(parse_stay_input("check_out", new_year, language, check_in=arrival), date(2027, 1, 2))
+                self.assertEqual(parse_stay_input("check_out", explicit, language, check_in=arrival), date(2026, 12, 20))
+                self.assertEqual(parse_stay_input("check_out", relative, language, check_in=arrival), date(2026, 11, 16))
+
+    def test_yearless_same_month_checkout_respects_leap_years(self, _today):
+        for language, reply in (("en", "February 29"), ("pl", "29 lutego")):
+            with self.subTest(language=language):
+                self.assertEqual(
+                    parse_stay_input("check_out", reply, language, check_in=date(2028, 2, 10)), date(2028, 2, 29),
+                )
+                self.assertIsNone(parse_stay_input("check_out", reply, language, check_in=date(2027, 2, 10)))
