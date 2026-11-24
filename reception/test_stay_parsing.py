@@ -164,3 +164,54 @@ class NoisyStayParsingTests(TestCase):
         ):
             with self.subTest(language=language, reply=reply):
                 self.assertIsNone(parse_stay_input("check_in", reply, language))
+
+    def test_disabled_numeric_formats_are_rejected_in_bilingual_replies(self, _today):
+        expected = date(2026, 12, 5)
+        for language, arrival_prefix, range_link, checkout_prefix, localized, named, departure, relative, duration in (
+            ("en", "from", "to", "checking out", ("12", "05"), "December 5", "December 7", "tomorrow", "for two nights"),
+            ("pl", "od", "do", "wyjadę", ("05", "12"), "5 grudnia", "7 grudnia", "jutro", "na dwie noce"),
+        ):
+            first, second = localized
+            configurations = ParserConfiguration.objects.filter(language=language)
+            for field, numeric in (
+                ("allow_iso_dates", "2026-12-05"),
+                ("allow_slash_dates", f"{first}/{second}/2026"),
+                ("allow_dot_dates", f"{first}.{second}.2026"),
+                ("allow_dash_dates", f"{first}-{second}-2026"),
+                ("allow_yearless_dates", f"{first}/{second}"),
+                ("allow_two_digit_years", f"{first}/{second}/26"),
+            ):
+                with self.subTest(language=language, setting=field):
+                    self.assertEqual(parse_stay_input("check_in", numeric, language), expected)
+                    configurations.update(**{field: False})
+                    self.assertIsNone(parse_stay_input("check_in", numeric, language))
+                    self.assertIsNone(parse_stay_input("check_in", f"{arrival_prefix} {numeric}", language))
+                    self.assertIsNone(parse_stay_input(
+                        "check_in", f"{arrival_prefix} {numeric} {range_link} {departure}", language,
+                    ))
+                    self.assertIsNone(parse_stay_input(
+                        "check_out", f"{checkout_prefix} {numeric}", language, check_in=date(2026, 12, 1),
+                    ))
+                    configurations.update(**{field: True})
+
+            configurations.update(allow_dash_dates=False, allow_yearless_dates=False)
+            self.assertEqual(parse_stay_input("check_in", f"{arrival_prefix} 2026-12-05", language), expected)
+            self.assertEqual(parse_stay_input("check_in", f"{arrival_prefix} {named}", language), expected)
+            self.assertEqual(parse_stay_input("check_in", relative, language), date(2026, 11, 16))
+            self.assertEqual(
+                parse_stay_input("check_out", duration, language, check_in=expected), date(2026, 12, 7),
+            )
+
+    def test_year_first_slash_and_dot_require_both_settings(self, _today):
+        expected = date(2026, 12, 5)
+        for language, prefix in (("en", "arriving"), ("pl", "przyjadę")):
+            configurations = ParserConfiguration.objects.filter(language=language)
+            for separator, field in (("/", "allow_slash_dates"), (".", "allow_dot_dates")):
+                numeric = separator.join(("2026", "12", "05"))
+                for iso, localized in ((True, True), (False, True), (True, False)):
+                    with self.subTest(language=language, separator=separator, iso=iso, localized=localized):
+                        configurations.update(allow_iso_dates=iso, **{field: localized})
+                        self.assertEqual(
+                            parse_stay_input("check_in", f"{prefix} {numeric}", language),
+                            expected if iso and localized else None,
+                        )
