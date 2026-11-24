@@ -12,6 +12,7 @@ from django.template.response import TemplateResponse
 from django.utils import timezone
 
 from .control_status import ControlStatusError, SLOTS, configuration, fetch_control_status, identifier, state
+from .dispatch_generation import current_dispatch_generation
 from .models import SPEECH_LANGUAGES, SpeechSelection, SpeechSwitchRequest
 from .switch_client import SwitchTransportError, submit_switch
 
@@ -48,7 +49,7 @@ def _planned_assignments(host):
             and item.language in item.deployment.provider.languages}
 
 
-def _preview_rows(request, endpoint, host, snapshot):
+def _preview_rows(request, endpoint, host, generation, snapshot):
     revision, routes = state(snapshot["state"])
     observed = state(snapshot["observed"])
     if snapshot["blocked"] or (revision, routes) != observed:
@@ -62,7 +63,7 @@ def _preview_rows(request, endpoint, host, snapshot):
         target = deployment.container_name if deployment else None
         preview = None
         if target and target != current:
-            preview = signing.dumps(dict(endpoint=endpoint, host=host, user=request.user.pk,
+            preview = signing.dumps(dict(endpoint=endpoint, host=host, user=request.user.pk, generation=generation,
                 request_id=uuid.uuid4().hex, slot=list(slot), revision=revision, current=current, target=target,
                 deployment=deployment.pk, provider=deployment.provider_id), salt=SALT)
         rows.append(dict(language=dict(SPEECH_LANGUAGES)[slot[0]], task=slot[1].upper(),
@@ -70,12 +71,13 @@ def _preview_rows(request, endpoint, host, snapshot):
     return {"rows": rows, "revision": revision, "host": host}
 
 
-def _save_switch(request, endpoint, host):
+def _save_switch(request, endpoint, host, generation, requests):
     preview = signing.loads(request.POST.get("preview", ""), salt=SALT, max_age=300)
-    if (preview["endpoint"], preview["host"], preview["user"]) != (endpoint, host, request.user.pk):
+    if (preview["endpoint"], preview["host"], preview["user"], preview.get("generation", "")) != (
+            endpoint, host, request.user.pk, generation):
         raise ValueError
     request_id = uuid.UUID(hex=preview["request_id"])
-    existing = SpeechSwitchRequest.objects.filter(pk=request_id, controller_url=endpoint).first()
+    existing = requests.filter(pk=request_id).first()
     if existing:
         return existing
     slot = tuple(preview["slot"])
@@ -89,11 +91,11 @@ def _save_switch(request, endpoint, host):
     try:
         with transaction.atomic():
             return SpeechSwitchRequest.objects.create(id=request_id, created_by=request.user, controller_url=endpoint,
-                planned_host=host, previous_target=preview["current"], payload=payload)
+                planned_host=host, previous_target=preview["current"], payload=payload, dispatch_generation=generation)
     except IntegrityError:
-        saved = SpeechSwitchRequest.objects.filter(pk=request_id, controller_url=endpoint).first()
+        saved = requests.filter(pk=request_id).first()
         if saved is None:
-            saved = SpeechSwitchRequest.objects.filter(controller_url=endpoint, closed=False).first()
+            saved = requests.filter(closed=False).first()
         if saved is None:
             raise
         return saved
@@ -107,14 +109,16 @@ def prepare_view(admin, request):
                "history": SpeechSwitchRequest.objects.select_related("created_by")[:20]}
     try:
         endpoint, host = _connection()
+        generation = current_dispatch_generation()
+        requests = SpeechSwitchRequest.objects.filter(controller_url=endpoint, dispatch_generation=generation)
         if request.method == "POST":
-            saved = _save_switch(request, endpoint, host)
+            saved = _save_switch(request, endpoint, host, generation, requests)
             return redirect(DETAIL_URL, switch_id=saved.pk)
-        pending = SpeechSwitchRequest.objects.filter(controller_url=endpoint, closed=False).first()
+        pending = requests.filter(closed=False).first()
         if pending:
             context["pending"] = pending
         else:
-            context.update(_preview_rows(request, endpoint, host, fetch_control_status()))
+            context.update(_preview_rows(request, endpoint, host, generation, fetch_control_status()))
     except ControlStatusError as error:
         context["switch_error"] = str(error)
     except (signing.BadSignature, TypeError, KeyError, ValueError):
@@ -145,8 +149,17 @@ def detail_view(admin, request, switch_id):
                "title": "Saved speech provider switch", "saved": saved, "form": form,
                "language": dict(SPEECH_LANGUAGES)[saved.payload["slot"][0]],
                "task": saved.payload["slot"][1].upper()}
-    if request.method == "POST" and not saved.closed:
-        pending = SpeechSwitchRequest.objects.filter(pk=saved.pk, closed=False)
+    try:
+        generation_matches = saved.dispatch_generation == current_dispatch_generation()
+        if not generation_matches:
+            context["switch_error"] = "This request belongs to another controller generation. It is retained for audit."
+    except ControlStatusError as error:
+        generation_matches = False
+        context["switch_error"] = str(error)
+    context["dispatch_allowed"] = generation_matches
+    if request.method == "POST" and not saved.closed and generation_matches:
+        pending = SpeechSwitchRequest.objects.filter(pk=saved.pk, closed=False,
+                                                      dispatch_generation=saved.dispatch_generation)
         action = request.POST.get("action")
         if action == "cancel":
             if not pending.filter(attempted_at__isnull=True).update(closed=True, outcome={"status": "cancelled"}):

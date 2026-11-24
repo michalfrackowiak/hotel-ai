@@ -44,6 +44,7 @@ ENVIRONMENT = {
     "HOTEL_SPEECH_ROUTE_TARGETS": json.dumps(TARGETS),
     "HOTEL_SPEECH_CONTROL_TOKEN": "routed-compose-fixture-token-only",
     "HOTEL_SPEECH_CONTROL_HOST": PROJECT,
+    "HOTEL_SPEECH_CONTROL_GENERATION": "fixture-generation",
     "HOTEL_SPEECH_CONTROL_SWITCH_ENABLED": "1",
     "HOTEL_SPEECH_CONTROL_RECOVERY_ENABLED": "1",
     **{f"HOTEL_ROUTED_{model.upper()}_IMAGE": image for model, image in IMAGE_IDS.items()},
@@ -109,6 +110,7 @@ class RoutedComposeTests(unittest.TestCase):
             "HOTEL_SPEECH_CONTROL_URL": "http://127.0.0.1:8093",
             "HOTEL_SPEECH_CONTROL_TOKEN": ENVIRONMENT["HOTEL_SPEECH_CONTROL_TOKEN"],
             "HOTEL_SPEECH_CONTROL_HOST": PROJECT,
+            "HOTEL_SPEECH_CONTROL_GENERATION": "fixture-generation",
             "HOTEL_SPEECH_CONTROL_SWITCH_ENABLED": "0",
             "HOTEL_SPEECH_CONTROL_RECOVERY_ENABLED": "0",
         }

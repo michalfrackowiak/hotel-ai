@@ -13,7 +13,8 @@
 {% if saved.attempted_at %}<p class="errornote">This request was submitted at {{ saved.attempted_at }}. Completion is not confirmed. A timeout does not cancel controller work.</p>
 {% else %}<p>This saved request has not been submitted.</p>{% endif %}
 {% if saved.outcome %}<p>Last controller result: {{ saved.outcome.status }} — {{ saved.outcome.reason }}.</p>{% endif %}
+{% if dispatch_allowed %}
 <p>Inspect controller status before retrying. Every submission uses the original request ID and payload. If the controller rejects a stale revision or conflicting route state, repeating it will not fix that conflict; obtain offline operator review. This page cannot edit, reset or discard the request.</p>
-<form method="post">{% csrf_token %}{{ form.as_p }}<input type="submit" value="{% if saved.attempted_at %}Retry saved request{% else %}Confirm and send recovery{% endif %}"></form>
+<form method="post">{% csrf_token %}{{ form.as_p }}<input type="submit" value="{% if saved.attempted_at %}Retry saved request{% else %}Confirm and send recovery{% endif %}"></form>{% endif %}
 {% endif %}
 {% endblock %}

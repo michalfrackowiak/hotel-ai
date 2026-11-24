@@ -11,6 +11,7 @@ from django.template.response import TemplateResponse
 from django.utils import timezone
 
 from .control_status import ControlStatusError, configuration, fetch_control_status, state, validate_status
+from .dispatch_generation import current_dispatch_generation
 from .models import SpeechRecoveryRequest
 from .recovery_client import RecoveryTransportError, submit_recovery
 
@@ -58,7 +59,9 @@ def prepare_view(admin, request):
     context = _context(admin, request) | {"title": "Prepare speech controller recovery"}
     try:
         endpoint = _endpoint()
-        existing = SpeechRecoveryRequest.objects.filter(controller_url=endpoint, completed=False).first()
+        generation = current_dispatch_generation()
+        requests = SpeechRecoveryRequest.objects.filter(controller_url=endpoint, dispatch_generation=generation)
+        existing = requests.filter(completed=False).first()
         if existing:
             return redirect("admin:model_providers_speechselection_recovery_detail", recovery_id=existing.pk)
         if request.method == "GET":
@@ -67,7 +70,7 @@ def prepare_view(admin, request):
                 context["recovery_error"] = "Recovery cannot be prepared here: the controller must be blocked without an existing recovery request."
             else:
                 preview = signing.dumps(dict(snapshot=snapshot, endpoint=endpoint, user=request.user.pk,
-                                             request_id=uuid.uuid4().hex), salt=SALT)
+                                             request_id=uuid.uuid4().hex, generation=generation), salt=SALT)
                 context.update(form=PrepareRecoveryForm(initial={"preview": preview}),
                                observed_rows=_rows(snapshot["observed"]), revision=snapshot["state"]["revision"],
                                observed_revision=snapshot["observed"]["revision"])
@@ -77,7 +80,8 @@ def prepare_view(admin, request):
             valid = form.is_valid()
             try:
                 preview = signing.loads(request.POST.get("preview", ""), salt=SALT, max_age=300)
-                if preview["endpoint"] != endpoint or preview["user"] != request.user.pk:
+                if (preview["endpoint"], preview["user"], preview.get("generation", "")) != (
+                        endpoint, request.user.pk, generation):
                     raise ValueError
                 request_id = uuid.UUID(hex=preview["request_id"])
                 snapshot = validate_status(preview["snapshot"])
@@ -94,11 +98,11 @@ def prepare_view(admin, request):
                     try:
                         with transaction.atomic():
                             saved = SpeechRecoveryRequest.objects.create(id=request_id, created_by=request.user,
-                                controller_url=endpoint, payload=payload)
+                                controller_url=endpoint, payload=payload, dispatch_generation=generation)
                     except IntegrityError:
-                        saved = SpeechRecoveryRequest.objects.filter(pk=request_id, controller_url=endpoint).first()
+                        saved = requests.filter(pk=request_id).first()
                         if saved is None:
-                            saved = SpeechRecoveryRequest.objects.filter(controller_url=endpoint, completed=False).first()
+                            saved = requests.filter(completed=False).first()
                         if saved is None:
                             raise
                     return redirect("admin:model_providers_speechselection_recovery_detail", recovery_id=saved.pk)
@@ -115,13 +119,22 @@ def detail_view(admin, request, recovery_id):
                                         "observed_rows": _rows(saved.payload["observed"])}
     form = ConfirmRecoveryForm(request.POST if request.method == "POST" else None)
     context["form"] = form
-    if request.method == "POST" and form.is_valid() and not saved.completed:
+    try:
+        generation_matches = saved.dispatch_generation == current_dispatch_generation()
+        if not generation_matches:
+            context["recovery_error"] = "This request belongs to another controller generation. It is retained for audit."
+    except ControlStatusError as error:
+        generation_matches = False
+        context["recovery_error"] = str(error)
+    context["dispatch_allowed"] = generation_matches
+    if request.method == "POST" and form.is_valid() and not saved.completed and generation_matches:
         try:
             if _endpoint() != saved.controller_url:
                 context["recovery_error"] = "The configured controller changed. Restore the original private connection before retrying this request."
             else:
                 # Commit uncertainty before the network call; no transaction spans dispatch.
-                pending = SpeechRecoveryRequest.objects.filter(pk=saved.pk, completed=False)
+                pending = SpeechRecoveryRequest.objects.filter(pk=saved.pk, completed=False,
+                                                                dispatch_generation=saved.dispatch_generation)
                 attempted_at = timezone.now()
                 if pending.update(attempted_at=attempted_at, outcome=None):
                     outcome = submit_recovery(saved.payload)
