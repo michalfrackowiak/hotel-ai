@@ -149,13 +149,15 @@ rejects reuse of a recovery ID, and runtime startup does not enforce the audit r
 ## Disposable boot rehearsal
 
 The hosted native-Linux fixture captures the stopped source store pair, preserves its audit
-history, and prepares new databases at the saved revision. It uses the same approved
-disposable worker identities for this pass. The controller must reopen the new generation
-and start only the workers selected by the saved routes. Django resumes fictional drafts
+history, and prepares new databases at the saved revision. The fixture retains the saved
+provider names and creates four new disposable containers on a separate private bridge.
+Replacement approvals pin the new full container and bridge IDs, addresses, images and
+resource limits. The controller must reopen the new generation and start only the workers
+selected by the saved routes. The original stopped workers stay available for rollback. Django resumes fictional drafts
 and exercises English and Polish speech through the new traffic store.
 
 With switch and recovery dispatch disabled, attempts to submit old requests must leave
 the controller state and workers unchanged. This check covers the disabled cutover state.
 Before enabling dispatch on a replacement host, review and fence restored requests
-independently of this fixture. Approval of newly provisioned worker identities, a quiet
-replacement host, and credentialed TLS, DNS and timing checks remain separate.
+independently of this fixture. An independently provisioned replacement host and credentialed TLS, DNS and timing checks
+remain separate.
