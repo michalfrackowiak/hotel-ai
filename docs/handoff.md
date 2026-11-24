@@ -8,6 +8,7 @@ reply have separate labels. The admin reads the earliest staff timestamp in its
 existing list query, so the measure covers older threads and needs no migration
 or new guest data. This measures the first recorded web handover reply. Live
 delivery and phone transfer checks still require configured destinations.
+All seven handover tests passed, and Django reported no migration changes.
 
 ## Observed English voice wording
 
