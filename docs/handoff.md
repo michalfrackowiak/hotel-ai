@@ -9,6 +9,8 @@ and Vosk in English and Polish. Restored switch and recovery POSTs with valid CS
 are refused while dispatch is disabled. The fixture checks the worker states and
 controller revision again after those requests.
 
+All 14 focused WSL tests and two Django admin permission tests passed locally.
+
 The fixture reuses its approved worker identities. Next action is a replacement-host
 acceptance run with newly provisioned and approved workers. Keep dispatch disabled
 until restored request IDs have been fenced and verified. TLS, DNS and elapsed recovery

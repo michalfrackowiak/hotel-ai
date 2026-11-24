@@ -500,7 +500,8 @@ def rehearse_replacement(docker, image, directory, fixture_dir, archive, origina
     drafts.touch(mode=0o600, exist_ok=False)
     drafts.write_bytes((fixture_dir / drafts.name).read_bytes())
 
-    selected = {name for _, name in final["state"]["routes"]}
+    routes = {tuple(slot): name for slot, name in final["state"]["routes"]}
+    selected = set(routes.values())
     for name in sorted(selected):
         controls.stop(name)
     require(all(controls.inspect(name) == "exited" for name in names.values()),
@@ -508,7 +509,7 @@ def rehearse_replacement(docker, image, directory, fixture_dir, archive, origina
     state = prepare(str(replacement_manifest), token, traffic_path=archive / traffic_path.name,
                     journal_path=archive / journal_path.name, capture_path=capture, audit_dir=directory,
                     recovery_id="staged-replacement", reason="Disposable routed replacement rehearsal")
-    require(json.loads(json.dumps(asdict(state))) == final["state"],
+    require(state.revision == final["state"]["revision"] and dict(state.routes) == routes,
             "Replacement preparation did not recover the saved revision and routes.")
     record = json.loads((directory / "staged-replacement.json").read_text(encoding="utf-8"))
     require(record["status"] == "prepared" and record["source"]["completed_switches"] == 5
@@ -520,6 +521,9 @@ def rehearse_replacement(docker, image, directory, fixture_dir, archive, origina
     require(all(controls.inspect(name) == "exited" for name in names.values()),
             "Replacement preparation started a staged worker.")
 
+    with closing(sqlite3.connect(replacement_journal.as_uri() + "?mode=ro", uri=True, timeout=1)) as db:
+        require(db.execute("SELECT 1 FROM operations UNION ALL SELECT 1 FROM reconciliations LIMIT 1").fetchone()
+                is None, "Replacement journal inherited archived request history.")
     command = [sys.executable, "-m", "speech_controller.runtime", "--config", str(replacement_manifest)]
     before = stopped_restart_state(replacement_traffic, replacement_journal, final["state"])
     with runtime(command, env, boot_workers=True) as process:
