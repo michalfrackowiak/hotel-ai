@@ -16,6 +16,7 @@ class ReplacementChecksumTests(unittest.TestCase):
             ("malformed", ("invalid",), 0, 0, "valid SHA-256"),
             ("restore-failure", (checksum,), 1, 0, "restore verification failed"),
             ("source-changed", (checksum, "cd" * 32), 1, 3, "Source snapshot changed"),
+            ("cleanup-failure", (checksum, checksum), 1, 3, "Cleanup failed"),
         )
         for outcome, digests, restore_count, runtime_count, error in cases:
             with self.subTest(outcome=outcome):
@@ -33,7 +34,10 @@ class ReplacementChecksumTests(unittest.TestCase):
                         patch.object(replacement, "require_windows_memory"), \
                         patch.object(replacement, "wait_http"), \
                         patch.object(replacement, "remove_resources") as cleanup, \
-                        patch("builtins.print"):
+                        patch.object(replacement, "monotonic", side_effect=(10, 15, 17, 18, 21, 25, 26)), \
+                        patch("builtins.print") as printed:
+                    if outcome == "cleanup-failure":
+                        cleanup.side_effect = RuntimeError("Cleanup failed")
                     if error is None:
                         replacement.rehearse("web", "piper", "asr")
                     else:
@@ -49,6 +53,20 @@ class ReplacementChecksumTests(unittest.TestCase):
                 self.assertEqual(len(restores), restore_count)
                 self.assertEqual(len(launches), runtime_count)
                 self.assertEqual(list(results), [])
+                prefix = "Replacement rehearsal timings: "
+                timings = [call.args[0].removeprefix(prefix) for call in printed.call_args_list
+                           if call.args[0].startswith(prefix)]
+                if error is None:
+                    self.assertEqual(len(timings), 1)
+                    self.assertEqual(json.loads(timings[0]), {
+                        "restore_verify_and_promote_seconds": 2,
+                        "cached_launch_to_all_ready_seconds": 3,
+                        "web_and_speech_checks_seconds": 4,
+                        "total_before_cleanup_seconds": 16,
+                    })
+                else:
+                    self.assertEqual(timings, [])
+                    self.assertFalse(any("Rehearsal checks passed" in call.args[0] for call in printed.call_args_list))
                 for restore in restores:
                     self.assertIn('--expected-sha256 "$1"', restore[-3])
                     self.assertNotIn(checksum, restore[-3])
