@@ -1,5 +1,13 @@
 # Session handoff
 
+## Reception staff group
+
+The optional `setup_reception_staff_group` command provisions handover access
+and read-only booking and confirmation access. Existing user memberships and
+staff flags are untouched. The command refuses a conflicting same-named group.
+All 22 focused tests passed with no migration drift. The group requires explicit
+provisioning and member assignment. See [reception access](reception-staff-role.md).
+
 ## Loopback SMTP confirmation verification
 
 The real Django SMTP backend sends fictional English and Polish confirmations
