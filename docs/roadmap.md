@@ -169,6 +169,7 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 - [x] 0.9 reception inbox filter: find handovers awaiting a first reply, replied handovers, and threads closed without a reply. Combine the filter with language and closure status.
 - [x] 0.9 reception inbox assignment: assign or unassign a staff owner in the private admin and filter the inbox by assignee.
 - [x] 0.9 reception inbox unread counts: show shared unread guest messages and let authorized staff mark the displayed thread messages as read.
+- [x] 0.9 reception inbox unread filter: find handovers with unread guest messages and combine the filter with assignee, language and first response.
 - [x] Match the Resort Neptun scenario prompts and timing. Open with a bilingual greeting and a two-second language window, wait ten seconds for an arrival date, quote room prices before consent, and use the selected delivery closing after provider acceptance.
 - [x] Start English web chat and browser voice with a Neptun Resort greeting followed immediately by Step 2.b.
 - [ ] Configure live SMTP, Twilio SMS, and the staff phone transfer destination. Verify each live destination with a controlled test.

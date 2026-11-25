@@ -437,6 +437,8 @@ class ReceptionHandoverTests(TestCase):
             )
             for _ in range(2)
         ]
+        handover.assignee = operator
+        handover.save(update_fields=["assignee"])
         guest = handover.messages.create(text="Fictional first guest message.")
         reply = handover.messages.create(staff=True, text="Fictional staff reply.")
         other.messages.create(text="Fictional separate message.")
@@ -464,11 +466,22 @@ class ReceptionHandoverTests(TestCase):
                 {row.pk: inbox_admin.unread_count(row) for row in inbox_admin.get_queryset(request)},
                 {handover.pk: 1, other.pk: 1},
             )
-        self.assertContains(self.client.get(inbox), "Unread guest messages")
+        unread_filter = self.client.get(inbox, {"unread": "yes"})
+        self.assertContains(unread_filter, "Has unread messages")
+        self.assertCountEqual(unread_filter.context["cl"].result_list, [handover, other])
+        self.assertCountEqual(
+            self.client.get(inbox, {
+                "unread": "yes", "first_response": "replied", "language__exact": "en",
+                "closed__exact": "0", "assignee__id__exact": operator.pk,
+            }).context["cl"].result_list,
+            [handover],
+        )
         latest_snapshot = self.client.get(detail).context["read_snapshot"]
         self.assertRedirects(self.client.post(endpoint, {"snapshot": latest_snapshot}), detail)
         self.assertRedirects(self.client.post(endpoint, {"snapshot": snapshot}), detail)
         self.assertNotContains(self.client.get(detail), "Mark read")
+        self.assertCountEqual(self.client.get(inbox, {"unread": "yes"}).context["cl"].result_list, [other])
+        self.assertCountEqual(self.client.get(inbox, {"unread": "no"}).context["cl"].result_list, [handover])
         reply_response = self.client.post(detail, {
             "messages-TOTAL_FORMS": "3", "messages-INITIAL_FORMS": "3", "reply": "Fictional follow-up.",
             "messages-0-id": guest.pk, "messages-1-id": reply.pk, "messages-2-id": later.pk,

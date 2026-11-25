@@ -73,6 +73,21 @@ class FirstStaffResponseFilter(admin.SimpleListFilter):
         return queryset
 
 
+class UnreadGuestMessagesFilter(admin.SimpleListFilter):
+    title = "unread guest messages"
+    parameter_name = "unread"
+
+    def lookups(self, request, model_admin):
+        return (("yes", "Has unread messages"), ("no", "No unread messages"))
+
+    def queryset(self, request, queryset):
+        if self.value() == "yes":
+            return queryset.filter(unread_guest_messages__gt=0)
+        if self.value() == "no":
+            return queryset.filter(unread_guest_messages=0)
+        return queryset
+
+
 @admin.register(StaffHandover)
 class StaffHandoverAdmin(admin.ModelAdmin):
     change_form_template = "admin/reception/staffhandover/change_form.html"
@@ -81,7 +96,10 @@ class StaffHandoverAdmin(admin.ModelAdmin):
     fields = ("created_at", "language", "first_staff_response", "assignee", "closed", "reply")
     readonly_fields = ("created_at", "language", "first_staff_response")
     list_display = ("id", "created_at", "language", "assignee", "closed", "first_staff_response", "unread_count")
-    list_filter = (FirstStaffResponseFilter, ("assignee", admin.RelatedOnlyFieldListFilter), "closed", "language")
+    list_filter = (
+        UnreadGuestMessagesFilter, FirstStaffResponseFilter, ("assignee", admin.RelatedOnlyFieldListFilter),
+        "closed", "language",
+    )
     list_select_related = ("assignee",)
     ordering = ("closed", "-created_at")
     inlines = (HandoverTranscript,)
