@@ -1,0 +1,16 @@
+from django.core.management.base import BaseCommand
+
+from reception.staff_groups import setup_staff_group
+
+
+GRANTS = (
+    ("reception", "parsersample", "view_parsersample"),
+    ("reception", "parsersample", "change_parsersample"),
+)
+
+
+class Command(BaseCommand):
+    help = "Create or verify the Parser reviewer permission group without assigning any accounts."
+
+    def handle(self, *args, **options):
+        return setup_staff_group("Parser reviewer", GRANTS)
