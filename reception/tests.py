@@ -6,6 +6,8 @@ from uuid import uuid4
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
+from django.db import connection
+from django.db.migrations.executor import MigrationExecutor
 from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -416,6 +418,16 @@ class ReceptionTests(TestCase):
 
 
 class ReceptionHandoverTests(TestCase):
+    def test_previous_model_can_create_handovers_on_the_current_schema(self):
+        previous = MigrationExecutor(connection).loader.project_state([
+            ("reception", "0012_staff_handover_assignee"),
+        ]).apps
+        conversation = Conversation.objects.create(conversation_id=uuid4().hex, state={})
+        handover = previous.get_model("reception", "StaffHandover").objects.create(
+            conversation_id=conversation.pk, language="en",
+        )
+        self.assertEqual(StaffHandover.objects.get(pk=handover.pk).last_read_guest_message_id, 0)
+
     def test_admin_marks_only_the_displayed_guest_messages_read(self):
         operator = get_user_model().objects.create_superuser(username="unread-operator")
         self.client.force_login(operator)
