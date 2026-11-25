@@ -1,5 +1,13 @@
 # Session handoff
 
+## Scenario simulator room and contact corrections
+
+Staff can preview fictional corrections for room selection, email entry, and
+phone entry from the scenario flow overview. The preview uses the selected
+scenario's parser policy and the existing correction safeguards, with fictional
+room offers. It reads no stored samples, saves no correction and calls no provider.
+Independent review and all 23 focused simulator and parser tests passed.
+
 ## Windows replacement rehearsal readiness
 
 The Windows snapshot on 26 November identified the same Intel MacBook as the

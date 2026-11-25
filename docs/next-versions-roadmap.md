@@ -116,7 +116,7 @@ The current admin edits prompt text and voice segments; conversation transitions
 - [x] Simulate email and SMS receipt polling outcomes with fictional delivery statuses and no provider calls.
 - [x] Simulate Polish welcome timeout and bilingual arrival timeout, including the final voice window and **Continue in chat**.
 - [x] Simulate a reply with prior consecutive retries and preview retry-limit handover without opening a staff conversation.
-- [x] Preview fictional reviewed parser corrections for arrival, departure and guest count without accessing saved samples.
+- [x] Preview fictional reviewed parser corrections for arrival, departure, guest count, room selection, email and phone without accessing saved samples.
 - [x] Preview fictional model results for arrival, departure and guest count using the scenario's fallback settings without calling a model provider.
 - [x] Simulate Polish welcome replies, including a single arrival date, a complete stay range and the switch to English.
 - [ ] Extend the simulator to additional steps and live parser parity. Validate missing placeholders, unreachable states, loops, required contact/consent paths and terminal states before publishing.

@@ -118,6 +118,62 @@ class ScenarioSimulatorTests(TestCase):
         self.assertEqual(skipped["decisions"], [("guests", "retry", "guests")])
         self.assertFalse(ParserSample.objects.exists())
 
+    def test_fictional_room_correction_respects_options_and_pinned_policy(self):
+        version = self.make_version("en", "chat")
+        with patch("reception.parser_training.Room.objects.filter", side_effect=AssertionError("Looked up real rooms")):
+            corrected = self.preview(version, "room", reply="rum fumble", fictional_correction="Demo Family")
+            unavailable = self.preview(version, "room", reply="rum fumble", fictional_correction="option 3")
+            step = version.steps.get(key="room")
+            step.configuration = {"parser_corrections": "skip"}
+            step.save(update_fields=["configuration"])
+            skipped = self.preview(version, "room", reply="rum fumble", fictional_correction="2")
+
+        self.assertTrue(corrected["correction_applied"])
+        self.assertEqual((corrected["stage"], corrected["selected_room"]), ("confirm", "Demo Family"))
+        self.assertFalse(unavailable["correction_applied"])
+        self.assertEqual(unavailable["stage"], "room")
+        self.assertFalse(skipped["corrections_allowed"])
+        self.assertEqual(skipped["stage"], "room")
+
+    def test_fictional_contact_corrections_enter_review_without_saving(self):
+        for language, stage, reply, correction in (
+            ("en", "email", "guest monkey example dot com", "guest@example.com"),
+            ("pl", "phone", "znak plusa 1 202 555 0142", "+12025550142"),
+        ):
+            with self.subTest(stage=stage):
+                version = self.make_version(language, "voice")
+                preview = self.preview(version, stage, reply=reply, fictional_correction=correction)
+                self.assertTrue(preview["correction_applied"])
+                self.assertEqual((preview["stage"], preview["contact_candidate"]), ("contact_confirm", correction))
+                step = version.steps.get(key=stage)
+                step.configuration = {"parser_corrections": "skip"}
+                step.save(update_fields=["configuration"])
+                skipped = self.preview(version, stage, reply=reply, fictional_correction=correction)
+                self.assertFalse(skipped["corrections_allowed"])
+                self.assertEqual((skipped["stage"], skipped["contact_candidate"]), (stage, None))
+        self.assertFalse(ParserSample.objects.exists())
+        self.assertFalse(Booking.objects.exists())
+        self.assertFalse(BookingConfirmation.objects.exists())
+
+    def test_simulator_rejects_unsafe_fictional_corrections(self):
+        version = self.make_version("en", "chat")
+        for stage, reply, correction in (
+            ("room", "Demo Double", "Demo Family"),
+            ("room", "rum fumble", "other room"),
+            ("email", "guest monkey example dot com", "other@example.com"),
+            ("email", "guest monkey private dot example dot com", "guest@private.example.com"),
+            ("phone", "plus sign 1 202 555 0142", "+12025550143"),
+            ("phone", "plus sign 1 202 555 0200", "+12025550200"),
+        ):
+            with self.subTest(stage=stage, correction=correction):
+                response = self.client.post(
+                    reverse("admin:reception_scenarioversion_flow", args=[version.pk]),
+                    {"stage": stage, "reply": reply, "fictional_correction": correction},
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("fictional_correction", response.context["simulation_form"].errors)
+                self.assertIsNone(response.context["simulation"])
+
     def test_retry_limit_previews_handover_without_creating_records(self):
         version = self.make_version(
             "en", "voice", {"guests": {"retry_limit": 2}}, (("guests", "retry_exhausted", "handover"),),

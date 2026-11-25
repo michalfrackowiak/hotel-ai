@@ -13,15 +13,16 @@ from bookings.services import RoomOffer
 from model_providers.extraction import validate_model_stay_value
 
 from .conversation import WELCOME_PARTS, advance, new_conversation, selects_english
-from .parser_review import review_text_allowed
-from .parser_training import STAY_STAGES, apply_reviewed_correction, validate_correction
+from .parser_review import extracted_booking_value, review_text_allowed
+from .parser_training import CONTACT_STAGES, apply_reviewed_correction, validate_correction
 from .parsing import StayDates, parse_stay_input
 from .receipt import DELIVERY_PENDING, apply_receipt_outcome, start_receipt
 from .scenario import default_chat_text, render_chat, set_prompt, split_voice_parts, voice_segments
 from .scenario_dispatch import RETRY_COUNT, RETRY_HANDOVER, advance_counted_turn
 from .scenario_pinned_prompts import browser_prompt_bindings, browser_prompt_overrides
 from .scenario_step_settings import (
-    ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, MAX_RETRY_LIMIT, REQUIRE_ARRIVAL_RANGE, STAY_PARSER_STEPS,
+    ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, MAX_RETRY_LIMIT, PARSER_CORRECTIONS_STEPS, REQUIRE_ARRIVAL_RANGE,
+    STAY_PARSER_STEPS,
     allows_model_fallback, allows_parser_corrections, retry_limit_value, voice_timeout_mode,
 )
 from .scenario_validation import approved_destination
@@ -32,6 +33,7 @@ FICTIONAL_ROOMS = (
     (-1, "Demo Double", 2, Decimal("120")),
     (-2, "Demo Family", 6, Decimal("200")),
 )
+FICTIONAL_ROOM_CODES = frozenset(name.casefold() for _, name, _, _ in FICTIONAL_ROOMS)
 FICTIONAL_CONTACTS = {
     "confirm_email": ("email", "guest@example.com"),
     "confirm_sms": ("sms", "+1 202 555 0142"),
@@ -71,7 +73,10 @@ class BookingReplySimulationForm(forms.Form):
     reply = forms.CharField(label="Example guest reply", max_length=500, required=False)
     fictional_correction = forms.CharField(
         label="Fictional parser correction", max_length=500, required=False,
-        help_text="Optional. Use a fictional arrival date, departure date, stay length, or guest count.",
+        help_text=(
+            "Optional. Use fictional dates, guest counts, room options, email addresses at example.com, "
+            "example.net or example.org, or phone numbers from +1 202 555 0100 to +1 202 555 0199."
+        ),
     )
     fictional_model_value = forms.CharField(
         label="Fictional model result", max_length=10, required=False,
@@ -113,15 +118,23 @@ class BookingReplySimulationForm(forms.Form):
             elif prior_retries >= limit:
                 self.add_error("prior_retries", f"Enter a count below this step's retry limit of {limit}.")
         if (corrected := values.get("fictional_correction")) and (reply := values.get("reply")):
-            if parser_stage not in STAY_STAGES:
-                self.add_error("fictional_correction", "Choose a welcome, arrival, departure, or guest-count reply.")
-            elif not (review_text_allowed(reply) and review_text_allowed(corrected)):
+            if parser_stage not in PARSER_CORRECTIONS_STEPS:
+                self.add_error("fictional_correction", "Choose a date, guest count, room selection, or contact entry reply.")
+            elif parser_stage not in CONTACT_STAGES and not (review_text_allowed(reply) and review_text_allowed(corrected)):
                 self.add_error("fictional_correction", "Use fictional text without contact details.")
             else:
                 try:
-                    values["fictional_correction"] = validate_correction(
+                    validated = validate_correction(
                         parser_stage, reply, corrected, language=self.language, source=self.channel,
+                        room_codes=FICTIONAL_ROOM_CODES,
                     )
+                    if parser_stage == "email" and validated.rsplit("@", 1)[-1].casefold() not in {
+                        "example.com", "example.net", "example.org",
+                    }:
+                        raise ValidationError("Use an example.com, example.net or example.org address.")
+                    if parser_stage == "phone" and (len(validated) != 12 or not validated.startswith("+120255501")):
+                        raise ValidationError("Use a phone number from +1 202 555 0100 to +1 202 555 0199.")
+                    values["fictional_correction"] = validated
                 except ValidationError as error:
                     self.add_error("fictional_correction", error)
         elif values.get("fictional_correction"):
@@ -212,7 +225,7 @@ def simulate_booking_reply(
     parser_stage = "check_in" if stage == "welcome" else stage
     parser_configuration = configurations[parser_stage]
     switch_to_english = parser_stage == "check_in" and language == "pl" and selects_english(reply)
-    contact_entry = stage in {"email", "phone"}
+    contact_entry = stage in CONTACT_STAGES
     needs_delivery = stage == "delivery" or contact_entry or fictional_contact is not None
     needs_room_offer = stage in {"room", "confirm"} or needs_delivery
     state = new_conversation(language, "guests" if needs_room_offer else stage)
@@ -237,6 +250,9 @@ def simulate_booking_reply(
             method, candidate = fictional_contact
             state = advance(advance(state, method, None), candidate, None)
     parsed = None if switch_to_english else parse_stay_input(parser_stage, reply, language, check_in=check_in)
+    input_parsed = stage == "room" or contact_entry
+    if input_parsed:
+        parsed = extracted_booking_value(state, reply, parsed)
     model_outcome = None
     if fictional_model_value:
         if switch_to_english:
@@ -256,6 +272,7 @@ def simulate_booking_reply(
     ):
         correction = apply_reviewed_correction(
             {**state, "stage": parser_stage}, reply, parsed, fictional_correction, source=channel,
+            room_codes=FICTIONAL_ROOM_CODES,
         )
     if correction is not None:
         parsed = correction
@@ -265,7 +282,8 @@ def simulate_booking_reply(
         state[RETRY_COUNT] = prior_retries
     result = advance_counted_turn(
         state, reply, parsed, resolve, lambda: retry_limit,
-        voice=channel == "voice", require_arrival_range=require_range, room_search=_fictional_room_search,
+        voice=channel == "voice", input_parsed=input_parsed,
+        require_arrival_range=require_range, room_search=_fictional_room_search,
         booking_writer=_fictional_booking,
     )
     arrival = departure = None

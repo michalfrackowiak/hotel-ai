@@ -39,7 +39,7 @@ def delete_expired_samples():
     return ParserSample.objects.exclude(pk__in=ParserSample.objects.unexpired().values("pk")).delete()[0]
 
 
-def _extracted_value(state, text, parsed):
+def extracted_booking_value(state, text, parsed):
     stage = state["stage"]
     if stage == "room":
         return _room_choice(state, _answer(text))
@@ -80,7 +80,7 @@ def review_booking_input(state, text, parsed, *, source, apply_corrections=True)
         return parsed, False
     if stage == "check_in" and language == "pl" and selects_english(text):
         return parsed, False
-    original = _extracted_value(state, text, parsed)
+    original = extracted_booking_value(state, text, parsed)
     if stage not in CONTACT_STAGES and not review_text_allowed(text):
         return original, True
     corrected = learned_result(state, text, original, source=source) if apply_corrections else None
