@@ -43,7 +43,11 @@ uniquely named test resources, and uses only cached images during the rehearsal.
 python scripts/rehearse_replacement_stack.py --web-image <web-id> --piper-image <piper-id> --asr-image <vosk-id>
 ```
 
-The fixture creates its own fictional snapshot on the workstation. It mounts the snapshot
+The fixture creates its own fictional snapshot on the workstation. Before the
+restore job opens the snapshot, it compares the file with the SHA-256 measured
+by the source job. A failed verification prevents the restored database from
+being moved into the web stack's data path. Build the web image from a revision
+that includes the verifier's `--expected-sha256` option. It mounts the snapshot
 read-only during recovery and starts Gunicorn with only the restored database. An internal
 Docker network connects the speech workers. The HTTP checks run on loopback inside the web
 container, without publishing a port to the workstation. The script prints aggregate checks

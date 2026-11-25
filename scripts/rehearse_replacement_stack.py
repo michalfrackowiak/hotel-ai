@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from time import monotonic, sleep
@@ -165,12 +166,18 @@ def rehearse(web_image, piper_image, asr_image):
         )
         digest_cmd = (*fixture_job, "-v", backup_mount, web["Id"], "python", "-c", DIGEST)
         source_digest = docker(*digest_cmd, capture=True).stdout.strip()
-        docker(
-            *fixture_job, "-v", backup_mount, "-v", f"{restore}:/app/data", web["Id"],
-            "sh", "-ec", "mkdir /app/data/restore; python scripts/verify_recovery.py "
-            "--backup /backup/snapshot.sqlite3 --restore-dir /app/data/restore; "
-            "mv /app/data/restore/restored.sqlite3 /app/data/db.sqlite3",
-        )
+        if not re.fullmatch(r"[0-9a-f]{64}", source_digest):
+            raise RuntimeError("Expected a valid SHA-256 digest for the source snapshot.")
+        try:
+            docker(
+                *fixture_job, "-v", backup_mount, "-v", f"{restore}:/app/data", web["Id"],
+                "sh", "-ec", "mkdir /app/data/restore; python scripts/verify_recovery.py "
+                '--backup /backup/snapshot.sqlite3 --restore-dir /app/data/restore --expected-sha256 "$1"; '
+                "mv /app/data/restore/restored.sqlite3 /app/data/db.sqlite3",
+                "restore-fixture", source_digest,
+            )
+        except subprocess.SubprocessError:
+            raise RuntimeError("Replacement snapshot restore verification failed.") from None
         require_windows_memory()
         for runtime, name, alias, cap in ((piper, piper_name, "piper", "384m"), (asr, asr_name, "asr", "768m")):
             docker(
