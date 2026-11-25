@@ -58,3 +58,8 @@ Run `python manage.py check_staff_role_groups` to compare the seven built-in
 groups in the current database with their expected permissions. The command
 reports which groups are missing or differ, with counts of missing or extra
 grants. It leaves groups and memberships untouched and omits account details.
+
+To verify specific groups in a deployment script, run
+`python manage.py check_staff_role_groups --require "Reception staff" --require "Parser reviewer"`.
+The command prints the full report, then exits nonzero if a required group is
+missing or has different permissions.

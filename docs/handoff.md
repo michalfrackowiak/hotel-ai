@@ -1,5 +1,13 @@
 # Session handoff
 
+## Required staff role audit
+
+Deployment scripts can require selected groups with repeatable `--require`
+flags on `check_staff_role_groups`. The command prints its redacted report and
+returns a nonzero status if a required group's grants differ or the group is
+missing. All 20 focused role tests passed. Actual deployment provisioning and
+account assignment remain explicit operations.
+
 ## Staff group audit
 
 The read-only `check_staff_role_groups` command checks the seven built-in

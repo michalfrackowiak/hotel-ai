@@ -3,6 +3,7 @@ from io import StringIO
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import TestCase
 
 
@@ -36,3 +37,33 @@ class StaffRoleGroupCheckTests(TestCase):
         self.assertEqual(set(operator.permissions.values_list("pk", flat=True)), prior_grants)
         self.assertTrue(operator.user_set.filter(pk=user.pk).exists())
         self.assertFalse(Group.objects.filter(name="Reception staff").exists())
+
+    def test_required_groups_fail_after_full_report_when_missing_or_drifted(self):
+        call_command("setup_parser_reviewer_group", stdout=StringIO())
+        Group.objects.create(name="Speech switch")
+        output = StringIO()
+        with self.assertNumQueries(1), self.assertRaisesMessage(
+            CommandError,
+            "Required staff role groups are missing or have permission drift: Reception staff, Speech switch.",
+        ):
+            call_command(
+                "check_staff_role_groups",
+                "--require", "Parser reviewer",
+                "--require", "Reception staff",
+                "--require", "Speech switch",
+                "--require", "Speech switch",
+                stdout=output,
+            )
+        self.assertIn("Parser reviewer: Matches", output.getvalue())
+        self.assertIn("Speech recovery: Missing", output.getvalue())
+
+    def test_only_required_groups_can_fail_the_command(self):
+        call_command("setup_parser_reviewer_group", stdout=StringIO())
+        output = StringIO()
+        call_command("check_staff_role_groups", "--require", "Parser reviewer", stdout=output)
+        self.assertIn("Parser reviewer: Matches", output.getvalue())
+        self.assertIn("Reception staff: Missing", output.getvalue())
+
+    def test_unknown_required_group_is_rejected_without_querying(self):
+        with self.assertNumQueries(0), self.assertRaisesMessage(CommandError, "invalid choice"):
+            call_command("check_staff_role_groups", "--require", "Unknown role", stdout=StringIO())
