@@ -29,3 +29,11 @@ editor** group. Members can author scenario drafts, including steps and
 transitions, in the private admin. Publishing or rolling back a version requires
 the separate scenario publication permission. Assign existing staff through
 **Users**.
+
+## Speech operator access
+
+Run `python manage.py setup_speech_operator_group` to provision the **Speech
+operator** group. It provides read-only access to speech plans, preflight,
+inventory, transition previews and controller status in the private admin.
+Provider switching and recovery require separate permissions. Assign existing
+staff through **Users**.
