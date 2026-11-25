@@ -1,5 +1,13 @@
 # Session handoff
 
+## Controlled delivery and transfer verification
+
+The [delivery verification runbook](delivery-verification.md) defines staging
+checks for matching email and SMS receipts and answered staff transfers with
+two-way audio in both languages. All 33 confirmation and telephony tests passed
+with provider doubles. Live checks still require an isolated staging instance,
+authorized test destinations and a staffed test queue.
+
 ## Confirmation submission triage
 
 The private booking confirmation list groups failed and uncertain submissions
