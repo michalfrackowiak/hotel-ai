@@ -1,5 +1,13 @@
 # Session handoff
 
+## Delivery configuration check
+
+`check_delivery_configuration` reports the SMTP sender, SMS sender and staff
+transfer destination configuration loaded by the current Django process. The
+command omits settings values and performs no database or provider calls. The
+staging runbook shows where to run it for each service. All 37 focused tests
+passed with no migration drift. Live receipt and transfer checks remain open.
+
 ## Confirmation submission outcome logs
 
 The confirmation worker emits `booking_confirmation_submission` after a

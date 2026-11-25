@@ -29,6 +29,11 @@ STAY_STAGES = ("check_in", "check_out", "guests")
 MENU = WELCOME_PARTS[0][1]
 
 
+def staff_transfer_destination():
+    number = settings.HOTEL_PHONE_RECEPTION_NUMBER
+    return number if re.fullmatch(r"\+[1-9][0-9]{7,14}", number) else None
+
+
 @dataclass(frozen=True)
 class CallReply:
     revision: str
