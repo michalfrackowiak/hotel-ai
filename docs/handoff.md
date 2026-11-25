@@ -1,5 +1,12 @@
 # Session handoff
 
+## Reception inbox unread filter
+
+Staff can find handovers with or without unread guest messages. The filter
+uses the shared read state and combines with assignee, language, closure and
+first-response status. All 11 handover tests passed, including the change in
+filter results after staff mark a thread as read. No migration is required.
+
 ## Reception inbox unread guest messages
 
 The private inbox shows a shared unread guest message count. Staff with handover
