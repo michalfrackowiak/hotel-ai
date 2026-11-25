@@ -97,9 +97,23 @@ class CalendarPublicationAdmin(ViewOnlyAdmin):
     search_fields = ("booking__reference", "calendar_id")
 
 
+class SubmissionReviewFilter(admin.SimpleListFilter):
+    title = "submission review"
+    parameter_name = "submission_review"
+
+    def lookups(self, request, model_admin):
+        return (("needed", "Failed or uncertain"),)
+
+    def queryset(self, request, queryset):
+        if self.value() == "needed":
+            return queryset.filter(status__in=(BookingConfirmation.Status.FAILED, BookingConfirmation.Status.UNCERTAIN))
+        return queryset
+
+
 @admin.register(BookingConfirmation)
 class BookingConfirmationAdmin(ViewOnlyAdmin):
+    change_list_template = "admin/bookings/bookingconfirmation/change_list.html"
     list_display = ("booking", "method", "status", "claimed_at", "accepted_at")
-    list_filter = ("status", "method", "language")
+    list_filter = (SubmissionReviewFilter, "status", "method", "language")
     list_select_related = ("booking",)
     search_fields = ("booking__reference", "provider_reference")

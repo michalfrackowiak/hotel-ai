@@ -1,5 +1,14 @@
 # Session handoff
 
+## Confirmation submission triage
+
+The private booking confirmation list groups failed and uncertain submissions
+under **Submission review**. The filter combines with method, language and
+status. The list explains the difference between provider acceptance and
+delivery to the guest, and describes interrupted submissions. All 13 focused
+operations-admin and confirmation tests passed with no migration drift. Live
+provider checks still need controlled destinations.
+
 ## Reception inbox unread filter
 
 Staff can find handovers with or without unread guest messages. The filter
