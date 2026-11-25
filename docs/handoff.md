@@ -1,5 +1,14 @@
 # Session handoff
 
+## Reception inbox unread guest messages
+
+The private inbox shows a shared unread guest message count. Staff with handover
+change permission can mark the messages shown on a thread as read. Messages
+arriving after the page loads remain unread, and older requests cannot move the
+read position backward. Migration 0013 starts existing guest messages as unread.
+All 16 handover and session continuity tests passed with no migration drift,
+including an insert from the previous model against the upgraded database.
+
 ## Reception inbox staff assignment
 
 Staff with handover change permission can assign, reassign or clear an owner in

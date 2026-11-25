@@ -3,7 +3,11 @@ from datetime import timedelta
 from django import forms
 from django.contrib import admin
 from django.contrib.auth import get_user_model
-from django.db.models import OuterRef, Q, Subquery
+from django.core import signing
+from django.core.exceptions import PermissionDenied
+from django.db.models import Count, OuterRef, Q, Subquery
+from django.db.models.functions import Coalesce
+from django.http import Http404, HttpResponseBadRequest, HttpResponseNotAllowed, HttpResponseRedirect
 from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
@@ -71,10 +75,12 @@ class FirstStaffResponseFilter(admin.SimpleListFilter):
 
 @admin.register(StaffHandover)
 class StaffHandoverAdmin(admin.ModelAdmin):
+    change_form_template = "admin/reception/staffhandover/change_form.html"
+    read_snapshot_salt = "reception.staff_handover.mark_read"
     form = StaffHandoverForm
     fields = ("created_at", "language", "first_staff_response", "assignee", "closed", "reply")
     readonly_fields = ("created_at", "language", "first_staff_response")
-    list_display = ("id", "created_at", "language", "assignee", "closed", "first_staff_response")
+    list_display = ("id", "created_at", "language", "assignee", "closed", "first_staff_response", "unread_count")
     list_filter = (FirstStaffResponseFilter, ("assignee", admin.RelatedOnlyFieldListFilter), "closed", "language")
     list_select_related = ("assignee",)
     ordering = ("closed", "-created_at")
@@ -84,7 +90,64 @@ class StaffHandoverAdmin(admin.ModelAdmin):
         first_reply = HandoverMessage.objects.filter(
             handover_id=OuterRef("pk"), staff=True,
         ).order_by("created_at").values("created_at")[:1]
-        return super().get_queryset(request).annotate(first_staff_reply_at=Subquery(first_reply))
+        unread = HandoverMessage.objects.filter(
+            handover_id=OuterRef("pk"), staff=False, pk__gt=OuterRef("last_read_guest_message_id"),
+        ).values("handover_id").annotate(total=Count("pk")).values("total")
+        return super().get_queryset(request).annotate(
+            first_staff_reply_at=Subquery(first_reply),
+            unread_guest_messages=Coalesce(Subquery(unread), 0),
+        )
+
+    @admin.display(description="Unread guest messages", ordering="unread_guest_messages")
+    def unread_count(self, obj):
+        return obj.unread_guest_messages
+
+    def get_urls(self):
+        return [path(
+            "<int:object_id>/mark-read/", self.admin_site.admin_view(self.mark_read),
+            name="reception_staffhandover_mark_read",
+        )] + super().get_urls()
+
+    def render_change_form(self, request, context, add=False, change=False, form_url="", obj=None):
+        if request.method == "GET" and obj and self.has_change_permission(request, obj):
+            latest_guest = max((
+                form.instance.pk
+                for inline in context["inline_admin_formsets"]
+                if isinstance(inline.opts, HandoverTranscript)
+                for form in inline.formset.initial_forms
+                if form.instance.pk is not None and not form.instance.staff
+            ), default=0)
+            if latest_guest > obj.last_read_guest_message_id:
+                context["read_snapshot"] = signing.dumps(
+                    [str(request.user.pk), obj.pk, latest_guest], salt=self.read_snapshot_salt,
+                )
+        return super().render_change_form(request, context, add, change, form_url, obj)
+
+    def mark_read(self, request, object_id):
+        if request.method != "POST":
+            return HttpResponseNotAllowed(["POST"])
+        obj = self.get_object(request, str(object_id))
+        if obj is None:
+            raise Http404
+        if not self.has_change_permission(request, obj):
+            raise PermissionDenied
+        try:
+            reader_id, handover_id, message_id = signing.loads(
+                request.POST.get("snapshot", ""), salt=self.read_snapshot_salt,
+            )
+        except signing.BadSignature:
+            return HttpResponseBadRequest("Invalid read snapshot.")
+        if (
+            reader_id != str(request.user.pk) or handover_id != obj.pk
+            or not obj.messages.filter(pk=message_id, staff=False).exists()
+        ):
+            return HttpResponseBadRequest("Invalid read snapshot.")
+        StaffHandover.objects.filter(pk=obj.pk, last_read_guest_message_id__lt=message_id).update(
+            last_read_guest_message_id=message_id,
+        )
+        return HttpResponseRedirect(reverse(
+            "admin:reception_staffhandover_change", args=[obj.pk], current_app=self.admin_site.name,
+        ))
 
     @admin.display(description="First staff response")
     def first_staff_response(self, obj):
@@ -100,7 +163,7 @@ class StaffHandoverAdmin(admin.ModelAdmin):
         return False
 
     def save_model(self, request, obj, form, change):
-        super().save_model(request, obj, form, change)
+        obj.save(update_fields=["assignee", "closed"])
         if reply := form.cleaned_data["reply"]:
             obj.messages.create(staff=True, text=reply)
 

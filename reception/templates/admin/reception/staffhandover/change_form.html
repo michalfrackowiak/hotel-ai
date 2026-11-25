@@ -1,0 +1,14 @@
+{% extends "admin/change_form.html" %}
+
+{% block object-tools-items %}
+  {% if read_snapshot %}
+    <li>
+      <form method="post" action="{% url 'admin:reception_staffhandover_mark_read' original.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="snapshot" value="{{ read_snapshot }}">
+        <button type="submit">Mark read</button>
+      </form>
+    </li>
+  {% endif %}
+  {{ block.super }}
+{% endblock %}
