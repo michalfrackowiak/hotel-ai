@@ -1,9 +1,12 @@
+from functools import partial
+import logging
 from smtplib import SMTPException, SMTPRecipientsRefused, SMTPResponseException
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
+from django.db import transaction
 from django.utils import timezone
 from requests.exceptions import RequestException
 from twilio.base.exceptions import TwilioException, TwilioRestException
@@ -12,6 +15,8 @@ from twilio.rest import Client as TwilioClient
 
 from .models import BookingConfirmation
 
+
+outcome_logger = logging.getLogger("bookings.confirmation_outcomes")
 
 COPY = {
     "en": (
@@ -97,7 +102,17 @@ def dispatch_confirmations(methods, limit=50):
             accepted_at = timezone.now()
         else:
             failed += 1
-        BookingConfirmation.objects.filter(pk=pk).update(
+        updated = BookingConfirmation.objects.filter(pk=pk).update(
             status=outcome, accepted_at=accepted_at, provider_reference=provider_reference,
         )
+        if (
+            updated
+            and confirmation.method in BookingConfirmation.Method.values
+            and confirmation.language in ("en", "pl")
+        ):
+            transaction.on_commit(partial(
+                outcome_logger.info,
+                "booking_confirmation_submission method=%s language=%s outcome=%s",
+                confirmation.method, confirmation.language, outcome.value,
+            ), robust=True)
     return accepted, failed
