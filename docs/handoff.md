@@ -1,5 +1,13 @@
 # Session handoff
 
+## Windows replacement rehearsal readiness
+
+The Windows snapshot on 26 November identified the same Intel MacBook as the
+original baseline. Docker answered the read-only inventory probe. The local
+replacement readiness check measured 15 MiB of available memory and refused
+the run below its 2 GiB threshold. The [readings and commands](windows-hardware-inventory.md)
+document the snapshot. A quiet isolated replacement target remains necessary.
+
 ## Replacement timing evidence
 
 The hosted Checks workflow uploads a 14-day JSON artifact with the four
