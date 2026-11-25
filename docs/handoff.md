@@ -1,5 +1,13 @@
 # Session handoff
 
+## Confirmation queue summary
+
+The private booking confirmation list shows Email and SMS counts across each
+submission status. The summary covers all matches for the active filters and
+search, across pages. It runs one aggregate query and shows no recipient data.
+All 14 focused operations-admin and confirmation tests passed with no migration
+drift. Live receipt and transfer checks still need controlled staging destinations.
+
 ## Delivery configuration check
 
 `check_delivery_configuration` reports the SMTP sender, SMS sender and staff

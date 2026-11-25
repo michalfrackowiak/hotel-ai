@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib import admin
+from django.db.models import Count
 from django.utils import timezone
 
 from .models import Booking, BookingConfirmation, CalendarPublication, Client, Price, Room
@@ -117,3 +118,20 @@ class BookingConfirmationAdmin(ViewOnlyAdmin):
     list_filter = (SubmissionReviewFilter, "status", "method", "language")
     list_select_related = ("booking",)
     search_fields = ("booking__reference", "provider_reference")
+
+    def changelist_view(self, request, extra_context=None):
+        response = super().changelist_view(request, extra_context=extra_context)
+        context = getattr(response, "context_data", None)
+        if context and (changelist := context.get("cl")):
+            totals = {
+                (method, status): total
+                for method, status, total in changelist.queryset.order_by()
+                .values("method", "status").annotate(total=Count("pk"))
+                .values_list("method", "status", "total")
+            }
+            context["queue_status_labels"] = BookingConfirmation.Status.labels
+            context["queue_summary"] = [
+                (label, [totals.get((method, status), 0) for status in BookingConfirmation.Status.values])
+                for method, label in BookingConfirmation.Method.choices
+            ]
+        return response

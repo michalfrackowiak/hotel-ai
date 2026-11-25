@@ -99,6 +99,14 @@ class OperationsAdminTests(TestCase):
             )
 
         url = reverse("admin:bookings_bookingconfirmation_changelist")
+        response = self.client.get(url)
+        self.assertContains(response, "Confirmation counts for the current filters and search")
+        self.assertNotContains(response, self.guest.email)
+        self.assertNotContains(response, "+48500111222")
+        self.assertEqual(response.context["queue_status_labels"], status.labels)
+        self.assertEqual(response.context["queue_summary"], [
+            ("Email", [1, 1, 1, 1, 0]), ("SMS", [0, 0, 0, 0, 1]),
+        ])
         response = self.client.get(url, {"submission_review": "needed"})
         self.assertContains(response, "Failed or uncertain")
         self.assertContains(response, "Provider acceptance records submission only.")
@@ -108,6 +116,13 @@ class OperationsAdminTests(TestCase):
         )
         response = self.client.get(url, {"submission_review": "needed", "method__exact": "sms", "language__exact": "pl"})
         self.assertEqual(list(response.context["cl"].result_list), [confirmations[status.UNCERTAIN]])
+        self.assertEqual(response.context["queue_summary"], [
+            ("Email", [0, 0, 0, 0, 0]), ("SMS", [0, 0, 0, 0, 1]),
+        ])
+        response = self.client.get(url, {"q": "no-match-fixture"})
+        self.assertEqual(response.context["queue_summary"], [
+            ("Email", [0, 0, 0, 0, 0]), ("SMS", [0, 0, 0, 0, 0]),
+        ])
         detail = reverse("admin:bookings_bookingconfirmation_change", args=[confirmations[status.FAILED].pk])
         self.assertEqual(self.client.post(detail, {"status": status.PENDING}).status_code, 403)
         self.assertEqual(BookingConfirmation.objects.get(pk=confirmations[status.FAILED].pk).status, status.FAILED)
