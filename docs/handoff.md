@@ -1,5 +1,12 @@
 # Session handoff
 
+## Scenario editor group
+
+The optional `setup_scenario_editor_group` command provisions private draft
+authoring and graph inspection. Publishing and rollback require separate
+permission. Existing staff accounts need explicit group assignment. All 10 role
+tests passed with no migration drift. Infrastructure operator access remains open.
+
 ## Parser reviewer group
 
 The optional `setup_parser_reviewer_group` command provisions permission to
