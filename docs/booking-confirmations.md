@@ -21,4 +21,6 @@ The scenario's “we sent” closing follows provider acceptance. If the sender 
 
 Look for `booking_confirmation_submission` in the worker logs to count committed `accepted`, `failed`, and `uncertain` outcomes by `method` and `language`. The event contains only those labels. Use the confirmation queue to inspect attempts that remain in **Sending or interrupted**.
 
+The [retry policy](delivery-retry-policy.md) defines the planned first automatic retry and the evidence required before rollout.
+
 To check the live setup, make one test booking per configured channel with a recipient you control. Verify the confirmation contains the reference shown to the guest and check the provider acceptance status in Django admin. Automated tests exercise provider submissions with local mail and a simulated Twilio client.
