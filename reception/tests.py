@@ -416,6 +416,66 @@ class ReceptionTests(TestCase):
 
 
 class ReceptionHandoverTests(TestCase):
+    def test_admin_marks_only_the_displayed_guest_messages_read(self):
+        operator = get_user_model().objects.create_superuser(username="unread-operator")
+        self.client.force_login(operator)
+        handover, other = [
+            StaffHandover.objects.create(
+                conversation=Conversation.objects.create(conversation_id=uuid4().hex, state={}), language="en",
+            )
+            for _ in range(2)
+        ]
+        guest = handover.messages.create(text="Fictional first guest message.")
+        reply = handover.messages.create(staff=True, text="Fictional staff reply.")
+        other.messages.create(text="Fictional separate message.")
+        detail = reverse("admin:reception_staffhandover_change", args=[handover.pk])
+        endpoint = reverse("admin:reception_staffhandover_mark_read", args=[handover.pk])
+        other_endpoint = reverse("admin:reception_staffhandover_mark_read", args=[other.pk])
+        inbox = reverse("admin:reception_staffhandover_changelist")
+        initial = self.client.get(detail)
+        self.assertContains(initial, "Mark read")
+        self.assertContains(initial, guest.text)
+        snapshot = initial.context["read_snapshot"]
+        later = handover.messages.create(text="Fictional later guest message.")
+
+        self.assertEqual(self.client.get(endpoint).status_code, 405)
+        for invalid_endpoint, invalid_snapshot in ((endpoint, snapshot + "-tampered"), (other_endpoint, snapshot)):
+            self.assertEqual(self.client.post(invalid_endpoint, {"snapshot": invalid_snapshot}).status_code, 400)
+        self.assertRedirects(self.client.post(endpoint, {"snapshot": snapshot}), detail)
+        handover.refresh_from_db()
+        self.assertEqual(handover.last_read_guest_message_id, guest.pk)
+        request = RequestFactory().get(inbox)
+        request.user = operator
+        inbox_admin = admin.site.get_model_admin(StaffHandover)
+        with self.assertNumQueries(1):
+            self.assertEqual(
+                {row.pk: inbox_admin.unread_count(row) for row in inbox_admin.get_queryset(request)},
+                {handover.pk: 1, other.pk: 1},
+            )
+        self.assertContains(self.client.get(inbox), "Unread guest messages")
+        latest_snapshot = self.client.get(detail).context["read_snapshot"]
+        self.assertRedirects(self.client.post(endpoint, {"snapshot": latest_snapshot}), detail)
+        self.assertRedirects(self.client.post(endpoint, {"snapshot": snapshot}), detail)
+        self.assertNotContains(self.client.get(detail), "Mark read")
+        reply_response = self.client.post(detail, {
+            "messages-TOTAL_FORMS": "3", "messages-INITIAL_FORMS": "3", "reply": "Fictional follow-up.",
+            "messages-0-id": guest.pk, "messages-1-id": reply.pk, "messages-2-id": later.pk,
+        })
+        self.assertRedirects(reply_response, inbox)
+        handover.refresh_from_db()
+        self.assertEqual(handover.last_read_guest_message_id, later.pk)
+        self.assertEqual(handover.messages.filter(staff=True).count(), 2)
+
+        viewer = get_user_model().objects.create_user(username="unread-viewer", is_staff=True)
+        viewer.user_permissions.add(Permission.objects.get(
+            content_type__app_label="reception", codename="view_staffhandover",
+        ))
+        self.client.force_login(viewer)
+        self.assertEqual(self.client.post(endpoint, {"snapshot": latest_snapshot}).status_code, 403)
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.force_login(operator)
+        self.assertEqual(csrf_client.post(endpoint, {"snapshot": latest_snapshot}).status_code, 403)
+
     def test_admin_assignment_validates_permissions_and_preserves_existing_assignee(self):
         users = get_user_model().objects
         operator = users.create_superuser(username="assignment-operator")

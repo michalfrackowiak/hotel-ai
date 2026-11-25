@@ -29,6 +29,7 @@ class StaffHandover(models.Model):
     language = models.CharField(max_length=2, choices=(("pl", "Polish"), ("en", "English")))
     created_at = models.DateTimeField(auto_now_add=True)
     closed = models.BooleanField(default=False)
+    last_read_guest_message_id = models.PositiveBigIntegerField(default=0, editable=False)
 
 
 class HandoverMessage(models.Model):
