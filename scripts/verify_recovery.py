@@ -18,6 +18,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
 import sqlite3
 import sys
 from time import monotonic
@@ -30,13 +31,33 @@ def digest(path):
         return hashlib.file_digest(source, "sha256").digest()
 
 
+class BackupChecksumMismatch(ValueError):
+    """The snapshot differs from the expected transfer checksum."""
+
+
+class BackupSidecarPresent(ValueError):
+    """A companion SQLite file could contribute unchecked snapshot data."""
+
+
+def require_standalone_backup(backup):
+    for suffix in ("-wal", "-journal"):
+        sidecar = backup.with_name(backup.name + suffix)
+        if sidecar.exists() or sidecar.is_symlink():
+            raise BackupSidecarPresent("Expected a standalone SQLite snapshot without sidecar files.")
+
+
 def require(condition):
     if not condition:
         raise RuntimeError("Recovery verification condition failed.")
 
 
-def database_checks(path):
-    with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as database:
+def open_read_only(path, *, immutable=False):
+    options = "?mode=ro&immutable=1" if immutable else "?mode=ro"
+    return sqlite3.connect(path.as_uri() + options, uri=True)
+
+
+def database_checks(path, *, immutable=False):
+    with closing(open_read_only(path, immutable=immutable)) as database:
         integrity = database.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
         foreign_keys = not database.execute("PRAGMA foreign_key_check").fetchall()
         tables = [row[0] for row in database.execute(
@@ -49,7 +70,7 @@ def database_checks(path):
     return integrity, foreign_keys, counts
 
 
-def restore_copy(backup, restore_dir):
+def restore_copy(backup, restore_dir, *, immutable=False):
     backup = backup.resolve(strict=True)
     restore_dir = restore_dir.resolve(strict=True)
     if not backup.is_file() or not restore_dir.is_dir() or any(restore_dir.iterdir()):
@@ -58,7 +79,7 @@ def restore_copy(backup, restore_dir):
     # Exclusive creation prevents accidental replacement of an existing database.
     descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     os.close(descriptor)
-    with closing(sqlite3.connect(backup.as_uri() + "?mode=ro", uri=True)) as source:
+    with closing(open_read_only(backup, immutable=immutable)) as source:
         with closing(sqlite3.connect(destination)) as target:
             source.backup(target)
     return backup, destination
@@ -126,17 +147,29 @@ def application_checks(destination):
     return result
 
 
-def verify(backup, restore_dir):
+def verify(backup, restore_dir, *, expected_sha256=None):
     started = monotonic()
-    original_digest = digest(backup.resolve(strict=True))
-    backup, destination = restore_copy(backup, restore_dir)
-    source_integrity, source_foreign_keys, source_counts = database_checks(backup)
+    if expected_sha256 is not None and not re.fullmatch(r"[0-9a-fA-F]{64}", expected_sha256):
+        raise ValueError("Expected a 64-character hexadecimal SHA-256 digest.")
+    backup = backup.resolve(strict=True)
+    checksum_requested = expected_sha256 is not None
+    if checksum_requested:
+        require_standalone_backup(backup)
+    original_digest = digest(backup)
+    if checksum_requested and original_digest != bytes.fromhex(expected_sha256):
+        raise BackupChecksumMismatch("Backup SHA-256 does not match.")
+    backup, destination = restore_copy(backup, restore_dir, immutable=checksum_requested)
+    source_integrity, source_foreign_keys, source_counts = database_checks(backup, immutable=checksum_requested)
+    if checksum_requested:
+        require_standalone_backup(backup)
     integrity, foreign_keys, before = database_checks(destination)
     if not all((source_integrity, source_foreign_keys, integrity, foreign_keys, source_counts == before)):
         raise RuntimeError("Database verification failed before application checks.")
     result = application_checks(destination)
     integrity, foreign_keys, after = database_checks(destination)
     unchanged = digest(backup) == original_digest
+    if checksum_requested:
+        require_standalone_backup(backup)
     if not all((integrity, foreign_keys, before == after, unchanged)):
         raise RuntimeError("Database verification failed after application checks.")
     return {
@@ -154,9 +187,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--backup", required=True, type=Path)
     parser.add_argument("--restore-dir", required=True, type=Path)
+    parser.add_argument("--expected-sha256", help="Check the backup against a 64-character SHA-256 digest before restoring.")
     args = parser.parse_args()
     try:
-        report = verify(args.backup, args.restore_dir)
+        report = verify(args.backup, args.restore_dir, expected_sha256=args.expected_sha256)
     except Exception as error:
         # Never print exception messages or tracebacks from a private database.
         report = {"passed": False, "error_type": type(error).__name__}
