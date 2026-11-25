@@ -53,6 +53,13 @@ Docker network connects the speech workers. The HTTP checks run on loopback insi
 container, without publishing a port to the workstation. The script prints aggregate checks
 and times along with the resource prefix and cleanup result.
 
+After verified cleanup the runner prints a JSON timing summary. It measures
+snapshot verification and promotion, cached container launch through readiness
+of all three services, and web and speech probes. The total starts after image
+inspection and ends after the final source checksum check, before cleanup.
+Image download, off-host transfer and DNS or TLS cutover are outside these
+measurements.
+
 ## Windows result, 24 November 2026
 
 The x86-64 web, Piper and Vosk images built on Docker Engine 29.9.3. The fictional snapshot

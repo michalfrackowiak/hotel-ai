@@ -168,6 +168,7 @@ def rehearse(web_image, piper_image, asr_image):
         source_digest = docker(*digest_cmd, capture=True).stdout.strip()
         if not re.fullmatch(r"[0-9a-f]{64}", source_digest):
             raise RuntimeError("Expected a valid SHA-256 digest for the source snapshot.")
+        restore_started = monotonic()
         try:
             docker(
                 *fixture_job, "-v", backup_mount, "-v", f"{restore}:/app/data", web["Id"],
@@ -178,7 +179,9 @@ def rehearse(web_image, piper_image, asr_image):
             )
         except subprocess.SubprocessError:
             raise RuntimeError("Replacement snapshot restore verification failed.") from None
+        restore_seconds = monotonic() - restore_started
         require_windows_memory()
+        launch_started = monotonic()
         for runtime, name, alias, cap in ((piper, piper_name, "piper", "384m"), (asr, asr_name, "asr", "768m")):
             docker(
                 "run", "-d", "--name", name, "--label", label, *run_flags(prefix, cap),
@@ -194,14 +197,23 @@ def rehearse(web_image, piper_image, asr_image):
         wait_http(web_name, web_name, "http://127.0.0.1:8000/healthz/")
         wait_http(web_name, piper_name, "http://piper:5000/healthz")
         wait_http(web_name, asr_name, "http://asr:5001/healthz")
+        all_ready_at = monotonic()
         docker("exec", web_name, "python", "-c", HTTP_PAGES)
         docker("exec", web_name, "python", "manage.py", "shell", "-c", VERIFY_FIXTURE)
         docker("exec", web_name, "python", "scripts/smoke_piper.py", "http://127.0.0.1:8000", "--asr")
+        functional_seconds = monotonic() - all_ready_at
         if docker(*digest_cmd, capture=True).stdout.strip() != source_digest:
             raise RuntimeError("Source snapshot changed after runtime checks.")
-        print(f"Source checksum unchanged. Rehearsal checks passed in {monotonic() - started:.2f}s.", flush=True)
+        total_seconds = monotonic() - started
     finally:
         remove_resources(label, (job, web_name, piper_name, asr_name), prefix, (source, restore))
+    print(f"Source checksum unchanged. Rehearsal checks passed in {total_seconds:.2f}s.", flush=True)
+    print("Replacement rehearsal timings: " + json.dumps({
+        "restore_verify_and_promote_seconds": round(restore_seconds, 3),
+        "cached_launch_to_all_ready_seconds": round(all_ready_at - launch_started, 3),
+        "web_and_speech_checks_seconds": round(functional_seconds, 3),
+        "total_before_cleanup_seconds": round(total_seconds, 3),
+    }), flush=True)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)

@@ -1,5 +1,14 @@
 # Session handoff
 
+## Replacement-stack phase timing
+
+A successful disposable replacement rehearsal reports the restore, cached
+container launch through readiness, and functional probe durations after
+cleanup. The total also covers fixture setup and the final source checksum
+check. The [measurement boundaries](replacement-stack-rehearsal.md) exclude
+image pulls and off-host cutover. Independent review and all five focused
+scenarios passed. The separate-host recovery gate remains open.
+
 ## Replacement-stack snapshot verification
 
 The disposable replacement-stack runner passes the source snapshot SHA-256 to
