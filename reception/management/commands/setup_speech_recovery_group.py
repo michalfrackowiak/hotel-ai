@@ -7,7 +7,4 @@ class Command(BaseCommand):
     help = "Create or verify the Speech recovery permission group without assigning any accounts."
 
     def handle(self, *args, **options):
-        return setup_staff_group(
-            "Speech recovery",
-            (("model_providers", "speechrecoveryrequest", "recover_speech_controller"),),
-        )
+        return setup_staff_group("Speech recovery")

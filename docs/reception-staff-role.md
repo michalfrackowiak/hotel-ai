@@ -51,3 +51,10 @@ Use `python manage.py setup_speech_switch_group` or
 action group. Assign only the action needed, alongside **Speech operator**
 monitoring access. Each action still needs its own deployment feature flag and
 uses the existing review, confirmation and audit workflow.
+
+## Check group permissions
+
+Run `python manage.py check_staff_role_groups` to compare the seven built-in
+groups in the current database with their expected permissions. The command
+reports which groups are missing or differ, with counts of missing or extra
+grants. It leaves groups and memberships untouched and omits account details.
