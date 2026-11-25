@@ -14,3 +14,10 @@ user memberships and staff flags alone.
 The command can be rerun on a matching group. It refuses to modify a group
 with extra permissions or a group with members that is missing permissions.
 Review conflicts in the private admin before changing access.
+
+## Parser reviewer access
+
+Run `python manage.py setup_parser_reviewer_group` to provision the separate
+**Parser reviewer** group. It grants permission to view parser samples and
+save corrections. Assign existing staff through **Users**. The same rules
+for repeated setup and conflicting groups apply.

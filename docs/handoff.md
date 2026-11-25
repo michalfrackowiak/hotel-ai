@@ -1,5 +1,12 @@
 # Session handoff
 
+## Parser reviewer group
+
+The optional `setup_parser_reviewer_group` command provisions permission to
+view and correct parser samples in the private admin. The group requires
+explicit provisioning and member assignment. All 22 role and parser tests
+passed with no migration drift. Scenario and infrastructure roles remain open.
+
 ## Reception staff group
 
 The optional `setup_reception_staff_group` command provisions handover access
