@@ -9,7 +9,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from .models import Booking, Client, Price, Room
+from .models import Booking, BookingConfirmation, Client, Price, Room
 from .services import BookingError, available_rooms, confirm_booking
 
 
@@ -75,6 +75,42 @@ class OperationsAdminTests(TestCase):
                 ["QA-LEGACY", 2],
             )
         self.assertTrue(Room.objects.get(code="QA-LEGACY").accepts_reservations)
+
+    def test_confirmation_submission_review_filters_read_only_changelist(self):
+        self.grant("view_bookingconfirmation")
+        status = BookingConfirmation.Status
+        today = timezone.localdate()
+        confirmations = {}
+        for day, (outcome, method, language) in enumerate((
+            (status.FAILED, "email", "en"),
+            (status.UNCERTAIN, "sms", "pl"),
+            (status.PENDING, "email", "en"),
+            (status.SENDING, "email", "en"),
+            (status.ACCEPTED, "email", "en"),
+        )):
+            booking = Booking.objects.create(
+                room=self.room, client=self.guest, guests=2, nightly_rate=Decimal("120.00"),
+                idempotency_key=uuid4(), check_in=today + timedelta(days=day),
+                check_out=today + timedelta(days=day + 1),
+            )
+            confirmations[outcome] = BookingConfirmation.objects.create(
+                booking=booking, method=method, language=language, status=outcome,
+                destination="+48500111222" if method == "sms" else self.guest.email,
+            )
+
+        url = reverse("admin:bookings_bookingconfirmation_changelist")
+        response = self.client.get(url, {"submission_review": "needed"})
+        self.assertContains(response, "Failed or uncertain")
+        self.assertContains(response, "Provider acceptance records submission only.")
+        self.assertEqual(
+            {item.pk for item in response.context["cl"].result_list},
+            {confirmations[status.FAILED].pk, confirmations[status.UNCERTAIN].pk},
+        )
+        response = self.client.get(url, {"submission_review": "needed", "method__exact": "sms", "language__exact": "pl"})
+        self.assertEqual(list(response.context["cl"].result_list), [confirmations[status.UNCERTAIN]])
+        detail = reverse("admin:bookings_bookingconfirmation_change", args=[confirmations[status.FAILED].pk])
+        self.assertEqual(self.client.post(detail, {"status": status.PENDING}).status_code, 403)
+        self.assertEqual(BookingConfirmation.objects.get(pk=confirmations[status.FAILED].pk).status, status.FAILED)
 
     def test_admin_room_pause_blocks_new_offers_and_stale_quotes_preserving_replay(self):
         self.grant("change_room")
