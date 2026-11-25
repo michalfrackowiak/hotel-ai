@@ -1,5 +1,13 @@
 # Session handoff
 
+## Loopback SMTP confirmation verification
+
+The real Django SMTP backend sends fictional English and Polish confirmations
+to a disposable loopback receiver. The test checks envelope recipients, MIME
+content, persisted acceptance and duplicate suppression across worker runs.
+It passed independently on Windows. Authenticated SMTP and receipt in a
+controlled external inbox remain staging checks.
+
 ## SMS confirmation retry after worker restart
 
 A disposable SQLite test runs the confirmation worker in three separate

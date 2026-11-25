@@ -173,6 +173,7 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 - [x] Match the Resort Neptun scenario prompts and timing. Open with a bilingual greeting and a two-second language window, wait ten seconds for an arrival date, quote room prices before consent, and use the selected delivery closing after provider acceptance.
 - [x] Start English web chat and browser voice with a Neptun Resort greeting followed immediately by Step 2.b.
 - [ ] Configure live SMTP, Twilio SMS, and the staff phone transfer destination. Verify each live destination using the [controlled rehearsal](delivery-verification.md).
+- [x] 0.9 loopback SMTP verification: submit a fictional confirmation through the real SMTP backend and verify the received message and duplicate suppression.
 - [x] 0.9 confirmation submission triage: group failed and uncertain provider submissions in the private admin and explain the recorded statuses.
 - [x] 0.9 confirmation dispatch events: record committed submission outcomes by channel and language in the worker log using fixed labels.
 - [x] 0.9 delivery configuration check: report per-process SMTP, SMS and staff transfer settings using redacted, read-only output.

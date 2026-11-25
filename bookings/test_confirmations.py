@@ -1,7 +1,11 @@
 from datetime import timedelta
 from decimal import Decimal
+from email import policy
+from email.parser import BytesParser
 from io import StringIO
 from smtplib import SMTPServerDisconnected
+from socketserver import StreamRequestHandler, TCPServer
+from threading import Thread
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -19,6 +23,38 @@ from reception.receipt import DELIVERY_PENDING, apply_receipt_outcome, start_rec
 from .confirmations import dispatch_confirmations
 from .models import Booking, BookingConfirmation, Client, Price, Room
 from .services import BookingError, confirm_booking, normalize_phone
+
+
+class ConfirmationSmtpReceiver(StreamRequestHandler):
+    timeout = 5
+
+    def handle(self):
+        recipient = None
+        self.wfile.write(b"220 localhost SMTP test receiver\r\n")
+        while line := self.rfile.readline():
+            command = line.partition(b" ")[0].strip().upper()
+            if command == b"MAIL":
+                recipient = None
+                self.wfile.write(b"250 OK\r\n")
+            elif command in (b"EHLO", b"HELO"):
+                self.wfile.write(b"250 OK\r\n")
+            elif command == b"RCPT":
+                recipient = line.strip().partition(b":")[2]
+                self.wfile.write(b"250 OK\r\n")
+            elif command == b"DATA" and recipient:
+                self.wfile.write(b"354 End with a dot\r\n")
+                message = bytearray()
+                for data in self.rfile:
+                    if data == b".\r\n":
+                        self.server.received.append((recipient, bytes(message)))
+                        self.wfile.write(b"250 Accepted\r\n")
+                        break
+                    message.extend(data[1:] if data.startswith(b"..") else data)
+            elif command == b"QUIT":
+                self.wfile.write(b"221 Bye\r\n")
+                return
+            else:
+                self.wfile.write(b"500 Unexpected test command\r\n")
 
 
 class BookingConfirmationTests(TestCase):
@@ -103,6 +139,67 @@ class BookingConfirmationTests(TestCase):
         self.assertEqual(email.confirmation.status, BookingConfirmation.Status.ACCEPTED)
         self.assertIsNotNone(email.confirmation.accepted_at)
         self.assertEqual(sms.confirmation.status, BookingConfirmation.Status.PENDING)
+
+    def test_worker_delivers_one_mime_message_per_booking_over_smtp(self):
+        cases = (
+            ("en", "Neptun Resort booking confirmation", "%Y-%m-%d", "2 guests"),
+            ("pl", "Potwierdzenie rezerwacji w Resorcie Neptun", "%d.%m.%Y", "liczba gości 2"),
+        )
+        bookings = {}
+        for offset, (language, *_expected) in enumerate(cases):
+            stay_offset = timedelta(days=offset * 3)
+            destination = f"{language}@example.test"
+            booking, _ = confirm_booking(**{
+                **self.request, "delivery_method": "email", "email": destination,
+                "language": language, "phone": "", "idempotency_key": uuid4(),
+                "check_in": self.request["check_in"] + stay_offset,
+                "check_out": self.request["check_out"] + stay_offset,
+            })
+            bookings[destination] = booking
+
+        with TCPServer(("127.0.0.1", 0), ConfirmationSmtpReceiver) as receiver:
+            receiver.received = []
+            server_thread = Thread(target=receiver.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
+            server_thread.start()
+            try:
+                with self.settings(
+                    EMAIL_BACKEND="django.core.mail.backends.smtp.EmailBackend",
+                    EMAIL_HOST="127.0.0.1", EMAIL_PORT=receiver.server_address[1],
+                    EMAIL_HOST_USER="", EMAIL_HOST_PASSWORD="", EMAIL_USE_TLS=False,
+                    EMAIL_USE_SSL=False, EMAIL_TIMEOUT=5, DEFAULT_FROM_EMAIL="resort@example.test",
+                    HOTEL_TWILIO_ACCOUNT_SID="", HOTEL_TWILIO_AUTH_TOKEN="", HOTEL_TWILIO_SMS_FROM="",
+                ):
+                    for _ in range(2):
+                        call_command("send_booking_confirmations", stdout=StringIO())
+            finally:
+                receiver.shutdown()
+                server_thread.join(timeout=5)
+
+        self.assertCountEqual(
+            [envelope for envelope, _ in receiver.received],
+            [f"<{destination}>".encode("ascii") for destination in bookings],
+        )
+        messages = {
+            envelope.decode("ascii")[1:-1]: BytesParser(policy=policy.default).parsebytes(raw)
+            for envelope, raw in receiver.received
+        }
+        for language, subject, date_format, guest_count in cases:
+            with self.subTest(language=language):
+                destination = f"{language}@example.test"
+                booking = bookings[destination]
+                message = messages[destination]
+                self.assertEqual(str(message["From"]), "resort@example.test")
+                self.assertEqual(str(message["To"]), destination)
+                self.assertEqual(str(message["Subject"]), subject)
+                body = message.get_content()
+                for detail in (
+                    str(booking.reference), booking.room.code, booking.check_in.strftime(date_format),
+                    booking.check_out.strftime(date_format), guest_count, "360.00 PLN",
+                ):
+                    self.assertIn(detail, body)
+                booking.confirmation.refresh_from_db()
+                self.assertEqual(booking.confirmation.status, BookingConfirmation.Status.ACCEPTED)
+                self.assertIsNotNone(booking.confirmation.accepted_at)
 
     @override_settings(
         EMAIL_HOST="smtp.example.test", DEFAULT_FROM_EMAIL="bad@example.test\n",
