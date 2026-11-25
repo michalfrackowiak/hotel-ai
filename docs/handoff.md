@@ -1,5 +1,14 @@
 # Session handoff
 
+## Recorded English parser rehearsal fixture
+
+The browser harness accepts an independently recorded fictional English WAV
+for both noisy transcript comparisons. Hosted checks still use Piper by
+default. Two focused tests cover WAV preparation and invalid input.
+The [local procedure](parser-accuracy-rehearsal.md#independently-recorded-english-fixture)
+uses a fresh disposable Compose fixture. Collecting and replaying an independent
+English clip and testing a physical microphone remain open.
+
 ## Sustained routed pilot benchmark
 
 The mixed-load runner supports a ten-minute routed pilot profile with bounded
