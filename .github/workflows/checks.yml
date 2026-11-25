@@ -120,8 +120,16 @@ jobs:
           web_image=$(docker compose images -q web)
           piper_image=$(docker compose -f compose.yaml -f compose.piper.yaml images -q piper)
           asr_image=$(docker compose -f compose.yaml -f compose.asr.yaml images -q asr)
-          python scripts/rehearse_replacement_stack.py --web-image "$web_image" --piper-image "$piper_image" --asr-image "$asr_image"
+          python scripts/rehearse_replacement_stack.py --web-image "$web_image" --piper-image "$piper_image" --asr-image "$asr_image" \
+            --timings-json "$RUNNER_TEMP/replacement-rehearsal-timings.json"
           python scripts/smoke_speech_runtime.py
+      - name: Upload replacement rehearsal timings
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: replacement-rehearsal-timings
+          path: ${{ runner.temp }}/replacement-rehearsal-timings.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Print Compose logs after a failure
         if: failure()
         run: docker compose -f compose.yaml -f compose.piper.yaml -f compose.asr.yaml logs --no-color

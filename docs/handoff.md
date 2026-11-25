@@ -1,5 +1,14 @@
 # Session handoff
 
+## Replacement timing evidence
+
+The hosted Checks workflow uploads a 14-day JSON artifact with the four
+replacement rehearsal durations after successful cleanup. Local callers can
+save the same fields to a new file with the optional timing output flag.
+Seven focused cases passed, including cleanup failure and existing file refusal.
+The first hosted log showed 9.44 seconds before cleanup. Full separate-host
+recovery remains open.
+
 ## Replacement-stack phase timing
 
 A successful disposable replacement rehearsal reports the restore, cached
