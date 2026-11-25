@@ -45,3 +45,9 @@ operator** group. It provides read-only access to speech plans, preflight,
 inventory, transition previews and controller status in the private admin.
 Provider switching and recovery require separate permissions. Assign existing
 staff through **Users**.
+
+Use `python manage.py setup_speech_switch_group` or
+`python manage.py setup_speech_recovery_group` to provision the corresponding
+action group. Assign only the action needed, alongside **Speech operator**
+monitoring access. Each action still needs its own deployment feature flag and
+uses the existing review, confirmation and audit workflow.

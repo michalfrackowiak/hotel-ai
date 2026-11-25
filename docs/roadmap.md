@@ -175,6 +175,7 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 - [x] 0.9 scenario editor group: provision private access to author scenario drafts while publication and rollback require separate permission.
 - [x] 0.9 scenario publisher group: provision private access to review, publish and roll back scenario versions separately from draft authoring.
 - [x] 0.9 speech operator monitoring group: provision private read-only access to speech plans, inventory, preflight and controller status.
+- [x] 0.9 speech action groups: provision separate switch and recovery permissions while retaining monitoring prerequisites and dispatch flags.
 - [x] Match the Resort Neptun scenario prompts and timing. Open with a bilingual greeting and a two-second language window, wait ten seconds for an arrival date, quote room prices before consent, and use the selected delivery closing after provider acceptance.
 - [x] Start English web chat and browser voice with a Neptun Resort greeting followed immediately by Step 2.b.
 - [ ] Configure live SMTP, Twilio SMS, and the staff phone transfer destination. Verify each live destination using the [controlled rehearsal](delivery-verification.md).
