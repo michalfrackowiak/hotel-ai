@@ -1,4 +1,4 @@
-"""Run 60–120 seconds of fictional booking and speech load in isolated staging.
+"""Run a bounded fictional booking and speech workload in isolated staging.
 
 Run with sudo on the Linux Docker host alongside benchmark_capacity.py and
 benchmark_speech.py. Uses existing production image IDs with fresh staging data.
@@ -17,17 +17,64 @@ from time import monotonic
 from urllib.request import HTTPCookieProcessor, ProxyHandler, Request, build_opener
 from uuid import uuid4
 
-from benchmark_capacity import cgroup_path, counters, docker, health, inspect, paired_request, production_state
+from benchmark_capacity import cgroup_path, counters, docker, health, inspect, paired_request
 from benchmark_speech import MAX_WAV_BYTES, NoRedirect, pcm_from_wav, post
 
 
 LABEL = "hotel-ai.mixed-probe"
+FIXED_SERVICES = {"web": "hotel-ai-web-1", "piper": "hotel-ai-piper-1", "asr": "hotel-ai-asr-1"}
+ROUTED_SERVICES = {
+    "web": "hotel-ai-web-1", "piper": "hotel-ai-routed-piper-primary", "asr": "hotel-ai-routed-vosk-primary",
+}
+INACTIVE_ROUTED_PEERS = (
+    "hotel-ai-routed-piper-standby", "hotel-ai-routed-vosk-standby", "hotel-ai-piper-1", "hotel-ai-asr-1",
+)
+NANOCPU = 1_000_000_000
+LOOPBACK_HEALTH_URL = "http://127.0.0.1:8080/healthz/"
 FIXTURES = (
     ("en", "short", "for three nights"),
     ("pl", "short", "na trzy noce"),
     ("en", "long", "I would like to arrive tomorrow and stay for three nights with two guests please."),
     ("pl", "long", "Chcemy przyjechać jutro i zostać na trzy noce. Będą dwie osoby. Proszę sprawdzić dostępność."),
 )
+
+
+def production_snapshot(names):
+    return {
+        name: {
+            "id": item["Id"], "image": item["Image"], "started_at": item["State"]["StartedAt"],
+            "running": item["State"]["Running"], "health": item["State"].get("Health", {}).get("Status"),
+            "nano_cpus": item["HostConfig"]["NanoCpus"],
+        }
+        for name in names for item in [inspect(name)]
+    }
+
+
+def production_ready(snapshot, services, routed, fixture_cap, host_cores):
+    active = {role: snapshot[name] for role, name in services.items()}
+    if any(not item["running"] for item in active.values()) or active["web"]["health"] != "healthy":
+        return False
+    if not routed:
+        return all(item["health"] == "healthy" for item in active.values())
+    return (
+        all(item["health"] in (None, "healthy") and item["nano_cpus"] > 0 for item in active.values())
+        and all(not snapshot[name]["running"] for name in INACTIVE_ROUTED_PEERS)
+        and sum(item["nano_cpus"] for item in active.values()) + len(active) * fixture_cap < host_cores * NANOCPU
+    )
+
+
+def routed_host_cores():
+    endpoint = os.environ.get("DOCKER_HOST") if not os.environ.get("DOCKER_CONTEXT") else None
+    if not endpoint:
+        endpoint = docker("context", "inspect", "--format", "{{.Endpoints.docker.Host}}")
+    if endpoint not in ("unix:///run/docker.sock", "unix:///var/run/docker.sock"):
+        raise RuntimeError("The routed benchmark requires the default local Docker socket.")
+    docker_cores = int(docker("info", "--format", "{{.NCPU}}"))
+    return min(docker_cores, len(os.sched_getaffinity(0)))
+
+
+def running_container_ids():
+    return sorted(docker("ps", "--quiet", "--no-trunc").splitlines())
 
 
 def memory_available():
@@ -118,6 +165,9 @@ def failed(report):
     database = report.get("ephemeral_database", {})
     return bool(
         report.get("error") or report.get("production_before") != report.get("production_after")
+        or report.get("running_containers_before") != report.get("running_containers_after")
+        or (report.get("duration_seconds", 0) > 120
+            and report.get("load_wall_seconds", 0) < report["duration_seconds"])
         or report.get("production_health_errors", 0)
         or any(value != "removed" for value in report["cleanup"].values())
         or report.get("aborted_on_health")
@@ -148,12 +198,17 @@ def run(args):
     containers = []
     abort, monitor_end = Event(), Event()
     health_samples = []
+    production_services = ROUTED_SERVICES if args.routed_pilot else FIXED_SERVICES
+    production_names = (*production_services.values(), *(INACTIVE_ROUTED_PEERS if args.routed_pilot else ()))
+    cpu_cap = 0.25 if args.routed_pilot else 0.5
+    host_cores = routed_host_cores() if args.routed_pilot else None
     report = {
         "schema_version": 1, "captured_at": datetime.now(timezone.utc).isoformat(), "run_id": token,
-        "duration_seconds": args.duration, "production_before": production_state(),
+        "duration_seconds": args.duration, "production_before": production_snapshot(production_names),
         "startup": {}, "speech": {"piper": [], "asr": []}, "bookings": [], "cleanup": {},
         "conditions": {
-            "memory_caps_mib": {"web": 512, "piper": 1024, "asr": 1536}, "cpu_cap_each": 0.5,
+            "memory_caps_mib": {"web": 512, "piper": 1024, "asr": 1536}, "cpu_cap_each": cpu_cap,
+            "production_profile": "routed-pilot" if args.routed_pilot else "fixed", "host_cpu_budget_cores": host_cores,
             "speech_concurrency_per_engine": 2, "booking_session_concurrency": 1,
             "minimum_pause_between_pairs_seconds": 1, "minimum_pause_between_sessions_seconds": 3,
             "request_timeout_seconds": {"speech": 20, "booking": 10},
@@ -167,14 +222,19 @@ def run(args):
         },
     }
     report["memory_available_bytes"] = memory_available()
+    if args.routed_pilot:
+        report["running_containers_before"] = running_container_ids()
+        approved_ids = sorted(report["production_before"][name]["id"] for name in production_services.values())
     baseline = [health(args.web_health_url) for _ in range(3)]
     report["health_baseline"] = baseline
     if (
         report["memory_available_bytes"] < 6 * 1024**3 or any(row["status"] != 200 for row in baseline)
-        or any(not row["running"] or row["health"] != "healthy" for row in report["production_before"].values())
+        or not production_ready(report["production_before"], production_services, args.routed_pilot,
+                                int(cpu_cap * NANOCPU), host_cores)
+        or (args.routed_pilot and report["running_containers_before"] != approved_ids)
     ):
         report["error"] = "PreflightFailed"
-        report["production_after"] = production_state()
+        report["production_after"] = production_snapshot(production_names)
         return report
 
     def monitor():
@@ -196,10 +256,11 @@ def run(args):
             if abort.is_set():
                 raise RuntimeError("Production health gate aborted setup.")
             name = network + "-" + engine
-            image = inspect("hotel-ai-" + engine + "-1")["Image"]
+            image = report["production_before"][production_services[engine]]["image"]
             options = [
                 "create", "--name", name, "--label", f"{LABEL}={token}", "--network", network,
-                "--network-alias", engine, "--cpus=.5", "--memory=" + memory, "--memory-swap=" + memory,
+                "--pull=never", "--network-alias", engine, f"--cpus={cpu_cap}",
+                "--memory=" + memory, "--memory-swap=" + memory,
                 "--read-only", "--init", "--cap-drop=ALL", "--security-opt=no-new-privileges",
                 "--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=32m,uid=10001,gid=10001",
             ]
@@ -234,7 +295,8 @@ def run(args):
             pcm, duration = pcm_from_wav(wav)
             fixtures.append((language, length, text, pcm))
             report.setdefault("fixture_audio_seconds", []).append({"language": language, "length": length, "seconds": duration})
-        deadline = monotonic() + args.duration
+        started = monotonic()
+        deadline = started + args.duration
 
         def speech_load(engine):
             index = 0
@@ -258,7 +320,6 @@ def run(args):
                 number += 1
                 abort.wait(min(3, max(0, deadline - monotonic())))
 
-        started = monotonic()
         with ThreadPoolExecutor(max_workers=3) as pool:
             jobs = [pool.submit(speech_load, engine) for engine in ("piper", "asr")]
             jobs.append(pool.submit(bookings_load))
@@ -310,15 +371,22 @@ def run(args):
             report["cleanup"][network] = "removed"
         except Exception as error:
             report["cleanup"][network] = type(error).__name__
-        report["production_after"] = production_state()
+        report["production_after"] = production_snapshot(production_names)
+        if args.routed_pilot:
+            report["running_containers_after"] = running_container_ids()
     return report
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--duration", type=int, choices=range(60, 121), default=60)
-    parser.add_argument("--web-health-url", default="http://127.0.0.1:8080/healthz/")
+    parser.add_argument("--duration", type=int, default=60, help="Load duration in seconds (60–120, or 60–600 for routed).")
+    parser.add_argument("--routed-pilot", action="store_true", help="Use the routed pilot primary images and CPU budget.")
+    parser.add_argument("--web-health-url", default=LOOPBACK_HEALTH_URL)
     args = parser.parse_args()
+    if not 60 <= args.duration <= (600 if args.routed_pilot else 120):
+        parser.error("Expected a duration of 60–120 seconds, or 60–600 seconds for the routed pilot.")
+    if args.routed_pilot and args.web_health_url != LOOPBACK_HEALTH_URL:
+        parser.error("The routed pilot requires the default loopback web health URL.")
     if not hasattr(os, "geteuid") or os.geteuid() != 0:
         parser.error("Run with sudo on the Linux Docker host.")
 
@@ -327,7 +395,15 @@ def main():
 
     for number in (signal.SIGTERM, signal.SIGINT):
         signal.signal(number, interrupted)
-    report = run(args)
+    import fcntl
+
+    lock_fd = os.open("/run/hotel-ai-mixed-load.lock", os.O_CREAT | os.O_RDONLY | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(lock_fd, "rb"):
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            parser.error("Another mixed-load run already owns the host lock.")
+        report = run(args)
     print(json.dumps(report, indent=2))
     return int(failed(report))
 

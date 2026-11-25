@@ -38,6 +38,9 @@ class MixedLoadTests(unittest.TestCase):
             ("missing long Polish ASR", lambda row: row["speech"]["asr"].pop()),
             ("health error", lambda row: row.update(production_health_errors=1)),
             ("abort", lambda row: row.update(aborted_on_health=True)),
+            ("short sustained load", lambda row: row.update(duration_seconds=600, load_wall_seconds=599)),
+            ("unexpected running container", lambda row: row.update(running_containers_before=["web"],
+                                                                    running_containers_after=["web", "other"])),
             ("no Polish booking", lambda row: row["bookings"].pop()),
             ("OOM", lambda row: row.update(resources_final={"web": {"memory.events": {"oom": 1}}})),
         ):
@@ -45,6 +48,25 @@ class MixedLoadTests(unittest.TestCase):
                 report = copy.deepcopy(good)
                 change(report)
                 self.assertTrue(benchmark.failed(report))
+
+    def test_routed_budget_uses_actual_caps_and_requires_inactive_peers(self):
+        web = {"running": True, "health": "healthy", "nano_cpus": 250_000_000}
+        worker = {"running": True, "health": None, "nano_cpus": 400_000_000}
+        services = benchmark.ROUTED_SERVICES
+        snapshot = {name: {"running": False} for name in benchmark.INACTIVE_ROUTED_PEERS}
+        snapshot.update({services["web"]: web, services["piper"]: worker.copy(), services["asr"]: worker.copy()})
+        self.assertTrue(benchmark.production_ready(snapshot, services, True, 250_000_000, 2))
+        self.assertFalse(benchmark.production_ready(snapshot, services, True, 250_000_000, 1))
+        for name, change in (
+            (services["web"], {"health": None}),
+            (services["asr"], {"nano_cpus": 0}),
+            (services["piper"], {"nano_cpus": 600_000_000}),
+            (benchmark.INACTIVE_ROUTED_PEERS[0], {"running": True}),
+        ):
+            with self.subTest(name=name, change=change):
+                rejected = copy.deepcopy(snapshot)
+                rejected[name].update(change)
+                self.assertFalse(benchmark.production_ready(rejected, services, True, 250_000_000, 2))
 
     def test_booking_uses_real_cookie_csrf_revision_and_contact_confirmation(self):
         captured = []
