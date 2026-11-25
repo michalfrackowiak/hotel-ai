@@ -1,5 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import patch
 from uuid import uuid4
 
 from django.contrib.auth import get_user_model
@@ -126,6 +127,43 @@ class OperationsAdminTests(TestCase):
         detail = reverse("admin:bookings_bookingconfirmation_change", args=[confirmations[status.FAILED].pk])
         self.assertEqual(self.client.post(detail, {"status": status.PENDING}).status_code, 403)
         self.assertEqual(BookingConfirmation.objects.get(pk=confirmations[status.FAILED].pk).status, status.FAILED)
+
+    def test_confirmation_claim_age_filters_sending_rows_and_summary(self):
+        self.grant("view_bookingconfirmation")
+        status = BookingConfirmation.Status
+        now = timezone.now()
+        today = timezone.localdate(now)
+        confirmations = {}
+        for day, (name, outcome, method, age) in enumerate((
+            ("cutoff", status.SENDING, "email", timedelta(minutes=5)),
+            ("older", status.SENDING, "sms", timedelta(minutes=6)),
+            ("fresh", status.SENDING, "email", timedelta(minutes=5, microseconds=-1)),
+            ("missing", status.SENDING, "email", None),
+            ("finished", status.ACCEPTED, "email", timedelta(minutes=6)),
+        )):
+            booking = Booking.objects.create(
+                room=self.room, client=self.guest, guests=2, nightly_rate=Decimal("120.00"),
+                idempotency_key=uuid4(), check_in=today + timedelta(days=day),
+                check_out=today + timedelta(days=day + 1),
+            )
+            confirmations[name] = BookingConfirmation.objects.create(
+                booking=booking, method=method, language="en", status=outcome,
+                destination=self.guest.email, claimed_at=None if age is None else now - age,
+            )
+
+        url = reverse("admin:bookings_bookingconfirmation_changelist")
+        with patch("bookings.admin.timezone.now", return_value=now):
+            response = self.client.get(url, {"claim_age": "older"})
+            email = self.client.get(url, {"claim_age": "older", "method__exact": "email"})
+        self.assertContains(response, "Claimed at least 5 minutes ago")
+        self.assertEqual(
+            {item.pk for item in response.context["cl"].result_list},
+            {confirmations["cutoff"].pk, confirmations["older"].pk},
+        )
+        self.assertEqual(list(email.context["cl"].result_list), [confirmations["cutoff"]])
+        self.assertEqual(email.context["queue_summary"], [
+            ("Email", [0, 1, 0, 0, 0]), ("SMS", [0, 0, 0, 0, 0]),
+        ])
 
     def test_admin_room_pause_blocks_new_offers_and_stale_quotes_preserving_replay(self):
         self.grant("change_room")

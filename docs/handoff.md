@@ -1,5 +1,13 @@
 # Session handoff
 
+## Confirmation attempts awaiting review
+
+The private confirmation list can filter sending attempts claimed at least
+five minutes ago. The age threshold flags attempts for investigation while the
+provider outcome remains unknown. The filter combines with method, language,
+status and search. All 15 focused operations-admin and confirmation tests
+passed with no migration drift. Live receipt and transfer checks still need staging.
+
 ## Confirmation queue summary
 
 The private booking confirmation list shows Email and SMS counts across each

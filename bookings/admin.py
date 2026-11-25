@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django import forms
 from django.contrib import admin
 from django.db.models import Count
@@ -111,11 +113,27 @@ class SubmissionReviewFilter(admin.SimpleListFilter):
         return queryset
 
 
+class SubmissionClaimAgeFilter(admin.SimpleListFilter):
+    title = "submission claim age"
+    parameter_name = "claim_age"
+
+    def lookups(self, request, model_admin):
+        return (("older", "Claimed at least 5 minutes ago"),)
+
+    def queryset(self, request, queryset):
+        if self.value() == "older":
+            return queryset.filter(
+                status=BookingConfirmation.Status.SENDING,
+                claimed_at__lte=timezone.now() - timedelta(minutes=5),
+            )
+        return queryset
+
+
 @admin.register(BookingConfirmation)
 class BookingConfirmationAdmin(ViewOnlyAdmin):
     change_list_template = "admin/bookings/bookingconfirmation/change_list.html"
     list_display = ("booking", "method", "status", "claimed_at", "accepted_at")
-    list_filter = (SubmissionReviewFilter, "status", "method", "language")
+    list_filter = (SubmissionReviewFilter, SubmissionClaimAgeFilter, "status", "method", "language")
     list_select_related = ("booking",)
     search_fields = ("booking__reference", "provider_reference")
 
