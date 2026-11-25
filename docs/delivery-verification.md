@@ -24,6 +24,11 @@ docker compose -p hotel-ai-delivery-check -f compose.yaml -f compose.telephony.y
 
 The check prints fixed labels and makes no provider requests. Use the live checks below to verify receipt and transfer.
 
+For scripted staging checks, append `--require email --require sms` to the
+worker command and `--require transfer` to the phone command. Require only the
+capabilities planned for that rehearsal. Each command exits nonzero if any
+required capability is unconfigured in its current process.
+
 ## Run the checks
 
 1. Complete an English chat booking using the test inbox for email confirmation. Confirm the displayed contact during readback and record the fictional booking reference. In **Booking confirmations**, find the matching Email record and check its submission status. Check the received email for the same reference, stay dates, room, guest count and total. Pass requires one matching email at the test inbox and one accepted submission in admin.
