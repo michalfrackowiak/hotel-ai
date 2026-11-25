@@ -2,5 +2,26 @@
 
 {% block content %}
 <p>Provider acceptance records submission only. Check delivery with the provider for uncertain submissions. A sending record can indicate an active or interrupted attempt.</p>
+{% if queue_summary %}
+<div class="module">
+    <table>
+        <caption>Confirmation counts for the current filters and search</caption>
+        <thead>
+            <tr>
+                <th scope="col">Method</th>
+                {% for label in queue_status_labels %}<th scope="col">{{ label }}</th>{% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for method, counts in queue_summary %}
+            <tr>
+                <th scope="row">{{ method }}</th>
+                {% for count in counts %}<td>{{ count }}</td>{% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
 {{ block.super }}
 {% endblock %}
