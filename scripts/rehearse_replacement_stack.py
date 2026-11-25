@@ -2,6 +2,7 @@
 
 import argparse
 import json
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -142,7 +143,7 @@ def remove_resources(label, containers, network, volumes):
     print("Rehearsal containers, network and volumes removed.", flush=True)
 
 
-def rehearse(web_image, piper_image, asr_image):
+def rehearse(web_image, piper_image, asr_image, *, timings_json=None):
     require_windows_memory()
     web, piper, asr = json.loads(docker("image", "inspect", web_image, piper_image, asr_image, capture=True).stdout)
     prefix = f"hotel-ai-offhost-{uuid4().hex[:12]}"
@@ -207,18 +208,23 @@ def rehearse(web_image, piper_image, asr_image):
         total_seconds = monotonic() - started
     finally:
         remove_resources(label, (job, web_name, piper_name, asr_name), prefix, (source, restore))
-    print(f"Source checksum unchanged. Rehearsal checks passed in {total_seconds:.2f}s.", flush=True)
-    print("Replacement rehearsal timings: " + json.dumps({
+    timings = {
         "restore_verify_and_promote_seconds": round(restore_seconds, 3),
         "cached_launch_to_all_ready_seconds": round(all_ready_at - launch_started, 3),
         "web_and_speech_checks_seconds": round(functional_seconds, 3),
         "total_before_cleanup_seconds": round(total_seconds, 3),
-    }), flush=True)
+    }
+    if timings_json is not None:
+        with timings_json.open("x", encoding="utf-8") as destination:
+            destination.write(json.dumps(timings, indent=2) + "\n")
+    print(f"Source checksum unchanged. Rehearsal checks passed in {total_seconds:.2f}s.", flush=True)
+    print("Replacement rehearsal timings: " + json.dumps(timings), flush=True)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--web-image", required=True)
     parser.add_argument("--piper-image", required=True)
     parser.add_argument("--asr-image", required=True)
+    parser.add_argument("--timings-json", type=Path, help="Write aggregate timings to a new file after verified cleanup.")
     images = parser.parse_args()
-    rehearse(images.web_image, images.piper_image, images.asr_image)
+    rehearse(images.web_image, images.piper_image, images.asr_image, timings_json=images.timings_json)

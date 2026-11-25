@@ -1,5 +1,7 @@
 import json
+from pathlib import Path
 import subprocess
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -7,19 +9,24 @@ from unittest.mock import patch
 import rehearse_replacement_stack as replacement
 
 
-class ReplacementChecksumTests(unittest.TestCase):
-    def test_replacement_checks_snapshot_before_restore_and_after_runtime(self):
+class ReplacementStackTests(unittest.TestCase):
+    def test_snapshot_checks_and_timing_evidence(self):
         checksum = "ab" * 32
         images = [{"Os": "linux", "Architecture": "amd64", "Id": role} for role in ("web", "piper", "asr")]
         cases = (
             ("unchanged", (checksum, checksum), 1, 3, None),
+            ("stdout-only", (checksum, checksum), 1, 3, None),
             ("malformed", ("invalid",), 0, 0, "valid SHA-256"),
             ("restore-failure", (checksum,), 1, 0, "restore verification failed"),
             ("source-changed", (checksum, "cd" * 32), 1, 3, "Source snapshot changed"),
             ("cleanup-failure", (checksum, checksum), 1, 3, "Cleanup failed"),
+            ("existing-evidence", (checksum, checksum), 1, 3, None),
         )
         for outcome, digests, restore_count, runtime_count, error in cases:
-            with self.subTest(outcome=outcome):
+            with self.subTest(outcome=outcome), TemporaryDirectory() as temporary:
+                timings_json = Path(temporary) / "timings.json"
+                if outcome == "existing-evidence":
+                    timings_json.write_text("previous evidence\n", encoding="utf-8")
                 results = iter(digests)
 
                 def docker(*args, **kwargs):
@@ -38,11 +45,16 @@ class ReplacementChecksumTests(unittest.TestCase):
                         patch("builtins.print") as printed:
                     if outcome == "cleanup-failure":
                         cleanup.side_effect = RuntimeError("Cleanup failed")
-                    if error is None:
+                    if outcome == "existing-evidence":
+                        with self.assertRaises(FileExistsError):
+                            replacement.rehearse("web", "piper", "asr", timings_json=timings_json)
+                    elif outcome == "stdout-only":
                         replacement.rehearse("web", "piper", "asr")
+                    elif error is None:
+                        replacement.rehearse("web", "piper", "asr", timings_json=timings_json)
                     else:
                         with self.assertRaisesRegex(RuntimeError, error) as failure:
-                            replacement.rehearse("web", "piper", "asr")
+                            replacement.rehearse("web", "piper", "asr", timings_json=timings_json)
                         self.assertNotIn(checksum, str(failure.exception))
                         if outcome == "restore-failure":
                             self.assertTrue(failure.exception.__suppress_context__)
@@ -56,7 +68,7 @@ class ReplacementChecksumTests(unittest.TestCase):
                 prefix = "Replacement rehearsal timings: "
                 timings = [call.args[0].removeprefix(prefix) for call in printed.call_args_list
                            if call.args[0].startswith(prefix)]
-                if error is None:
+                if outcome in ("unchanged", "stdout-only"):
                     self.assertEqual(len(timings), 1)
                     self.assertEqual(json.loads(timings[0]), {
                         "restore_verify_and_promote_seconds": 2,
@@ -64,9 +76,17 @@ class ReplacementChecksumTests(unittest.TestCase):
                         "web_and_speech_checks_seconds": 4,
                         "total_before_cleanup_seconds": 16,
                     })
+                    if outcome == "unchanged":
+                        self.assertEqual(json.loads(timings_json.read_text(encoding="utf-8")), json.loads(timings[0]))
+                    else:
+                        self.assertFalse(timings_json.exists())
                 else:
                     self.assertEqual(timings, [])
                     self.assertFalse(any("Rehearsal checks passed" in call.args[0] for call in printed.call_args_list))
+                    if outcome == "existing-evidence":
+                        self.assertEqual(timings_json.read_text(encoding="utf-8"), "previous evidence\n")
+                    else:
+                        self.assertFalse(timings_json.exists())
                 for restore in restores:
                     self.assertIn('--expected-sha256 "$1"', restore[-3])
                     self.assertNotIn(checksum, restore[-3])

@@ -60,6 +60,16 @@ inspection and ends after the final source checksum check, before cleanup.
 Image download, off-host transfer and DNS or TLS cutover are outside these
 measurements.
 
+Pass `--timings-json <new-path>` to save the same four durations as JSON.
+The Checks workflow attaches this file as `replacement-rehearsal-timings`
+for 14 days after a successful rehearsal job step.
+
+The first hosted timing run recorded 1.166 seconds for restore and promotion,
+2.83 seconds for launch to readiness, and 3.05 seconds for web and speech
+checks. The total before cleanup was 9.44 seconds. These measurements describe
+one cached-image run on a hosted runner.
+[GitHub Actions run](https://github.com/michalfrackowiak/hotel-ai/actions/runs/45716959408)
+
 ## Windows result, 24 November 2026
 
 The x86-64 web, Piper and Vosk images built on Docker Engine 29.9.3. The fictional snapshot
