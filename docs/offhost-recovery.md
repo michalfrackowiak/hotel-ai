@@ -20,6 +20,11 @@ With this checkout's dependencies installed, create an empty restore directory i
 
 The example paths are placeholders; set the private folder's access restrictions before copying data. The verifier creates `restored.sqlite3` exclusively and refuses a nonempty destination. It checks migration compatibility without applying migrations. Its JSON report contains booleans, elapsed verifier time and the number of tables checked; it omits row contents and individual table counts. Keep private input files outside the repository and remove them once the drill is complete. A successful report must also be accompanied by transfer checksum, production-health and cleanup verification.
 
+Append `--expected-sha256 <source-digest>` to verify the transferred snapshot
+before creating the restore copy. Use the 64-character hexadecimal digest
+obtained from the source through the private transfer channel. The report omits
+the digest. Use a standalone snapshot with no companion SQLite WAL or rollback journal. The other recovery checks still apply.
+
 ## Verified result, 16 November 2026
 
 The production online snapshot passed source integrity/foreign-key checks and its SHA-256 matched after SSH transfer. Windows access was restricted before transfer to the current account and SYSTEM. [Sanitized results](offhost-recovery-results.json) record successful integrity and foreign-key checks across 24 tables, matching source/restore row counts, current migrations, Django system checks, English/Polish page and chat starts, and fictional booking creation with idempotent replay. All probe writes rolled back; the original backup checksum remained unchanged.

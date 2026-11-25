@@ -10,7 +10,7 @@ import sys
 import tempfile
 import unittest
 
-from verify_recovery import database_checks, digest, restore_copy
+from verify_recovery import BackupSidecarPresent, database_checks, digest, restore_copy, verify
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,7 +53,8 @@ class RecoveryTests(unittest.TestCase):
             # The verifier must clear inherited deployment settings before setup.
             env.update(DJANGO_DB_PATH="wrong.sqlite3", HOTEL_SMTP_HOST="forbidden.example.test")
             run = subprocess.run(
-                [sys.executable, "-O", "scripts/verify_recovery.py", "--backup", str(backup), "--restore-dir", str(destination)],
+                [sys.executable, "-O", "scripts/verify_recovery.py", "--backup", str(backup),
+                 "--restore-dir", str(destination), "--expected-sha256", original.hex().upper()],
                 cwd=ROOT, env=env, capture_output=True, text=True, timeout=45,
             )
             self.assertEqual(run.returncode, 0, run.stdout)
@@ -64,6 +65,45 @@ class RecoveryTests(unittest.TestCase):
             self.assertNotIn("recovery@example.test", run.stdout + run.stderr)
             self.assertEqual(digest(backup), original)
             self.assertEqual(database_checks(backup), database_checks(destination / "restored.sqlite3"))
+
+    def test_bad_checksum_is_redacted_and_stops_before_restore(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            backup = root / "backup.sqlite3"
+            backup.write_bytes(b"fictional snapshot")
+            original = digest(backup)
+            destination = root / "restore"
+            destination.mkdir()
+            for expected, error_type in (("0" * 64, "BackupChecksumMismatch"), ("g" * 64, "ValueError")):
+                with self.subTest(error_type=error_type):
+                    run = subprocess.run(
+                        [sys.executable, "scripts/verify_recovery.py", "--backup", str(backup),
+                         "--restore-dir", str(destination), "--expected-sha256", expected],
+                        cwd=ROOT, capture_output=True, text=True, timeout=45,
+                    )
+                    self.assertEqual(run.returncode, 1)
+                    self.assertEqual(json.loads(run.stdout), {"passed": False, "error_type": error_type})
+                    self.assertEqual(run.stderr, "")
+                    self.assertEqual(list(destination.iterdir()), [])
+                    self.assertEqual(digest(backup), original)
+
+    def test_expected_checksum_requires_standalone_backup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            backup = root / "backup.sqlite3"
+            backup.write_bytes(b"fictional snapshot")
+            original = digest(backup)
+            destination = root / "restore"
+            destination.mkdir()
+            for suffix in ("-wal", "-journal"):
+                with self.subTest(suffix=suffix):
+                    sidecar = root / (backup.name + suffix)
+                    sidecar.touch()
+                    with self.assertRaises(BackupSidecarPresent):
+                        verify(backup, destination, expected_sha256=original.hex())
+                    self.assertEqual(list(destination.iterdir()), [])
+                    self.assertEqual(digest(backup), original)
+                    sidecar.unlink()
 
 
 if __name__ == "__main__":

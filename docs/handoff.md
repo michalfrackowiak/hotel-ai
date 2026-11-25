@@ -1,5 +1,15 @@
 # Session handoff
 
+## Off-host snapshot checksum check
+
+The disposable recovery verifier accepts an optional source SHA-256. It checks
+the transferred snapshot before creating the restore copy and checks the source
+again after verification. It rejects companion WAL and rollback journals and
+uses immutable SQLite source reads in checksum mode. Independent review
+confirmed that the installed SQLite build excludes WAL-only rows from these
+reads and passed all four recovery tests on Windows. The report omits the digest. Full replacement-host
+recovery still needs an isolated staging target.
+
 ## Required staff role audit
 
 Deployment scripts can require selected groups with repeatable `--require`
