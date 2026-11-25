@@ -1,5 +1,14 @@
 # Session handoff
 
+## Replacement-stack snapshot verification
+
+The disposable replacement-stack runner passes the source snapshot SHA-256 to
+the recovery verifier before promoting the restored database. It rechecks the
+snapshot after web and bilingual speech probes. The hosted rehearsal uses a web
+image built from the current revision. Independent review passed four focused
+runner scenarios and four recovery tests. Separate-host acceptance requires
+an isolated replacement target.
+
 ## Recorded English parser rehearsal fixture
 
 The browser harness accepts an independently recorded fictional English WAV
