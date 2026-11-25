@@ -172,7 +172,7 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 - [x] 0.9 reception inbox unread filter: find handovers with unread guest messages and combine the filter with assignee, language and first response.
 - [x] Match the Resort Neptun scenario prompts and timing. Open with a bilingual greeting and a two-second language window, wait ten seconds for an arrival date, quote room prices before consent, and use the selected delivery closing after provider acceptance.
 - [x] Start English web chat and browser voice with a Neptun Resort greeting followed immediately by Step 2.b.
-- [ ] Configure live SMTP, Twilio SMS, and the staff phone transfer destination. Verify each live destination with a controlled test.
+- [ ] Configure live SMTP, Twilio SMS, and the staff phone transfer destination. Verify each live destination using the [controlled rehearsal](delivery-verification.md).
 - [x] 0.9 confirmation submission triage: group failed and uncertain provider submissions in the private admin and explain the recorded statuses.
 - [x] Flexible stay dates. Extract arrival and departure from one English or Polish message, including a spoken arrival date and stay duration amid extra words.
 - [x] Retire browser speech training. Remove opt-in audio capture, sample storage, and the admin transcription/export view while keeping live voice transcription.
