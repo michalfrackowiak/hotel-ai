@@ -19,4 +19,6 @@ Django admin lists **Booking confirmations**. Pending confirmations for an uncon
 
 The scenario's “we sent” closing follows provider acceptance. If the sender is unavailable, the worker is still processing the request, or the provider rejects it, the guest receives a booking reference and the current dispatch status. The reception and phone containers use sender presence to decide whether to wait. Provider credentials remain with the confirmation worker, with the phone webhook token also used for signature verification.
 
+Look for `booking_confirmation_submission` in the worker logs to count committed `accepted`, `failed`, and `uncertain` outcomes by `method` and `language`. The event contains only those labels. Use the confirmation queue to inspect attempts that remain in **Sending or interrupted**.
+
 To check the live setup, make one test booking per configured channel with a recipient you control. Verify the confirmation contains the reference shown to the guest and check the provider acceptance status in Django admin. Automated tests exercise provider submissions with local mail and a simulated Twilio client.

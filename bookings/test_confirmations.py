@@ -8,6 +8,7 @@ from uuid import uuid4
 from django.core import mail
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.db import transaction
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -122,7 +123,16 @@ class BookingConfirmationTests(TestCase):
         send = twilio.return_value.messages.create
         send.return_value.status = "queued"
         send.return_value.sid = "SM00000000000000000000000000000000"
-        call_command("send_booking_confirmations", stdout=StringIO())
+        with self.assertLogs("bookings.confirmation_outcomes", level="INFO") as outcomes:
+            with self.captureOnCommitCallbacks(execute=True) as callbacks:
+                call_command("send_booking_confirmations", stdout=StringIO())
+                call_command("send_booking_confirmations", stdout=StringIO())
+                self.assertEqual(outcomes.records, [])
+        self.assertEqual(len(callbacks), 1)
+        self.assertEqual(
+            [record.getMessage() for record in outcomes.records],
+            ["booking_confirmation_submission method=sms language=pl outcome=accepted"],
+        )
         send.assert_called_once()
         params = send.call_args.kwargs
         self.assertEqual(params["to"], "+48501502503")
@@ -139,10 +149,37 @@ class BookingConfirmationTests(TestCase):
         booking = confirm_booking(**{
             **self.request, "delivery_method": "email", "phone": "", "email": "guest@example.test",
         })[0]
-        with self.assertRaises(CommandError):
-            call_command("send_booking_confirmations", stdout=StringIO())
+        with self.assertLogs("bookings.confirmation_outcomes", level="INFO") as outcomes:
+            with self.captureOnCommitCallbacks(execute=True), self.assertRaises(CommandError):
+                call_command("send_booking_confirmations", stdout=StringIO())
+        self.assertEqual(
+            [record.getMessage() for record in outcomes.records],
+            ["booking_confirmation_submission method=email language=pl outcome=uncertain"],
+        )
         booking.confirmation.refresh_from_db()
         self.assertEqual(booking.confirmation.status, BookingConfirmation.Status.UNCERTAIN)
         self.assertIsNone(booking.confirmation.accepted_at)
         self.assertEqual(dispatch_confirmations(["email"]), (0, 0))
         send.assert_called_once()
+
+    @patch("bookings.confirmations.send_mail", return_value=0)
+    def test_worker_logs_failed_submission_only_after_commit(self, send):
+        booking = confirm_booking(**{
+            **self.request, "delivery_method": "email", "phone": "", "email": "guest@example.test",
+        })[0]
+        with self.assertNoLogs("bookings.confirmation_outcomes", level="INFO"):
+            with self.captureOnCommitCallbacks(execute=True), transaction.atomic():
+                self.assertEqual(dispatch_confirmations(["email"]), (0, 1))
+                transaction.set_rollback(True)
+        booking.confirmation.refresh_from_db()
+        self.assertEqual(booking.confirmation.status, BookingConfirmation.Status.PENDING)
+
+        with self.assertLogs("bookings.confirmation_outcomes", level="INFO") as outcomes:
+            with self.captureOnCommitCallbacks(execute=True):
+                self.assertEqual(dispatch_confirmations(["email"]), (0, 1))
+        self.assertEqual(
+            [record.getMessage() for record in outcomes.records],
+            ["booking_confirmation_submission method=email language=pl outcome=failed"],
+        )
+        booking.confirmation.refresh_from_db()
+        self.assertEqual(booking.confirmation.status, BookingConfirmation.Status.FAILED)

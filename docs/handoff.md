@@ -1,5 +1,13 @@
 # Session handoff
 
+## Confirmation submission outcome logs
+
+The confirmation worker emits `booking_confirmation_submission` after a
+submission outcome commits. The event contains fixed method, language and
+outcome labels. All 40 focused confirmation, operations-admin and telephony
+tests passed, including rollback suppression and duplicate worker runs. Live
+receipt and transfer verification still need controlled staging destinations.
+
 ## Controlled delivery and transfer verification
 
 The [delivery verification runbook](delivery-verification.md) defines staging

@@ -128,8 +128,12 @@ LOGGING = {
     "disable_existing_loggers": False,
     "handlers": {
         "parser_corrections": {"class": "logging.StreamHandler"},
+        "confirmation_outcomes": {"class": "logging.StreamHandler"},
     },
     "loggers": {
+        "bookings.confirmation_outcomes": {
+            "handlers": ["confirmation_outcomes"], "level": "INFO", "propagate": False,
+        },
         "reception.parser_corrections": {
             "handlers": ["parser_corrections"], "level": "INFO", "propagate": False,
         },
