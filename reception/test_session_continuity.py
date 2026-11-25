@@ -126,10 +126,14 @@ class SessionContinuityMigrationTests(TransactionTestCase):
     candidate = [("reception", "0010_conversation_session_continuity")]
 
     def setUp(self):
-        self.addCleanup(lambda: MigrationExecutor(connection).migrate(self.candidate))
         executor = MigrationExecutor(connection)
+        self.latest = executor.loader.graph.leaf_nodes()
+        self.addCleanup(self.restore_current_schema)
         executor.migrate(self.previous)
         self.legacy = executor.loader.project_state(self.previous).apps
+
+    def restore_current_schema(self):
+        MigrationExecutor(connection).migrate(self.latest)
 
     def new_session(self):
         session = SessionStore()
@@ -153,10 +157,16 @@ class SessionContinuityMigrationTests(TransactionTestCase):
         draft.state["handover_id"] = handover.pk
         draft.save(update_fields=["state"])
 
-        MigrationExecutor(connection).migrate(self.candidate)
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.candidate)
+        candidate_models = executor.loader.project_state(self.candidate).apps
+        candidate_conversations = candidate_models.get_model("reception", "Conversation").objects
         expiry = Session.objects.get(pk=session.session_key).expire_date
-        self.assertEqual(Conversation.objects.get(pk=draft.pk).expires_at, expiry)
+        self.assertEqual(candidate_conversations.get(pk=draft.pk).expires_at, expiry)
         self.assertEqual(old_conversations.get(pk=draft.pk).state, draft.state)
+
+        # The HTTP endpoint and maintenance command use the current models.
+        self.restore_current_schema()
         resumed = client.post(
             reverse("reception-message"), {"language": "en", "start": True, "resume": True},
             content_type="application/json",
