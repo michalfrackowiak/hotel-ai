@@ -2,7 +2,8 @@ from datetime import timedelta
 
 from django import forms
 from django.contrib import admin
-from django.db.models import OuterRef, Subquery
+from django.contrib.auth import get_user_model
+from django.db.models import OuterRef, Q, Subquery
 from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
@@ -18,7 +19,20 @@ class StaffHandoverForm(forms.ModelForm):
 
     class Meta:
         model = StaffHandover
-        fields = ("reply", "closed")
+        fields = ("assignee", "reply", "closed")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "assignee" not in self.fields:
+            return
+        user_model = get_user_model()
+        eligible = user_model.objects.with_perm("reception.change_staffhandover").filter(is_staff=True)
+        field = self.fields["assignee"]
+        field.queryset = field.queryset.filter(
+            Q(pk__in=eligible) | Q(pk=self.instance.assignee_id),
+        ).order_by(user_model.USERNAME_FIELD)
+        # A reply form opened before the assignment field was added can still be saved.
+        field.disabled = self.is_bound and self.add_prefix("assignee") not in self.data
 
 
 class HandoverTranscript(admin.TabularInline):
@@ -58,10 +72,11 @@ class FirstStaffResponseFilter(admin.SimpleListFilter):
 @admin.register(StaffHandover)
 class StaffHandoverAdmin(admin.ModelAdmin):
     form = StaffHandoverForm
-    fields = ("created_at", "language", "first_staff_response", "closed", "reply")
+    fields = ("created_at", "language", "first_staff_response", "assignee", "closed", "reply")
     readonly_fields = ("created_at", "language", "first_staff_response")
-    list_display = ("id", "created_at", "language", "closed", "first_staff_response")
-    list_filter = (FirstStaffResponseFilter, "closed", "language")
+    list_display = ("id", "created_at", "language", "assignee", "closed", "first_staff_response")
+    list_filter = (FirstStaffResponseFilter, ("assignee", admin.RelatedOnlyFieldListFilter), "closed", "language")
+    list_select_related = ("assignee",)
     ordering = ("closed", "-created_at")
     inlines = (HandoverTranscript,)
 

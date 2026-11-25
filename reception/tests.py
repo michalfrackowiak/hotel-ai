@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group, Permission
 from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -415,6 +416,64 @@ class ReceptionTests(TestCase):
 
 
 class ReceptionHandoverTests(TestCase):
+    def test_admin_assignment_validates_permissions_and_preserves_existing_assignee(self):
+        users = get_user_model().objects
+        operator = users.create_superuser(username="assignment-operator")
+        receptionist = users.create_user(username="assignment-receptionist", is_staff=True)
+        viewer = users.create_user(username="assignment-viewer", is_staff=True)
+        nonstaff = users.create_user(username="assignment-nonstaff")
+        group = Group.objects.create(name="Assignment reception team")
+        change_permission = Permission.objects.get(
+            content_type__app_label="reception", codename="change_staffhandover",
+        )
+        group.permissions.add(change_permission)
+        receptionist.groups.add(group)
+        nonstaff.user_permissions.add(change_permission)
+        viewer.user_permissions.add(Permission.objects.get(
+            content_type__app_label="reception", codename="view_staffhandover",
+        ))
+        handover = StaffHandover.objects.create(
+            conversation=Conversation.objects.create(conversation_id=uuid4().hex, state={}), language="en",
+        )
+        detail_path = reverse("admin:reception_staffhandover_change", args=[handover.pk])
+        inbox_path = reverse("admin:reception_staffhandover_changelist")
+        forms = {"messages-TOTAL_FORMS": "0", "messages-INITIAL_FORMS": "0"}
+        self.client.force_login(operator)
+        for invalid_user in (viewer, nonstaff):
+            with self.subTest(user=invalid_user):
+                rejected = self.client.post(detail_path, {**forms, "assignee": invalid_user.pk})
+                self.assertIn("assignee", rejected.context["adminform"].form.errors)
+                handover.refresh_from_db()
+                self.assertIsNone(handover.assignee_id)
+
+        self.assertRedirects(self.client.post(detail_path, {**forms, "assignee": receptionist.pk}), inbox_path)
+        handover.refresh_from_db()
+        self.assertEqual(handover.assignee, receptionist)
+        filtered = self.client.get(inbox_path, {"assignee__id__exact": receptionist.pk})
+        self.assertContains(filtered, receptionist.username)
+        self.assertCountEqual(filtered.context["cl"].result_list, [handover])
+        self.assertCountEqual(self.client.get(inbox_path, {"assignee__isnull": 1}).context["cl"].result_list, [])
+
+        receptionist.is_active = False
+        receptionist.save(update_fields=["is_active"])
+        self.assertRedirects(self.client.post(detail_path, forms), inbox_path)
+        handover.refresh_from_db()
+        self.assertEqual(handover.assignee, receptionist)
+        self.assertRedirects(self.client.post(detail_path, {
+            **forms, "assignee": receptionist.pk, "reply": "Fictional staff follow-up.",
+        }), inbox_path)
+        handover.refresh_from_db()
+        self.assertEqual(handover.assignee, receptionist)
+        self.assertEqual(handover.messages.get().text, "Fictional staff follow-up.")
+        self.assertRedirects(self.client.post(detail_path, {**forms, "assignee": ""}), inbox_path)
+        handover.refresh_from_db()
+        self.assertIsNone(handover.assignee_id)
+        rejected = self.client.post(detail_path, {**forms, "assignee": receptionist.pk})
+        self.assertIn("assignee", rejected.context["adminform"].form.errors)
+        self.client.force_login(viewer)
+        self.assertContains(self.client.get(detail_path), "Assignee")
+        self.assertEqual(self.client.post(detail_path, {**forms, "assignee": operator.pk}).status_code, 403)
+
     def test_admin_shows_first_staff_response_and_unanswered_states(self):
         now = timezone.now()
         waiting, closed, answered = [
@@ -549,11 +608,13 @@ class ReceptionHandoverTests(TestCase):
         self.assertIn("breakfast", first["text"])
 
         staff = Client()
-        staff.force_login(get_user_model().objects.create_superuser(username="reception-staff"))
+        receptionist = get_user_model().objects.create_superuser(username="reception-staff")
+        staff.force_login(receptionist)
         path = reverse("admin:reception_staffhandover_change", args=[StaffHandover.objects.get().pk])
         self.assertContains(staff.get(path), escape(first["text"]))
         self.assertRedirects(staff.post(path, {
             "reply": "Breakfast begins at seven.",
+            "assignee": receptionist.pk,
             "closed": "on",
             "messages-TOTAL_FORMS": "1",
             "messages-INITIAL_FORMS": "1",
@@ -565,10 +626,13 @@ class ReceptionHandoverTests(TestCase):
         poll = {"poll": True, "revision": forwarded["revision"], "cursor": first["id"]}
         response = self.post(**poll).json()
         self.assertTrue(response["handover_closed"])
+        self.assertNotIn("assignee", response)
+        self.assertEqual(StaffHandover.objects.get().assignee, receptionist)
         self.assertEqual(len(response["handover_messages"]), 1)
         reply = response["handover_messages"][0]
         self.assertTrue(reply["staff"])
         self.assertEqual(reply["text"], "Breakfast begins at seven.")
+        self.assertNotIn(receptionist.username, str(reply))
         self.assertEqual(self.post(**{**poll, "cursor": reply["id"]}).json()["handover_messages"], [])
         self.assertEqual(self.post(revision=forwarded["revision"], message="A new question").status_code, 409)
         self.assertEqual(StaffHandover.objects.get().messages.count(), 2)

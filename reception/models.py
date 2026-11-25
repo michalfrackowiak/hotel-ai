@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models, router
 from django.db.models.signals import pre_delete
@@ -21,6 +22,10 @@ class Conversation(models.Model):
 
 class StaffHandover(models.Model):
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE)
+    assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+",
+        help_text="Staff member responsible for following up on this handover.",
+    )
     language = models.CharField(max_length=2, choices=(("pl", "Polish"), ("en", "English")))
     created_at = models.DateTimeField(auto_now_add=True)
     closed = models.BooleanField(default=False)
