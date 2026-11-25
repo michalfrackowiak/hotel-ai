@@ -180,6 +180,7 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 - [x] 0.9 confirmation claim-age review: find sending attempts claimed at least five minutes ago in the private admin.
 - [x] 0.9 confirmation retry design: document which provider response can authorize a bounded retry and which recorded outcomes require investigation. See the [retry policy](delivery-retry-policy.md).
 - [x] 0.9 confirmation retry implementation: persist and verify bounded retries for newly observed Twilio 429 responses with error code 20429. The worker flag defaults off.
+- [x] 0.9 confirmation retry restart verification: exercise the worker across three separate processes on disposable SQLite with a simulated provider.
 - [ ] 0.9 live SMS retry acceptance: verify receipt with a controlled staging recipient before enabling the retry flag in production.
 - [x] 0.9 scripted delivery preflight: fail the read-only configuration check when a channel required for staging is unconfigured.
 - [x] Flexible stay dates. Extract arrival and departure from one English or Polish message, including a spoken arrival date and stay duration amid extra words.

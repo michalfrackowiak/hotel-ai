@@ -1,5 +1,13 @@
 # Session handoff
 
+## SMS confirmation retry after worker restart
+
+A disposable SQLite test runs the confirmation worker in three separate
+processes. The first records a simulated Twilio rate limit and schedules a
+retry. The next process skips the attempt before its due time, then submits it
+once. The final process leaves the accepted confirmation untouched. Live
+receipt verification still needs a controlled staging recipient.
+
 ## Bounded SMS confirmation retry
 
 The confirmation worker can schedule one retry for a new Twilio HTTP 429 with
