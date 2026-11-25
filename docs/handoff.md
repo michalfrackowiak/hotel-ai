@@ -1,5 +1,14 @@
 # Session handoff
 
+## Scenario publisher group
+
+The optional `setup_scenario_publisher_group` command provisions graph review,
+publication and rollback access in the private admin. Publishers follow the
+existing signed review and confirmation flow, which records the staff account
+in the publication history. Draft editing requires separate permissions.
+All 14 staff role tests passed with no migration drift. Next, verify the
+separate speech switch and recovery permission assignments.
+
 ## Speech operator monitoring group
 
 The optional `setup_speech_operator_group` command provisions read-only access

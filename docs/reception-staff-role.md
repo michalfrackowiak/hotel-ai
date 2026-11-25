@@ -30,6 +30,14 @@ transitions, in the private admin. Publishing or rolling back a version requires
 the separate scenario publication permission. Assign existing staff through
 **Users**.
 
+## Scenario publisher access
+
+Run `python manage.py setup_scenario_publisher_group` to provision the
+**Scenario publisher** group. Members can inspect the graph and publication
+history, then publish or roll back a version through the existing review flow.
+Draft editing requires the editor permissions. Assign existing staff through
+**Users**.
+
 ## Speech operator access
 
 Run `python manage.py setup_speech_operator_group` to provision the **Speech
