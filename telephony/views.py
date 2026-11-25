@@ -1,4 +1,3 @@
-import re
 from functools import wraps
 from urllib.parse import urlsplit
 
@@ -17,7 +16,10 @@ from twilio.twiml.voice_response import Gather, VoiceResponse
 from reception.conversation import WELCOME_PARTS
 from reception.receipt import DELIVERY_PENDING
 
-from .calls import COPY, TERMINAL_STAGES, advance_call, finish_handover, is_call_sid, phone_prompt_parts, start_call
+from .calls import (
+    COPY, TERMINAL_STAGES, advance_call, finish_handover, is_call_sid, phone_prompt_parts,
+    staff_transfer_destination, start_call,
+)
 
 
 MAX_WEBHOOK_BODY_BYTES = 16 * 1024
@@ -153,8 +155,7 @@ def _prompt_for_answer(response, result, action):
 def _voice_reply(result, *, announce_pending=False):
     response = VoiceResponse()
     if result.stage == "handover":
-        number = settings.HOTEL_PHONE_RECEPTION_NUMBER
-        if re.fullmatch(r"\+[1-9][0-9]{7,14}", number):
+        if number := staff_transfer_destination():
             action = _public_url(reverse("telephony:handover", kwargs={"revision": result.revision}))
             _say_message(response, result.parts, result.reply, result.language)
             response.dial(number, action=action, method="POST", timeout=20)

@@ -15,6 +15,15 @@ docker compose -p hotel-ai-delivery-check -f compose.yaml -f compose.telephony.y
 
 Check that the seeded inventory is available, the worker is running, and the admin confirmation queue is empty before making test bookings.
 
+Run the configuration check in each process with the same Compose project and overlays. Read the SMTP and SMS lines from the worker and the staff transfer line from the phone service. Each invocation reports only the settings loaded in that process.
+
+```sh
+docker compose -p hotel-ai-delivery-check -f compose.yaml -f compose.telephony.yaml -f compose.confirmations.yaml exec booking-confirmations python manage.py check_delivery_configuration
+docker compose -p hotel-ai-delivery-check -f compose.yaml -f compose.telephony.yaml -f compose.confirmations.yaml exec phone python manage.py check_delivery_configuration
+```
+
+The check prints fixed labels and makes no provider requests. Use the live checks below to verify receipt and transfer.
+
 ## Run the checks
 
 1. Complete an English chat booking using the test inbox for email confirmation. Confirm the displayed contact during readback and record the fictional booking reference. In **Booking confirmations**, find the matching Email record and check its submission status. Check the received email for the same reference, stay dates, room, guest count and total. Pass requires one matching email at the test inbox and one accepted submission in admin.
