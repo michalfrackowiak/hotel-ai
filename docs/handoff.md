@@ -1,5 +1,13 @@
 # Session handoff
 
+## Required delivery configuration
+
+Staging scripts can pass `--require email`, `--require sms` or
+`--require transfer` to `check_delivery_configuration`. Only the capabilities
+required for that process affect the exit status. The report remains redacted.
+All 41 focused configuration, confirmation and telephony tests passed. Live
+receipt and transfer checks still need controlled staging destinations.
+
 ## Confirmation attempts awaiting review
 
 The private confirmation list can filter sending attempts claimed at least
