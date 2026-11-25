@@ -1,5 +1,12 @@
 # Session handoff
 
+## Staff group audit
+
+The read-only `check_staff_role_groups` command checks the seven built-in
+groups against the same grant definitions used to provision them. It reports
+missing groups and counts of missing or extra permissions. All 17 focused role
+tests passed. Provisioning and account assignment remain explicit operations.
+
 ## Separate speech action groups
 
 The optional `setup_speech_switch_group` and `setup_speech_recovery_group`
