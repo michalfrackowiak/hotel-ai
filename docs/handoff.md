@@ -1,5 +1,14 @@
 # Session handoff
 
+## Sustained routed pilot benchmark
+
+The mixed-load runner supports a ten-minute routed pilot profile with bounded
+CPU and memory, fictional bookings, bilingual speech, and production health
+monitoring. The 19 November ARM64 run completed 188 fictional bookings and
+all 1,259 production health samples succeeded. The staging resources were
+removed. The [runbook and results](routed-pilot-mixed-load.md) record the workload
+and limits. Independent review and all four benchmark unit tests passed. Physical microphone and full replacement-host recovery remain open.
+
 ## Off-host snapshot checksum check
 
 The disposable recovery verifier accepts an optional source SHA-256. It checks
