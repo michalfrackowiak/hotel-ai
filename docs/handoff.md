@@ -1,5 +1,13 @@
 # Session handoff
 
+## Separate speech action groups
+
+The optional `setup_speech_switch_group` and `setup_speech_recovery_group`
+commands provision independently assignable action permissions. Staff using
+either action also need speech monitoring access and the corresponding feature
+flag. All 30 focused tests passed with controller doubles. Live dispatch and
+production group assignment remain separate operational steps.
+
 ## Scenario publisher group
 
 The optional `setup_scenario_publisher_group` command provisions graph review,
