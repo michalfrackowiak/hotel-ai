@@ -1,7 +1,10 @@
 # Booking confirmation retry policy
 
-The current worker submits each queued confirmation once. This document
-defines the first retry increment and its acceptance checks.
+The worker defaults to one submission per confirmation. A staging operator can
+enable the bounded SMS retry for the confirmation worker by setting
+`HOTEL_SMS_CONFIRMATION_RETRY_ENABLED=1`. Apply migrations before using the
+updated worker. Keep the flag disabled in production until controlled receipt
+verification passes.
 
 ## Existing outcomes
 
@@ -20,7 +23,7 @@ Limit eligibility to a newly observed Twilio submission failure with both HTTP
 are unprocessed and can be retried after backing off. Use the exact code and
 status from the submission exception. [Twilio error 20429](https://www.twilio.com/docs/api/errors/20429)
 
-The first implementation should allow one additional attempt after a delay of
+The worker allows one additional attempt after a delay of
 at least 60 seconds, within 15 minutes of the first claim. Persist the attempt
 count and next eligible time. Once the budget or time window is exhausted,
 keep the outcome visible in the confirmation queue. Keep SMTP outside this
@@ -35,6 +38,11 @@ claim. A worker that disappears mid-attempt leaves it for investigation.
 The existing booking reference and confirmed destination identify the same
 confirmation throughout. Any future manual resend needs separate authorization,
 provider reconciliation and an audit record.
+
+The **SMS retry scheduled** state records eligibility from Twilio error 20429.
+An enabled SMS worker closes expired scheduled retries as failed. A disabled
+worker leaves them queued for review and performs no retry. The guest keeps the
+booking reference and the existing 25-second wait for confirmation submission.
 
 ## Acceptance before rollout
 

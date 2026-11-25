@@ -93,6 +93,7 @@ class BookingConfirmation(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
         SENDING = "sending", "Sending or interrupted"
+        RETRY_DUE = "retry_due", "SMS retry scheduled"
         ACCEPTED = "accepted", "Accepted by provider"
         FAILED = "failed", "Submission failed"
         UNCERTAIN = "uncertain", "Provider outcome uncertain"
@@ -103,6 +104,9 @@ class BookingConfirmation(models.Model):
     language = models.CharField(max_length=2, choices=(("pl", "Polish"), ("en", "English")))
     status = models.CharField(max_length=9, choices=Status.choices, default=Status.PENDING)
     claimed_at = models.DateTimeField(null=True, blank=True)
+    attempt_count = models.PositiveSmallIntegerField(default=0, db_default=0, editable=False)
+    retry_after = models.DateTimeField(null=True, blank=True)
+    retry_until = models.DateTimeField(null=True, blank=True)
     accepted_at = models.DateTimeField(null=True, blank=True)
     provider_reference = models.CharField(max_length=64, blank=True)
 

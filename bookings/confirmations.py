@@ -1,3 +1,4 @@
+from datetime import timedelta
 from functools import partial
 import logging
 from smtplib import SMTPException, SMTPRecipientsRefused, SMTPResponseException
@@ -7,6 +8,7 @@ from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.db import transaction
+from django.db.models import F, Q
 from django.utils import timezone
 from requests.exceptions import RequestException
 from twilio.base.exceptions import TwilioException, TwilioRestException
@@ -17,6 +19,8 @@ from .models import BookingConfirmation
 
 
 outcome_logger = logging.getLogger("bookings.confirmation_outcomes")
+SMS_RETRY_DELAY = timedelta(seconds=60)
+SMS_RETRY_WINDOW = timedelta(minutes=15)
 
 COPY = {
     "en": (
@@ -72,25 +76,54 @@ def _submit(confirmation, subject, body):
     return message.sid, message.status not in ("failed", "undelivered", "canceled")
 
 
+def _claimable_confirmations(queue, retry_enabled, now):
+    status = BookingConfirmation.Status
+    claimable = Q(status=status.PENDING)
+    if retry_enabled:
+        claimable |= Q(
+            status=status.RETRY_DUE, method=BookingConfirmation.Method.SMS, attempt_count=1,
+            retry_after__lte=now, retry_until__gt=now,
+        )
+    return queue.filter(claimable)
+
+
 def dispatch_confirmations(methods, limit=50):
     status = BookingConfirmation.Status
-    pending = BookingConfirmation.objects.filter(method__in=methods, status=status.PENDING)
-    ids = list(pending.order_by("pk").values_list("pk", flat=True)[:limit])
+    methods = tuple(methods)
+    queue = BookingConfirmation.objects.filter(method__in=methods)
+    retry_enabled = settings.HOTEL_SMS_CONFIRMATION_RETRY_ENABLED and BookingConfirmation.Method.SMS in methods
+    now = timezone.now()
+    if retry_enabled:
+        queue.filter(status=status.RETRY_DUE, retry_until__lte=now).update(status=status.FAILED)
+    ids = list(_claimable_confirmations(queue, retry_enabled, now).order_by("pk").values_list("pk", flat=True)[:limit])
     accepted = failed = 0
     for pk in ids:
         # Claim before network I/O. A worker crash leaves the attempt visible in admin
         # and prevents automatic resends when the provider may already have accepted it.
-        if not pending.filter(pk=pk).update(status=status.SENDING, claimed_at=timezone.now()):
+        claimed_at = timezone.now()
+        if not _claimable_confirmations(queue, retry_enabled, claimed_at).filter(pk=pk).update(
+            status=status.SENDING, claimed_at=claimed_at, attempt_count=F("attempt_count") + 1,
+        ):
             continue
         confirmation = BookingConfirmation.objects.select_related("booking__room").get(pk=pk)
         subject, body = _message(confirmation)
         provider_reference = ""
         accepted_at = None
+        retry_schedule = {}
         try:
             provider_reference, submitted = _submit(confirmation, subject, body)
             outcome = status.ACCEPTED if submitted else status.FAILED
         except TwilioRestException as error:
             outcome = status.FAILED if 400 <= (error.status or 0) < 500 else status.UNCERTAIN
+            if (
+                retry_enabled and confirmation.method == BookingConfirmation.Method.SMS
+                and confirmation.attempt_count == 1 and error.status == 429 and error.code == 20429
+            ):
+                retry_after = timezone.now() + SMS_RETRY_DELAY
+                retry_until = claimed_at + SMS_RETRY_WINDOW
+                if retry_after < retry_until:
+                    outcome = status.RETRY_DUE
+                    retry_schedule = {"retry_after": retry_after, "retry_until": retry_until}
         except SMTPResponseException as error:
             outcome = status.FAILED if 400 <= error.smtp_code < 600 else status.UNCERTAIN
         except (SMTPRecipientsRefused, ValidationError, ValueError):
@@ -102,8 +135,10 @@ def dispatch_confirmations(methods, limit=50):
             accepted_at = timezone.now()
         else:
             failed += 1
-        updated = BookingConfirmation.objects.filter(pk=pk).update(
-            status=outcome, accepted_at=accepted_at, provider_reference=provider_reference,
+        updated = queue.filter(
+            pk=pk, status=status.SENDING, claimed_at=claimed_at, attempt_count=confirmation.attempt_count,
+        ).update(
+            status=outcome, accepted_at=accepted_at, provider_reference=provider_reference, **retry_schedule,
         )
         if (
             updated

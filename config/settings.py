@@ -161,6 +161,7 @@ if not 1 <= EMAIL_PORT <= 65535:
     raise ImproperlyConfigured("HOTEL_SMTP_PORT must be between 1 and 65535.")
 HOTEL_TWILIO_ACCOUNT_SID = os.environ.get("HOTEL_TWILIO_ACCOUNT_SID", "").strip()
 HOTEL_TWILIO_SMS_FROM = os.environ.get("HOTEL_TWILIO_SMS_FROM", "").strip()
+HOTEL_SMS_CONFIRMATION_RETRY_ENABLED = os.environ.get("HOTEL_SMS_CONFIRMATION_RETRY_ENABLED") == "1"
 HOTEL_CONFIRMATION_WAIT_METHODS = tuple(
     method for method in ("email", "sms")
     if os.environ.get(f"HOTEL_CONFIRMATION_WAIT_{method.upper()}") == "1"

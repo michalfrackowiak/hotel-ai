@@ -8,9 +8,13 @@ from uuid import uuid4
 from django.core import mail
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.db import transaction
+from django.db import DatabaseError, connection, transaction
+from django.db.migrations.executor import MigrationExecutor
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from twilio.base.exceptions import TwilioRestException
+
+from reception.receipt import DELIVERY_PENDING, apply_receipt_outcome, start_receipt
 
 from .confirmations import dispatch_confirmations
 from .models import Booking, BookingConfirmation, Client, Price, Room
@@ -183,3 +187,132 @@ class BookingConfirmationTests(TestCase):
         )
         booking.confirmation.refresh_from_db()
         self.assertEqual(booking.confirmation.status, BookingConfirmation.Status.FAILED)
+
+    @override_settings(HOTEL_SMS_CONFIRMATION_RETRY_ENABLED=True)
+    @patch("bookings.confirmations.TwilioClient")
+    def test_exact_twilio_rejection_allows_one_delayed_retry(self, twilio):
+        confirmation = confirm_booking(**self.request)[0].confirmation
+        send = twilio.return_value.messages.create
+        rejected = TwilioRestException(429, "/Messages.json", code=20429)
+        send.side_effect = [rejected, rejected]
+        started = timezone.now()
+        with patch("bookings.confirmations.timezone.now", return_value=started):
+            self.assertEqual(dispatch_confirmations(["sms"]), (0, 1))
+        confirmation.refresh_from_db()
+        self.assertEqual(confirmation.status, BookingConfirmation.Status.RETRY_DUE)
+        self.assertEqual(confirmation.attempt_count, 1)
+        self.assertEqual(confirmation.retry_after, started + timedelta(seconds=60))
+        self.assertEqual(confirmation.retry_until, started + timedelta(minutes=15))
+        with patch("bookings.confirmations.timezone.now", return_value=confirmation.retry_after - timedelta(microseconds=1)):
+            self.assertEqual(dispatch_confirmations(["sms"]), (0, 0))
+        with patch("bookings.confirmations.timezone.now", return_value=confirmation.retry_after):
+            with self.settings(HOTEL_SMS_CONFIRMATION_RETRY_ENABLED=False):
+                self.assertEqual(dispatch_confirmations(["sms"]), (0, 0))
+            self.assertEqual(dispatch_confirmations(["sms"]), (0, 1))
+            self.assertEqual(dispatch_confirmations(["sms"]), (0, 0))
+        confirmation.refresh_from_db()
+        self.assertEqual(confirmation.status, BookingConfirmation.Status.FAILED)
+        self.assertEqual(confirmation.attempt_count, 2)
+        self.assertEqual(send.call_count, 2)
+
+    @override_settings(HOTEL_SMS_CONFIRMATION_RETRY_ENABLED=True)
+    @patch("bookings.confirmations._submit")
+    def test_retry_expiry_and_active_retry_claim_exclude_duplicate_sends(self, submit):
+        confirmation = confirm_booking(**self.request)[0].confirmation
+        expired = timezone.now()
+        schedule = {
+            "status": BookingConfirmation.Status.RETRY_DUE, "attempt_count": 1,
+            "retry_after": expired - timedelta(minutes=14), "retry_until": expired,
+        }
+        BookingConfirmation.objects.filter(pk=confirmation.pk).update(**schedule)
+        with patch("bookings.confirmations.timezone.now", return_value=expired):
+            self.assertEqual(dispatch_confirmations(["sms"]), (0, 0))
+        submit.assert_not_called()
+        confirmation.refresh_from_db()
+        self.assertEqual(confirmation.status, BookingConfirmation.Status.FAILED)
+
+        BookingConfirmation.objects.filter(pk=confirmation.pk).update(
+            **{**schedule, "retry_until": expired + timedelta(minutes=1)},
+        )
+
+        def accepted(*args):
+            self.assertEqual(dispatch_confirmations(["sms"]), (0, 0))
+            return "SM00000000000000000000000000000000", True
+
+        submit.side_effect = accepted
+        self.assertEqual(dispatch_confirmations(["sms"]), (1, 0))
+        submit.assert_called_once()
+        confirmation.refresh_from_db()
+        self.assertEqual(confirmation.status, BookingConfirmation.Status.ACCEPTED)
+        self.assertEqual(confirmation.attempt_count, 2)
+
+    @override_settings(HOTEL_SMS_CONFIRMATION_RETRY_ENABLED=True)
+    @patch("bookings.confirmations._submit")
+    def test_ambiguous_or_unmatched_failures_do_not_schedule(self, submit):
+        confirmation = confirm_booking(**self.request)[0].confirmation
+        for error, expected in (
+            (TwilioRestException(429, "/Messages.json", code=12345), BookingConfirmation.Status.FAILED),
+            (TwilioRestException(500, "/Messages.json", code=20429), BookingConfirmation.Status.UNCERTAIN),
+            (OSError("disconnected"), BookingConfirmation.Status.UNCERTAIN),
+        ):
+            with self.subTest(error=type(error)):
+                BookingConfirmation.objects.filter(pk=confirmation.pk).update(
+                    status=BookingConfirmation.Status.PENDING, attempt_count=0,
+                )
+                submit.side_effect = error
+                self.assertEqual(dispatch_confirmations(["sms"]), (0, 1))
+                self.assertEqual(dispatch_confirmations(["sms"]), (0, 0))
+                confirmation.refresh_from_db()
+                self.assertEqual(confirmation.status, expected)
+                self.assertIsNone(confirmation.retry_after)
+
+    @override_settings(HOTEL_SMS_CONFIRMATION_RETRY_ENABLED=False)
+    @patch("bookings.confirmations._submit", side_effect=TwilioRestException(429, "/Messages.json", code=20429))
+    def test_disabled_retry_and_legacy_insert_remain_compatible(self, submit):
+        booking = confirm_booking(**self.request)[0]
+        booking.confirmation.delete()
+        legacy = MigrationExecutor(connection).loader.project_state([
+            ("bookings", "0004_room_reservation_availability"),
+        ]).apps.get_model("bookings", "BookingConfirmation")
+        legacy_row = legacy.objects.create(
+            booking_id=booking.pk, method="sms", destination="+12025550100", language="en",
+        )
+        confirmation = BookingConfirmation.objects.get(pk=legacy_row.pk)
+        self.assertEqual(confirmation.attempt_count, 0)
+        self.assertEqual(dispatch_confirmations(["sms"]), (0, 1))
+        with self.settings(HOTEL_SMS_CONFIRMATION_RETRY_ENABLED=True):
+            self.assertEqual(dispatch_confirmations(["sms"]), (0, 0))
+        submit.assert_called_once()
+        confirmation.refresh_from_db()
+        self.assertEqual(confirmation.status, BookingConfirmation.Status.FAILED)
+        self.assertIsNone(confirmation.retry_after)
+
+    @override_settings(HOTEL_SMS_CONFIRMATION_RETRY_ENABLED=True)
+    @patch("bookings.confirmations._submit")
+    def test_result_write_failure_leaves_claim_unavailable(self, submit):
+        confirmation = confirm_booking(**self.request)[0].confirmation
+        query_class = type(BookingConfirmation.objects.all())
+        actual_update = query_class.update
+
+        def write_outcome(query, **values):
+            if values.get("status") == BookingConfirmation.Status.ACCEPTED:
+                raise DatabaseError("simulated write failure")
+            return actual_update(query, **values)
+
+        submit.return_value = "SM00000000000000000000000000000000", True
+        with patch.object(query_class, "update", write_outcome), self.assertRaises(DatabaseError):
+            dispatch_confirmations(["sms"])
+        self.assertEqual(dispatch_confirmations(["sms"]), (0, 0))
+        submit.assert_called_once()
+        confirmation.refresh_from_db()
+        self.assertEqual(confirmation.status, BookingConfirmation.Status.SENDING)
+
+    def test_retry_waiting_never_uses_sent_copy(self):
+        receipt = start_receipt({"language": "en", "revision": "test", "flow": "web"}, "DEMO", "sms", wait=True)
+        deadline = receipt["delivery_deadline"]
+        waiting = apply_receipt_outcome(receipt, BookingConfirmation.Status.RETRY_DUE, now=deadline - 1)
+        self.assertEqual(waiting["stage"], DELIVERY_PENDING)
+        completed = apply_receipt_outcome(receipt, BookingConfirmation.Status.RETRY_DUE, now=deadline)
+        self.assertEqual(completed["stage"], "completed")
+        self.assertEqual(completed["reference"], "DEMO")
+        self.assertEqual(completed["prompt_key"], "receipt_unconfirmed")

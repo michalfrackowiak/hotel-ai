@@ -1,5 +1,14 @@
 # Session handoff
 
+## Bounded SMS confirmation retry
+
+The confirmation worker can schedule one retry for a new Twilio HTTP 429 with
+error code 20429. Migration 0005 persists the attempt count and retry window.
+The worker claims the retry atomically and never resumes an interrupted claim.
+The private admin shows the retry status and timing. The flag defaults off.
+All 61 focused tests passed with no migration drift. Next, verify actual receipt
+with a controlled staging recipient before enabling production retries.
+
 ## Confirmation retry policy
 
 The [retry policy](delivery-retry-policy.md) records the evidence behind each
