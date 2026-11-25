@@ -1,5 +1,14 @@
 # Session handoff
 
+## Confirmation retry policy
+
+The [retry policy](delivery-retry-policy.md) records the evidence behind each
+existing outcome and limits the first planned retry to a newly observed Twilio
+HTTP 429 with error code 20429. The plan requires a persisted retry budget,
+conditional claims and crash verification. Next, implement and test those
+transitions using provider doubles. All 41 configuration, confirmation and
+telephony tests passed. Live receipt and transfer remain open.
+
 ## Required delivery configuration
 
 Staging scripts can pass `--require email`, `--require sms` or

@@ -178,6 +178,8 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 - [x] 0.9 delivery configuration check: report per-process SMTP, SMS and staff transfer settings using redacted, read-only output.
 - [x] 0.9 confirmation queue summary: count email and SMS submissions by status for the current private admin filters and search.
 - [x] 0.9 confirmation claim-age review: find sending attempts claimed at least five minutes ago in the private admin.
+- [x] 0.9 confirmation retry design: document which provider response can authorize a bounded retry and which recorded outcomes require investigation. See the [retry policy](delivery-retry-policy.md).
+- [ ] 0.9 confirmation retry implementation: persist and verify bounded retries for newly observed Twilio 429 responses with error code 20429.
 - [x] 0.9 scripted delivery preflight: fail the read-only configuration check when a channel required for staging is unconfigured.
 - [x] Flexible stay dates. Extract arrival and departure from one English or Polish message, including a spoken arrival date and stay duration amid extra words.
 - [x] Retire browser speech training. Remove opt-in audio capture, sample storage, and the admin transcription/export view while keeping live voice transcription.
