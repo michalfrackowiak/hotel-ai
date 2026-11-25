@@ -68,7 +68,7 @@ def refresh_receipt(state, *, resolve_transition=None):
 def apply_receipt_outcome(state, outcome, *, now, resolve_transition=None):
     """Apply an observed or fictional delivery status without accessing storage."""
     status = BookingConfirmation.Status
-    if outcome in (status.PENDING, status.SENDING) and now < state["delivery_deadline"]:
+    if outcome in (status.PENDING, status.SENDING, status.RETRY_DUE) and now < state["delivery_deadline"]:
         if resolve_transition is not None:
             resolve_transition(state, "retry")
         return state

@@ -132,10 +132,11 @@ class SubmissionClaimAgeFilter(admin.SimpleListFilter):
 @admin.register(BookingConfirmation)
 class BookingConfirmationAdmin(ViewOnlyAdmin):
     change_list_template = "admin/bookings/bookingconfirmation/change_list.html"
-    list_display = ("booking", "method", "status", "claimed_at", "accepted_at")
+    list_display = ("booking", "method", "status", "claimed_at", "retry_after", "accepted_at")
     list_filter = (SubmissionReviewFilter, SubmissionClaimAgeFilter, "status", "method", "language")
     list_select_related = ("booking",)
     search_fields = ("booking__reference", "provider_reference")
+    readonly_fields = ("attempt_count",)
 
     def changelist_view(self, request, extra_context=None):
         response = super().changelist_view(request, extra_context=extra_context)
