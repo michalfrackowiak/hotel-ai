@@ -23,3 +23,38 @@ The event shows that the correction changed a committed turn. The tester's compa
 ## English wording observed in Vosk
 
 The hosted harness repeats the English noisy synthetic clip in two fresh voice drafts. It checks a separate, predefined correction for `to guess`, the wording Vosk returned during the local preflight. A matching baseline must leave the guest count empty. The corrected reply must show two guests and produce one committed correction event. While the rule is active, submitting `to guess` in chat must leave the guest count empty with no correction event. If the transcript differs or the baseline already produces a result, the harness reports the comparison as indeterminate. The original `two guess` comparison retains its own result.
+
+## Independently recorded English fixture
+
+On an isolated Linux workstation, record a fictional speaker saying “two guess”
+with the intended count of two guests. Export an uncompressed mono 16-bit PCM WAV
+at 16–48 kHz, between 0.25 and 5 seconds and at most 512 KiB. Keep the clip
+outside the checkout and use it only in the disposable rehearsal.
+
+From a fresh checkout with no deployment `.env`, use a fresh local Docker
+Compose project and the same service files as the hosted fixture. Install
+Playwright and Chromium in a local Python environment before starting the
+fixture.
+
+```sh
+python -m pip install 'playwright==1.58.0'
+python -m playwright install --with-deps --only-shell chromium
+
+export COMPOSE_FILE=compose.yaml:compose.server.yaml:compose.piper.yaml:compose.asr.yaml
+export COMPOSE_PROJECT_NAME=hotel-parser-ci
+export DJANGO_SECRET_KEY=django-insecure-ci-browser-parser-fixture
+export HOTEL_PORT=8082
+export HOTEL_PARSER_TRAINING_ENABLED=1
+
+docker compose up --build --wait --wait-timeout 90 web piper asr
+docker compose exec -T web python manage.py seed_demo
+python -u scripts/rehearse_browser_parser.py --english-noisy-wav /private/english-noisy.wav
+docker compose down --volumes --remove-orphans
+```
+
+Use the teardown command even if the rehearsal fails. Both English noisy voice
+comparisons replay the same recording through Chromium's simulated microphone.
+The clear English control and Polish voice cases still use Piper. Keep the
+recorded results separate from the hosted synthetic results. A transcript
+mismatch still yields an indeterminate case. A live physical microphone
+rehearsal remains a separate acceptance check.

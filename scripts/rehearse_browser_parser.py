@@ -1,5 +1,6 @@
-"""Run the fictional parser rehearsal against the hosted Checks Compose fixture."""
+"""Run the fictional parser rehearsal against the disposable Checks Compose fixture."""
 
+import argparse
 from contextlib import closing
 import io
 import json
@@ -11,9 +12,13 @@ import wave
 
 from playwright.sync_api import expect, sync_playwright
 
+from parser_rehearsal_audio import prepare_recorded_wav, write_fixture_wav
+
 
 ORIGIN = "http://127.0.0.1:8082"
 COMPOSE = ("docker", "compose")
+FIXTURE_SECRET = "django-insecure-ci-browser-parser-fixture"
+FIXTURE_COMPOSE_FILES = ("compose.yaml", "compose.server.yaml", "compose.piper.yaml", "compose.asr.yaml")
 FIXTURES = {
     "en": ("tomorrow", "for a week", "two guess", "two guests", "Guests"),
     "pl": ("jutro", "na tydzień", "załoga bez liczby", "dwie osoby", "Goście"),
@@ -37,13 +42,8 @@ def synthesize(language, phrase, path):
         "sys.stdout.buffer.write(urlopen(request, timeout=15).read())"
     )
     audio = compose("exec", "-T", "web", "python", "-c", code)
-    with wave.open(io.BytesIO(audio), "rb") as source, wave.open(str(path), "wb") as output:
-        output.setparams(source.getparams())
-        frame = b"\0" * source.getnchannels() * source.getsampwidth()
-        # The fake device clock can run while the prompt plays.
-        output.writeframes(frame * (7 * source.getframerate()))
-        output.writeframes(source.readframes(source.getnframes()))
-        output.writeframes(frame * (2 * source.getframerate()))
+    with wave.open(io.BytesIO(audio), "rb") as source:
+        write_fixture_wav(path, source, source.readframes(source.getnframes()))
 
 
 def manage(code):
@@ -134,7 +134,10 @@ def voice_case(chromium, language, wav_path, expected, corrected, *, allow_basel
             transcript = response.json()["text"]
             if transcript:
                 expect(page.locator("#voice-answer-review")).to_be_visible()
-                expect(page.locator("#chat-message")).to_have_value(transcript)
+                try:
+                    expect(page.locator("#chat-message")).to_have_value(transcript)
+                except AssertionError:
+                    raise AssertionError("Voice review input did not match the returned transcript.") from None
             if transcript != expected:
                 if allow_baseline_drift:
                     print("en observed wording baseline indeterminate (transcript mismatch)")
@@ -180,12 +183,14 @@ def rehearse_observed_english(chromium, browser, noisy_wav):
     print(f"en observed wording comparison {outcome}; opposite-channel scope passed")
 
 
-def rehearse(chromium, browser, language, directory):
+def rehearse(chromium, browser, language, directory, *, recorded_noisy_wav=None):
     _, _, noisy, clear, _ = FIXTURES[language]
-    for phrase, label in ((noisy, "noisy"), (clear, "clear")):
-        synthesize(language, phrase, directory / f"{language}-{label}.wav")
-    noisy_wav = directory / f"{language}-noisy.wav"
+    noisy_wav = recorded_noisy_wav
+    if noisy_wav is None:
+        noisy_wav = directory / f"{language}-noisy.wav"
+        synthesize(language, noisy, noisy_wav)
     clear_wav = directory / f"{language}-clear.wav"
+    synthesize(language, clear, clear_wav)
 
     chat_before = event_count(language, "chat")
     voice_before = event_count(language, "voice")
@@ -222,21 +227,71 @@ def rehearse(chromium, browser, language, directory):
         rehearse_observed_english(chromium, browser, noisy_wav)
 
 
+def verify_local_fixture():
+    root = Path(__file__).resolve().parents[1]
+    expected = {
+        "COMPOSE_FILE": os.pathsep.join(FIXTURE_COMPOSE_FILES),
+        "DJANGO_SECRET_KEY": FIXTURE_SECRET,
+        "HOTEL_PORT": "8082",
+    }
+    if Path.cwd().resolve() != root or any(os.environ.get(name) != value for name, value in expected.items()):
+        raise ValueError("Use the documented disposable local Compose fixture from the checkout root.")
+    if os.environ.get("DOCKER_HOST") or os.environ.get("DOCKER_CONTEXT"):
+        raise ValueError("Local rehearsal requires the default local Docker endpoint.")
+    endpoint = subprocess.run(
+        ("docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"),
+        check=True, capture_output=True, timeout=15,
+    ).stdout.strip()
+    if not endpoint.startswith((b"unix:///", b"npipe:////./pipe/")):
+        raise ValueError("Local rehearsal requires a local Docker socket or named pipe.")
+    if compose("port", "web", "8000").strip() != b"127.0.0.1:8082":
+        raise ValueError("The disposable web fixture must listen on 127.0.0.1:8082.")
+    manage(
+        "from django.conf import settings; from bookings.models import Booking; "
+        "from reception.models import Conversation, ParserSample; "
+        f"fixture = settings.SECRET_KEY == {FIXTURE_SECRET!r} and settings.HOTEL_PARSER_TRAINING_ENABLED; "
+        "has_data = any(model.objects.exists() for model in (Booking, Conversation, ParserSample)); "
+        "raise SystemExit(int(not fixture or has_data))"
+    )
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--english-noisy-wav", type=Path, help="Independently recorded fictional English WAV.")
+    args = parser.parse_args()
     required_environment = {
-        "GITHUB_ACTIONS": "true",
         "COMPOSE_PROJECT_NAME": "hotel-parser-ci",
         "HOTEL_PARSER_TRAINING_ENABLED": "1",
     }
-    if any(os.environ.get(name) != value for name, value in required_environment.items()):
-        raise SystemExit("Run only against the disposable hosted Checks fixture")
-    with tempfile.TemporaryDirectory(prefix="hotel-parser-fixtures-") as temporary, sync_playwright() as playwright:
-        browser = playwright.chromium.launch()
+    local = os.environ.get("GITHUB_ACTIONS") != "true"
+    if (local and args.english_noisy_wav is None) or any(
+        os.environ.get(name) != value for name, value in required_environment.items()
+    ):
+        parser.error("Run only against the disposable Checks fixture; local use requires a recorded English WAV.")
+    with tempfile.TemporaryDirectory(prefix="hotel-parser-fixtures-") as temporary:
+        directory = Path(temporary)
+        recorded = None
         try:
-            for language in FIXTURES:
-                rehearse(playwright.chromium, browser, language, Path(temporary))
-        finally:
-            browser.close()
+            if args.english_noisy_wav is not None:
+                recorded = directory / "en-noisy-recorded.wav"
+                prepare_recorded_wav(args.english_noisy_wav, recorded)
+            if local:
+                verify_local_fixture()
+        except ValueError as error:
+            parser.error(str(error))
+        except (OSError, subprocess.SubprocessError):
+            parser.error("Could not read the recorded WAV or verify the disposable Compose fixture.")
+        print(f"English noisy voice fixture source: {'recorded' if recorded else 'piper'}")
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for language in FIXTURES:
+                    rehearse(
+                        playwright.chromium, browser, language, directory,
+                        recorded_noisy_wav=recorded if language == "en" else None,
+                    )
+            finally:
+                browser.close()
     manage("from bookings.models import Booking; assert not Booking.objects.exists()")
 
 
