@@ -85,7 +85,7 @@ def _room_value(state, text):
     return _room_choice(state, _answer(text))
 
 
-def _reviewed_room_text(language, corrected):
+def _reviewed_room_text(language, corrected, *, room_codes=None):
     from .conversation import _answer, _room_option_number
 
     label = _answer(corrected)
@@ -95,6 +95,8 @@ def _reviewed_room_text(language, corrected):
         return corrected
     prefix = "room " if language == "en" else "pokój "
     room = label.removeprefix(prefix)
+    if room_codes is not None:
+        return corrected if room in room_codes else None
     if room and Room.objects.filter(code__iexact=room).exists():
         return corrected
     return None
@@ -104,7 +106,7 @@ def _text_ok(text):
     return isinstance(text, str) and 0 < len(text) <= MAX_SAMPLE_TEXT and text.isprintable() and bool(text.strip())
 
 
-def _protected_literal(stage, text, language, source):
+def _protected_literal(stage, text, language, source, *, room_codes=None):
     label = _normalized(text, stage)
     plain_count = bool(re.fullmatch(r"[0-9]{1,5}", label) or label in NUMBER_WORDS[language])
     if stage == "guests":
@@ -122,12 +124,12 @@ def _protected_literal(stage, text, language, source):
                 return False
     if stage == "room":
         if source == "chat":
-            return _reviewed_room_text(language, text) is not None
+            return _reviewed_room_text(language, text, room_codes=room_codes) is not None
         return plain_count or label in ORDINALS[language]
     return False
 
 
-def validate_correction(stage, text, corrected_result, *, language="en", source="voice"):
+def validate_correction(stage, text, corrected_result, *, language="en", source="voice", room_codes=None):
     """Return the reviewed rule text or raise a validation error for an unsafe correction."""
     if corrected_result == "":
         return ""
@@ -138,14 +140,14 @@ def validate_correction(stage, text, corrected_result, *, language="en", source=
         if contact := _contact_correction(stage, text, corrected):
             return contact
         raise ValidationError("The correction must preserve the email address characters or phone digits.")
-    if _protected_literal(stage, text, language, source):
+    if _protected_literal(stage, text, language, source, room_codes=room_codes):
         raise ValidationError("This reply is a direct booking value. Correct a misrecognized or ambiguous phrase instead.")
     if stage in STAY_STAGES:
         state = {"stage": stage, "language": language, "check_in": timezone.localdate().isoformat()}
         if _stay_value(state, corrected) is not None:
             return corrected
         raise ValidationError("Enter a valid date, stay length, or guest count for this prompt.")
-    if stage == "room" and _reviewed_room_text(language, corrected):
+    if stage == "room" and _reviewed_room_text(language, corrected, room_codes=room_codes):
         return corrected
     raise ValidationError("Enter an existing room code or a room option number.")
 
@@ -167,10 +169,10 @@ def learned_result(state, text, parsed, *, source):
     return apply_reviewed_correction(state, text, parsed, corrections[0], source=source)
 
 
-def apply_reviewed_correction(state, text, parsed, corrected, *, source):
+def apply_reviewed_correction(state, text, parsed, corrected, *, source, room_codes=None):
     """Apply one reviewed rule against the current stay and offer context."""
     stage, language = state["stage"], state["language"]
-    if not _text_ok(corrected) or _protected_literal(stage, text, language, source):
+    if not _text_ok(corrected) or _protected_literal(stage, text, language, source, room_codes=room_codes):
         return None
     corrected = corrected.strip()
     if stage in CONTACT_STAGES:

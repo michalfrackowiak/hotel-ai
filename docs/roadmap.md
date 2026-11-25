@@ -35,6 +35,7 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 - [x] 0.9 parser correction conflicts: show when enabled rules in the same exact match scope disagree and explain how a conflict affects guest replies.
 - [x] 0.9 fictional date regression replay: compare a proposed correction with expected English and Polish dates in the private parser preview.
 - [x] 0.9 fictional correction effectiveness: summarize baseline and proposed match counts, improvements and regressions in the date replay.
+- [x] 0.6 scenario simulator parser parity: preview fictional room, email and phone corrections under the selected scenario policy.
 - [x] 0.9 live correction usage: emit a bounded event for a reviewed parser correction that changes a committed booking turn.
 - [x] 0.9 parser accuracy rehearsal protocol: compare paused and enabled corrections against independently recorded intent for fictional English and Polish chat and voice replies. See the [rehearsal](parser-accuracy-rehearsal.md).
 - [x] 0.9 hosted browser rehearsal: exercise fictional chat replies and synthetic microphone input through Chromium and Vosk on the hosted Checks runner. Report transcript mismatches as indeterminate.
