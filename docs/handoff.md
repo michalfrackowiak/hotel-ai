@@ -1,5 +1,12 @@
 # Session handoff
 
+## Speech operator monitoring group
+
+The optional `setup_speech_operator_group` command provisions read-only access
+to private speech plans, preflight, inventory, transition previews and status.
+Switching, recovery and plan changes still require separate permissions. All 12
+staff role tests passed. The group requires explicit setup and member assignment.
+
 ## Scenario editor group
 
 The optional `setup_scenario_editor_group` command provisions private draft
