@@ -67,7 +67,7 @@
     <p>Delivery examples <code>email</code>, <code>sms</code>. Email example <code>guest@example.com</code>. Phone example <code>+1 202 555 0142</code>.</p>
     <p>Contact review accepts the same yes and no examples as the quote decision. Approval uses a fictional booking reference and previews the initial receipt without creating a booking or sending a message.</p>
     <p>For an email or SMS receipt, choose a fictional delivery status. Leave the reply blank. The preview uses a fictional reference and does not contact a delivery provider.</p>
-    <p>For an arrival or Polish welcome timeout, choose chat inactivity or the final voice listening window. The final voice window uses this version's timeout setting, including when the combined reception uses a chat version with the microphone active. Leave the reply blank for timeouts.</p>
+    <p>Choose chat inactivity or the final voice listening window for arrival and Polish welcome. Later booking steps offer a final voice listening window preview, including when the combined reception uses a chat version with the microphone active. Leave the reply blank for timeouts.</p>
     <p>For a reply step with a retry limit, the prior count represents fictional consecutive retries at that same step. If the next reply reaches the limit, the simulator previews the reception handover without opening a staff conversation.</p>
     <p>The reply preview uses built-in parsing and the current date settings. For welcome, arrival, departure, or guest count, you can enter a fictional model result or parser correction. The preview applies the scenario's model fallback setting without contacting a model provider or reading saved corrections.</p>
     {% if simulation_form.language == "pl" %}
@@ -89,6 +89,8 @@
           <dt>Fictional reference</dt><dd>{{ simulation.fictional_reference }}</dd>
         {% elif simulation.timeout %}
           {% if simulation.continue_in_chat %}<dt>Voice timeout action</dt><dd>Continue in chat</dd>{% endif %}
+          {% if simulation.voice_stopped %}<dt>Voice timeout action</dt><dd>End voice at this step</dd>{% endif %}
+          {% if simulation.voice_silence_seconds %}<dt>Configured silence window</dt><dd>{{ simulation.voice_silence_seconds }} s</dd>{% endif %}
         {% elif simulation.input_stage == "guests" %}
           <dt>Extracted guest count</dt><dd>{{ simulation.guests|default_if_none:"—" }}</dd>
         {% elif simulation.input_stage == "room" %}
@@ -140,7 +142,7 @@
       {% endif %}
       <h4>Chat reply</h4>
       <p>{{ simulation.chat }}</p>
-      {% if simulation.continue_in_chat %}
+      {% if simulation.continue_in_chat or simulation.voice_stopped %}
         <p>The browser ends the voice session and keeps the current step open in chat. This action sends no server timeout request.</p>
       {% else %}
         <h4>Spoken reply</h4>

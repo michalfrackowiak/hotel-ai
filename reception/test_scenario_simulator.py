@@ -75,6 +75,32 @@ class ScenarioSimulatorTests(TestCase):
         self.assertEqual(chat["stage"], "check_in")
         self.assertEqual(chat["decisions"], [("welcome", "timeout", "check_in")])
 
+    def test_later_voice_silence_keeps_fictional_booking_at_its_current_step(self):
+        stages = {
+            "check_out": "check_out", "guests": "guests", "room": "room", "confirm": "confirm",
+            "delivery": "delivery", "email": "email", "phone": "phone",
+            "confirm_email": "contact_confirm", "confirm_sms": "contact_confirm",
+        }
+        for language, channel in (("en", "chat"), ("pl", "voice")):
+            version = self.make_version(
+                language, channel, {"contact_confirm": {"voice_silence_seconds": 7}},
+            )
+            for fixture, stage in stages.items():
+                with self.subTest(language=language, channel=channel, stage=fixture):
+                    preview = self.preview(version, f"{fixture}_voice_timeout")
+                    self.assertEqual((preview["language"], preview["stage"]), (language, stage))
+                    self.assertEqual(preview["voice_silence_seconds"], 7 if stage == "contact_confirm" else None)
+                    self.assertTrue(preview["voice_stopped"])
+                    self.assertTrue(preview["chat"])
+                    self.assertEqual((preview["voice"], preview["voice_fallback"], preview["decisions"]), ([], "", []))
+                    if fixture == "confirm_email":
+                        self.assertIn("guest@example.com", preview["chat"])
+                    if fixture == "confirm_sms":
+                        self.assertIn("5550142", preview["chat"].replace(" ", ""))
+        self.assertFalse(Booking.objects.exists())
+        self.assertFalse(BookingConfirmation.objects.exists())
+        self.assertFalse(StaffHandover.objects.exists())
+
     def test_bilingual_arrival_preview_extracts_a_stay_from_noisy_input(self):
         today = date(2030, 1, 15)
         for language, reply in (

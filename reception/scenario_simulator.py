@@ -23,7 +23,7 @@ from .scenario_pinned_prompts import browser_prompt_bindings, browser_prompt_ove
 from .scenario_step_settings import (
     ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, MAX_RETRY_LIMIT, PARSER_CORRECTIONS_STEPS, REQUIRE_ARRIVAL_RANGE,
     STAY_PARSER_STEPS,
-    allows_model_fallback, allows_parser_corrections, retry_limit_value, voice_timeout_mode,
+    allows_model_fallback, allows_parser_corrections, retry_limit_value, silence_window_seconds, voice_timeout_mode,
 )
 from .scenario_validation import approved_destination
 from .speech import MAX_TEXT_CHARACTERS
@@ -55,6 +55,12 @@ TIMEOUT_STEPS = {
     "welcome_voice_timeout": "welcome",
 }
 VOICE_TIMEOUT_PREVIEWS = {"arrival_voice_timeout", "welcome_voice_timeout"}
+LATER_VOICE_TIMEOUT_CHOICES = (
+    ("check_out", "Departure"), ("guests", "Guest count"), ("room", "Room selection"),
+    ("confirm", "Quote decision"), ("delivery", "Delivery choice"), ("email", "Email entry"),
+    ("phone", "Phone entry"), ("confirm_email", "Contact review (email)"), ("confirm_sms", "Contact review (SMS)"),
+)
+LATER_VOICE_TIMEOUT_STEPS = {f"{step}_voice_timeout": step for step, _ in LATER_VOICE_TIMEOUT_CHOICES}
 
 
 class BookingReplySimulationForm(forms.Form):
@@ -69,6 +75,8 @@ class BookingReplySimulationForm(forms.Form):
         ("arrival_voice_timeout", "Arrival timeout (final voice listening window)"),
         ("welcome_timeout", "Welcome timeout (chat)"),
         ("welcome_voice_timeout", "Welcome timeout (final voice listening window)"),
+        *((f"{step}_voice_timeout", f"{label} timeout (final voice listening window)")
+          for step, label in LATER_VOICE_TIMEOUT_CHOICES),
     ))
     reply = forms.CharField(label="Example guest reply", max_length=500, required=False)
     fictional_correction = forms.CharField(
@@ -108,7 +116,8 @@ class BookingReplySimulationForm(forms.Form):
         parser_stage = "check_in" if stage == "welcome" else stage
         if stage in RECEIPT_METHODS and values.get("receipt_outcome") == "":
             self.add_error("receipt_outcome", "Choose a fictional receipt status.")
-        elif stage and stage not in RECEIPT_METHODS and stage not in TIMEOUT_STEPS and values.get("reply") == "":
+        elif (stage and stage not in RECEIPT_METHODS and stage not in TIMEOUT_STEPS
+              and stage not in LATER_VOICE_TIMEOUT_STEPS and values.get("reply") == ""):
             self.add_error("reply", "Enter an example guest reply.")
         if stage and (prior_retries := values.get("prior_retries")):
             retry_step = "contact_confirm" if stage in FICTIONAL_CONTACTS else stage
@@ -181,6 +190,9 @@ def simulate_booking_reply(
     step_keys = {step.pk: step.key for step, _ in steps}
     edges = {(step_keys[source], event): step_keys[target] for source, event, target in transitions}
     configurations = {step.key: configuration for step, configuration in steps}
+    final_voice_timeout = stage in LATER_VOICE_TIMEOUT_STEPS
+    if final_voice_timeout:
+        stage = LATER_VOICE_TIMEOUT_STEPS[stage]
     fictional_contact = FICTIONAL_CONTACTS.get(stage)
     if fictional_contact:
         stage = "contact_confirm"
@@ -239,7 +251,7 @@ def simulate_booking_reply(
         state["check_out"] = check_out.isoformat()
     if needs_room_offer:
         # Prepare a two-guest example independently of the edge for the turn being simulated.
-        state = advance(state, "", 2, voice=channel == "voice", room_search=_fictional_room_search)
+        state = advance(state, "", 2, voice=final_voice_timeout or channel == "voice", room_search=_fictional_room_search)
         if stage != "room":
             state = advance(state, "1", None)
         if needs_delivery:
@@ -249,6 +261,16 @@ def simulate_booking_reply(
         elif fictional_contact:
             method, candidate = fictional_contact
             state = advance(advance(state, method, None), candidate, None)
+    if final_voice_timeout:
+        # Later listening windows end locally, without submitting a booking turn.
+        preview = _render_result(language, channel, configurations, state, decisions)
+        preview.update(
+            timeout=True, voice_stopped=True, voice_silence_seconds=silence_window_seconds(configuration),
+            context_arrival=check_in.isoformat() if check_in else None,
+            context_departure=check_out.isoformat() if check_out else None,
+            voice=[], voice_fallback="",
+        )
+        return preview
     parsed = None if switch_to_english else parse_stay_input(parser_stage, reply, language, check_in=check_in)
     input_parsed = stage == "room" or contact_entry
     if input_parsed:
