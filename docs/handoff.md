@@ -1,5 +1,19 @@
 # Session handoff
 
+## Scenario numeric date order
+
+Staff can set day-first or month-first numeric date order on a browser
+arrival or departure step. Blank fields use the shared or language setting.
+Live bookings and the simulator use the arrival order for Polish welcome
+replies and for both dates in a complete stay range. A later departure reply
+uses its own step setting. The order applies to built-in guest reply parsing.
+Reviewed correction values and inbound phone retain their existing rules.
+All 379 Django tests passed, including 80 focused tests. Independent review
+passed 60 focused tests and confirmed the final editor help. Django system
+and migration drift checks passed.
+The next 0.6 action is to audit the remaining configurable timeout and
+handover actions against the approved transition graph.
+
 ## Delivery choice retry wording
 
 Staff can edit the versioned chat wording and spoken segments for an

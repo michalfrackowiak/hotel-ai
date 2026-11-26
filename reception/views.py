@@ -37,7 +37,8 @@ from .scenario_pinning import (
 from .scenario_step_settings import (
     ALLOW_VOICE_SKIP, ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, PARSER_CORRECTIONS_STEPS, REQUIRE_ARRIVAL_RANGE,
     SILENCE_WINDOW_STEPS, STAY_PARSER_STEPS, VOICE_INTERRUPTION_STEPS, VOICE_TIMEOUT_STEPS, allows_model_fallback,
-    allows_parser_corrections, silence_window_seconds, voice_interruption_mode, voice_timeout_mode,
+    allows_parser_corrections, numeric_date_order_override, silence_window_seconds, voice_interruption_mode,
+    voice_timeout_mode,
 )
 from .session_continuity import active_conversations, conversation_id, open_conversation
 from .speech import (
@@ -362,11 +363,13 @@ def message(request):
         stage = "check_in" if preview["stage"] == "welcome" else preview["stage"]
         check_in = date.fromisoformat(preview["check_in"]) if stage == "check_out" else None
         if not (stage == "check_in" and language == "pl" and selects_english(text)):
-            parsed = parse_stay_input(stage, text, language, check_in=check_in)
-            if parsed is None:
-                configuration = _pinned_step_configuration(preview, stage)
-                if allows_model_fallback(configuration):
-                    parsed = extract_stay_value(stage, text, language)
+            configuration = _pinned_step_configuration(preview, stage)
+            parsed = parse_stay_input(
+                stage, text, language, check_in=check_in,
+                numeric_date_order=numeric_date_order_override(configuration),
+            )
+            if parsed is None and allows_model_fallback(configuration):
+                parsed = extract_stay_value(stage, text, language)
 
     # Recheck the revision under SQLite's write lock after parsing. Booking and
     # conversation updates commit together, including a retried confirmation.

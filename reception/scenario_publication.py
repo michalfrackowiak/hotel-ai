@@ -14,9 +14,10 @@ from .models import Scenario, ScenarioPublication, ScenarioStep, ScenarioTransit
 from .scenario_answers import ROOM_ANSWER_LABEL
 from .scenario_materialization import materialize_scenario_defaults
 from .scenario_step_settings import (
-    ARRIVAL_INPUT_CHOICES, ARRIVAL_INPUT_FIELD, PARSER_CORRECTIONS_LABELS, PARSER_FALLBACK_LABELS,
-    VOICE_INTERRUPTION_LABELS, VOICE_TIMEOUT_LABELS, parser_corrections_mode, parser_fallback_mode, retry_limit_value,
-    silence_window_seconds, voice_interruption_mode, voice_timeout_mode,
+    ARRIVAL_INPUT_CHOICES, ARRIVAL_INPUT_FIELD, NUMERIC_DATE_ORDER_LABELS, PARSER_CORRECTIONS_LABELS,
+    PARSER_FALLBACK_LABELS, VOICE_INTERRUPTION_LABELS, VOICE_TIMEOUT_LABELS, numeric_date_order_override,
+    parser_corrections_mode, parser_fallback_mode, retry_limit_value, silence_window_seconds, voice_interruption_mode,
+    voice_timeout_mode,
 )
 from .scenario_validation import APPROVED_STEPS, MAX_TRANSITIONS, validate_materialized_scenario
 
@@ -152,6 +153,8 @@ def _describe_step(position, configuration):
     ]
     if mode := describe_arrival_input(configuration):
         parts.append(f"Expected arrival input: {mode}")
+    if mode := numeric_date_order_override(configuration):
+        parts.append(f"Numeric date order: {NUMERIC_DATE_ORDER_LABELS[mode]}")
     if mode := parser_fallback_mode(configuration):
         parts.append(f"Parser fallback: {PARSER_FALLBACK_LABELS[mode]}")
     if mode := parser_corrections_mode(configuration):

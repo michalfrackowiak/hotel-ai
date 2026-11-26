@@ -105,6 +105,7 @@ The current admin edits prompt text and voice segments; conversation transitions
 - [x] Extend the reviewed correction policy to browser room selection, email and phone entry.
 - [x] Add automated regression coverage for pinned room and contact correction policies and admin previews of language switching, voice timeouts, bilingual date parsing, fictional parser outcomes and retry handover.
 - [x] Edit the chat wording and spoken segments for unrecognized delivery choices and preview the retry in the simulator.
+- [x] Configure numeric date order for browser arrival and departure steps and use the same setting in the simulator.
 - [ ] Extend editing to other parser settings, additional validation messages, allowed branches, timeout actions, and delivery/handover behavior.
 - [ ] Permit adding/reordering optional steps and routing through approved actions. Keep availability, price calculation, required consent and atomic booking creation as enforced server invariants. Forbid arbitrary Python, SQL or unvalidated external actions in the editor.
 - [x] Provide a read-only admin flow overview of the saved or effective inherited graph and its validation findings.

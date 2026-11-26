@@ -38,6 +38,12 @@ Set **Parser fallback** on an arrival, departure, or guest-count step to choose 
 
 The setting follows the pinned browser scenario for typed and transcribed replies in English and Polish. An arrival answer entered during the Polish welcome uses the arrival step's policy. Phone bookings keep their existing parser behavior.
 
+## Numeric date order
+
+On an arrival or departure step, choose day-first or month-first numeric dates for the built-in browser parser. Leave the field blank to inherit the shared step setting or use the language's parser configuration. The simulator uses the selected scenario's order. A reply containing both stay dates uses the arrival step's order for both dates, and Polish welcome replies use the arrival setting.
+
+The setting changes the component order of localized numeric dates. ISO, named and relative dates, enabled formats, saved correction values, and phone bookings continue to use their usual parsing rules.
+
 ## Reviewed parser corrections
 
 Use **Reviewed parser corrections** on arrival, departure, guest count, room selection, email entry, or phone entry to control whether the pinned scenario applies staff-reviewed corrections. The Polish welcome uses the arrival setting when it reaches parser review. Choose **Skip reviewed corrections** to ignore saved rules, or **Apply reviewed corrections when enabled** to override a shared skip setting. Leave it blank to inherit or keep the existing behavior. Model fallback and sample recording keep their own controls.

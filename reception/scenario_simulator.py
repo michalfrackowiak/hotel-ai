@@ -23,7 +23,8 @@ from .scenario_pinned_prompts import browser_prompt_bindings, browser_prompt_ove
 from .scenario_step_settings import (
     ARRIVAL_INPUT_FIELD, CONTINUE_IN_CHAT, MAX_RETRY_LIMIT, PARSER_CORRECTIONS_STEPS, REQUIRE_ARRIVAL_RANGE,
     STAY_PARSER_STEPS,
-    allows_model_fallback, allows_parser_corrections, retry_limit_value, silence_window_seconds, voice_timeout_mode,
+    allows_model_fallback, allows_parser_corrections, numeric_date_order_override, retry_limit_value,
+    silence_window_seconds, voice_timeout_mode,
 )
 from .scenario_validation import approved_destination
 from .speech import MAX_TEXT_CHARACTERS
@@ -290,7 +291,10 @@ def simulate_booking_reply(
             voice=[], voice_fallback="",
         )
         return preview
-    parsed = None if switch_to_english else parse_stay_input(parser_stage, reply, language, check_in=check_in)
+    parsed = None if switch_to_english else parse_stay_input(
+        parser_stage, reply, language, check_in=check_in,
+        numeric_date_order=numeric_date_order_override(parser_configuration),
+    )
     input_parsed = stage == "room" or contact_entry
     if input_parsed:
         parsed = extracted_booking_value(state, reply, parsed)
