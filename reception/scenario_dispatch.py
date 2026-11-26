@@ -4,6 +4,7 @@ import logging
 
 from .conversation import _terminal, advance
 from .models import ScenarioTransition
+from .scenario import DELIVERY_RETRY_PROMPT, set_prompt
 from .scenario_pinning import pinned_scenario_version_id, published_pinned_steps
 from .scenario_step_settings import RETRY_EXHAUSTED_EVENT, RETRY_LIMIT_STEPS, retry_limit_value
 from .scenario_validation import approved_destination
@@ -63,6 +64,8 @@ def advance_counted_turn(state, text, parsed, resolve_transition, get_retry_limi
 
     result = advance(state, text, parsed, resolve_transition=resolve, **options)
     if retried and result["stage"] == stage:
+        if stage == "delivery":
+            set_prompt(result, DELIVERY_RETRY_PROMPT)
         if limit := get_retry_limit():
             previous_count = state.get(RETRY_COUNT, 0)
             if type(previous_count) is not int or not 0 <= previous_count <= limit:

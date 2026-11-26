@@ -9,7 +9,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_http_methods
 
 from .models import Scenario, ScenarioPublication, ScenarioStep, ScenarioTransition, ScenarioVersion
-from .scenario import default_chat_text, default_voice_parts
+from .scenario import DELIVERY_RETRY_PROMPT, default_chat_text, default_voice_parts
 from .scenario_answers import MAX_ANSWER_LABEL, ROOM_ANSWER_LABEL, answer_label_defaults, answer_label_fields
 from .scenario_editor import ARRIVAL_KEYS, VoicePartsField, _fields, _placeholder_help
 from .scenario_step_settings import (
@@ -401,10 +401,15 @@ class ScenarioStepDraftForm(forms.ModelForm):
                 label.help_text += f" Leave blank to use {default_source}."
         for key, fields in prompt_bindings(scenario.language, scenario.channel, step.key).items():
             chat_name, voice_name = fields.get(CHAT_FIELD), fields.get(VOICE_FIELD)
+            prompt_default_source = default_source
+            if key == DELIVERY_RETRY_PROMPT:
+                prompt_default_source = "the usual delivery prompt"
+                if step.version.base_version_id:
+                    prompt_default_source = "the shared retry wording when available, otherwise the usual delivery prompt"
             if chat := self.fields.get(chat_name):
                 default = default_chat_text(scenario.language, key)
                 self.initial[chat_name] = configuration.get(chat_name, "")
-                chat.help_text = f"Leave blank to use {default_source}." + _placeholder_help(_fields([default]))
+                chat.help_text = f"Leave blank to use {prompt_default_source}." + _placeholder_help(_fields([default]))
                 chat.widget.attrs["placeholder"] = default
             if voice := self.fields.get(voice_name):
                 parts = configuration.get(voice_name)
@@ -412,7 +417,7 @@ class ScenarioStepDraftForm(forms.ModelForm):
                     self.initial[voice_name] = parts
                 voice.widget.allow_listening = key in ARRIVAL_KEYS
                 defaults = default_voice_parts(scenario.language, key)
-                voice.help_text += f" Leave every row blank to use {default_source}."
+                voice.help_text += f" Leave every row blank to use {prompt_default_source}."
                 voice.help_text += _placeholder_help(_fields(part["text"] for part in defaults))
                 if key == "option":
                     voice.widget.max_parts = 1

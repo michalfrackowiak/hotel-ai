@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from django.core.exceptions import ValidationError
 
-from .scenario import _specs
+from .scenario import DELIVERY_RETRY_PROMPT, _specs
 from .scenario_pinning import pinned_scenario_version_id, published_pinned_steps, web_scenario_channel
 from .scenario_step_settings import (
     CHAT_FIELD, OUTCOME_PROMPTS, STEP_PROMPTS, VOICE_FIELD, prompt_bindings, validate_step_configuration,
@@ -68,6 +68,9 @@ def browser_prompt_overrides(language, channel, bindings, steps):
         for prompt, fields in bindings[step].items():
             chat_text = configuration.get(fields.get(CHAT_FIELD), "")
             voice_parts = configuration.get(fields.get(VOICE_FIELD), ())
+            if prompt == DELIVERY_RETRY_PROMPT:
+                chat_text = chat_text or configuration.get(CHAT_FIELD, "")
+                voice_parts = voice_parts or configuration.get(VOICE_FIELD, ())
             if chat_text or voice_parts:
                 overrides[language, prompt] = _PinnedPrompt(chat_text, tuple(voice_parts))
     return overrides
