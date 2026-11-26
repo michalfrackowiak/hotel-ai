@@ -1,5 +1,15 @@
 # Session handoff
 
+## Scenario simulator final voice silence
+
+Staff can preview final browser voice silence from departure through contact
+review using fictional booking state. The preview keeps the same booking step
+and chat prompt and shows configured silence seconds when present. It runs no
+booking transition and writes no booking, delivery, or handover records.
+Independent review approved the change and all nine simulator tests passed.
+The next 0.6 action is to review the remaining parser and timeout controls
+against the scenario roadmap before release verification.
+
 ## Scenario simulator room and contact corrections
 
 Staff can preview fictional corrections for room selection, email entry, and
