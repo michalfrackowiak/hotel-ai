@@ -114,6 +114,9 @@
         {% if simulation.model_outcome %}
           <dt>Fictional model result</dt><dd>{{ simulation.model_outcome }}</dd>
         {% endif %}
+        {% if simulation.reply_input_mode %}
+          <dt>Reply input mode</dt><dd>{{ simulation.reply_input_mode }}</dd>
+        {% endif %}
         {% if simulation.fictional_correction %}
           <dt>Fictional parser correction</dt>
           <dd>{% if not simulation.corrections_allowed %}Skipped by this step’s parser policy{% elif simulation.correction_applied %}Applied{% else %}No change to the parsed value{% endif %}</dd>

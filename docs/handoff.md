@@ -1,5 +1,15 @@
 # Session handoff
 
+## Scenario simulator reply input modes
+
+Staff can preview typed replies with voice off, typed or edited replies with
+voice active, and unedited microphone transcripts. Corrections use the same
+source scopes as live browser turns. The selected scenario supplies prompts
+and policies, and the default mode follows its channel. Independent review
+approved the change and passed all 18 simulator, editor, and rendering tests.
+The next 0.6 action is to check remaining parser, validation, and timeout
+controls against the phased roadmap before release verification.
+
 ## Scenario simulator final voice silence
 
 Staff can preview final browser voice silence from departure through contact

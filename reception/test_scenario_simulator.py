@@ -7,6 +7,7 @@ from django.urls import reverse
 
 from bookings.models import Booking, BookingConfirmation
 
+from . import scenario_simulator
 from .models import ParserSample, Scenario, ScenarioStep, ScenarioTransition, ScenarioVersion, StaffHandover
 from .scenario_validation import APPROVED_STEPS, APPROVED_TRANSITIONS
 
@@ -143,6 +144,40 @@ class ScenarioSimulatorTests(TestCase):
         self.assertEqual((skipped["stage"], skipped["guests"]), ("guests", None))
         self.assertEqual(skipped["decisions"], [("guests", "retry", "guests")])
         self.assertFalse(ParserSample.objects.exists())
+
+    def test_chat_scenario_previews_transcribed_input_with_pinned_chat_prompt(self):
+        version = self.make_version("en", "chat", {"room": {"chat_text": "Choose a fictional room: {options}."}})
+        preview = self.preview(
+            version, "guests", reply="three guests", reply_input_mode="transcribed", fictional_correction="2",
+        )
+
+        self.assertEqual(preview["reply_input_mode"], "Unedited microphone transcript")
+        self.assertEqual((preview["stage"], preview["guests"]), ("room", 2))
+        self.assertTrue(preview["correction_applied"])
+        self.assertIn("Choose a fictional room:", preview["chat"])
+        self.assertFalse(ParserSample.objects.exists())
+
+    def test_voice_scenario_typed_input_uses_chat_protection_and_selected_voice_behavior(self):
+        version = self.make_version("en", "voice")
+        url = reverse("admin:reception_scenarioversion_flow", args=[version.pk])
+        for mode, voice in (("typed", False), ("typed_voice", True)):
+            with self.subTest(mode=mode):
+                request = {"stage": "guests", "reply": "three guests", "reply_input_mode": mode}
+                response = self.client.post(url, {**request, "fictional_correction": "2"})
+                self.assertEqual(response.status_code, 200)
+                self.assertIsNone(response.context["simulation"])
+                errors = response.context["simulation_form"].errors
+                self.assertIn("direct booking value", errors["fictional_correction"][0])
+                with patch.object(
+                    scenario_simulator, "advance_counted_turn", wraps=scenario_simulator.advance_counted_turn,
+                ) as advance:
+                    preview = self.preview(version, "guests", reply="three guests", reply_input_mode=mode)
+                    self.assertIs(advance.call_args.kwargs["voice"], voice)
+                self.assertEqual((preview["stage"], preview["guests"]), ("room", 3))
+
+        default = self.preview(version, "guests", reply="three guests", fictional_correction="2")
+        self.assertEqual(default["reply_input_mode"], "Unedited microphone transcript")
+        self.assertTrue(default["correction_applied"])
 
     def test_fictional_room_correction_respects_options_and_pinned_policy(self):
         version = self.make_version("en", "chat")
