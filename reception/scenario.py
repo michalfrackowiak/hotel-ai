@@ -8,6 +8,7 @@ from .speech import MAX_TEXT_CHARACTERS
 
 
 ENGLISH_WEB_GREETING = "Hi, this is Neptun Resort Jastrzębia Góra."
+DELIVERY_RETRY_PROMPT = "delivery_retry"
 WELCOME_KEYS = (("pl", "welcome"), ("en", "welcome_english_option"), ("pl", "welcome_polish_option"))
 WELCOME_INDEX = {pair: index for index, pair in enumerate(WELCOME_KEYS)}
 PHONE_COPY = {
@@ -53,6 +54,8 @@ def default_chat_text(language, key):
         return RECEIPT_COPY[language][key.removeprefix("receipt_")]
     if key.startswith("phone_"):
         return PHONE_COPY[language][key.removeprefix("phone_")]
+    if key == DELIVERY_RETRY_PROMPT:
+        return COPY[language]["delivery"]
     return COPY[language][key]
 
 

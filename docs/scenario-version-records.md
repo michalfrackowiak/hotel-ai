@@ -18,6 +18,8 @@ After saving a step, reopen it to edit its prompts. Use **Chat wording** to over
 
 The structural preview accepts incomplete drafts. The stricter outcome check requires named routes for both delivery methods, the wait and immediate receipt paths, dispatch outcomes, and booking retries and corrections. It checks standalone English and Polish web chat and browser voice. Language switching, legacy drafts and inbound phone are still handled by their existing engines. The publisher protects the saved graph with its database transaction. At runtime, the booking engine identifies outcomes before applying their pinned transitions. Staff can continue changing live wording from the existing prompt editor.
 
+On a saved delivery choice step, edit the retry chat wording or voice segments to guide guests who enter an unrecognized delivery method. When a retry override is blank, it inherits shared wording if available and otherwise repeats the usual delivery choice prompt for that channel. In the flow overview, select the delivery step and enter an unrecognized reply to preview the retry.
+
 ## Chat suggestion labels
 
 On a saved chat step or shared template, staff can edit the labels displayed for arrival, departure, guest-count and room suggestions, language choice, quote and contact decisions, and delivery actions. Leave a label blank to inherit the shared value or use the built-in label. The room label includes the `{room}` placeholder so guests can identify each available room.

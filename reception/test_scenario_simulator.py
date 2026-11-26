@@ -5,10 +5,11 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from bookings.models import Booking, BookingConfirmation
+from bookings.models import Booking, BookingConfirmation, Price, Room
 
 from . import scenario_simulator
 from .models import ParserSample, Scenario, ScenarioStep, ScenarioTransition, ScenarioVersion, StaffHandover
+from .scenario_publication import publish_scenario_version, review_scenario_selection
 from .scenario_validation import APPROVED_STEPS, APPROVED_TRANSITIONS
 
 
@@ -253,3 +254,66 @@ class ScenarioSimulatorTests(TestCase):
         self.assertFalse(StaffHandover.objects.exists())
         self.assertFalse(Booking.objects.exists())
         self.assertFalse(BookingConfirmation.objects.exists())
+
+    def test_delivery_retry_uses_the_same_pinned_chat_prompt_in_preview_and_live_turn(self):
+        version = self.make_version("en", "chat", {"delivery": {
+            "chat_text": "How should we send the confirmation?",
+            "delivery_retry_chat_text": "Please answer email or SMS.",
+        }})
+        step = version.steps.get(key="delivery")
+        editor = self.client.get(reverse("admin:reception_scenariostep_change", args=[step.pk]))
+        self.assertContains(editor, "Leave blank to use the usual delivery prompt.")
+        retry = self.preview(version, "delivery", reply="postcard")
+        self.assertEqual(retry["decisions"], [("delivery", "retry", "delivery")])
+        self.assertEqual(retry["chat"], "Please answer email or SMS.")
+
+        review = review_scenario_selection(version.scenario_id, version.pk, actor=self.staff, action="publish")
+        self.assertIn("Please answer email or SMS.", "\n".join(review.diff))
+        publish_scenario_version(
+            version.scenario_id, version.pk, actor=self.staff, expected_version_id=review.expected_version_id,
+            expected_audit_id=review.expected_audit_id, expected_fingerprint=review.fingerprint,
+        )
+        room = Room.objects.create(code="DEMO-ROOM", capacity=2)
+        Price.objects.create(room=room, nightly_rate=120)
+
+        def turn(**payload):
+            response = self.client.post(
+                reverse("reception-message"), {"language": "en", **payload}, content_type="application/json",
+            )
+            self.assertEqual(response.status_code, 200, response.content)
+            return response.json()
+
+        result = turn(reset=True)
+        for reply in ("tomorrow for two nights", "2", "1", "yes"):
+            result = turn(revision=result["revision"], message=reply)
+        self.assertEqual(result["stage"], "delivery")
+        self.assertEqual(result["reply"], "How should we send the confirmation?")
+        result = turn(revision=result["revision"], message="postcard")
+        self.assertEqual((result["stage"], result["reply"]), (retry["stage"], retry["chat"]))
+        result = turn(revision=result["revision"], message="email")
+        self.assertEqual(result["stage"], "email")
+        self.assertFalse(BookingConfirmation.objects.exists())
+
+    def test_delivery_retry_voice_wording_falls_back_to_primary_until_configured(self):
+        initial = {"text": "Wybierz e-mail lub SMS.", "seconds": 0, "listen": False}
+        retry = {**initial, "text": "Powtórz proszę: e-mail lub SMS."}
+        version = self.make_version(
+            "pl", "voice", {"delivery": {"voice_parts": [initial], "retry_limit": 2}},
+            (("delivery", "retry_exhausted", "handover"),),
+        )
+        step = version.steps.get(key="delivery")
+        editor = self.client.get(reverse("admin:reception_scenariostep_change", args=[step.pk]))
+        self.assertContains(editor, "Leave every row blank to use the usual delivery prompt.")
+        first = self.preview(version, "delivery", reply="pocztówka")
+        self.assertEqual(first["voice"], [{**initial, "language": "pl"}])
+
+        step.configuration["delivery_retry_voice_parts"] = [retry]
+        step.save(update_fields=["configuration"])
+        edited = self.preview(version, "delivery", reply="pocztówka")
+        self.assertEqual(edited["voice"], [{**retry, "language": "pl"}])
+        self.assertEqual(edited["chat"], first["chat"])
+        self.assertEqual(edited["resulting_retry_count"], 1)
+        exhausted = self.preview(version, "delivery", reply="pocztówka", prior_retries="1")
+        self.assertEqual(exhausted["stage"], "handover")
+        self.assertTrue(exhausted["retry_handover"])
+        self.assertFalse(StaffHandover.objects.exists())

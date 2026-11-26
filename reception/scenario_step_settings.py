@@ -2,6 +2,7 @@
 
 from django.core.exceptions import ValidationError
 
+from .scenario import DELIVERY_RETRY_PROMPT
 from .scenario_answers import answer_label_fields, validate_answer_labels
 from .scenario_editor import validate_prompt
 
@@ -82,6 +83,7 @@ OUTCOME_PROMPTS = {
     "check_out": ("check_out_retry",),
     "guests": ("stay_dates", "guests_retry"),
     "room": ("option",),
+    "delivery": (DELIVERY_RETRY_PROMPT,),
     "email": ("invalid_email",),
     "phone": ("invalid_phone",),
     "contact_confirm": ("confirm_email", "confirm_phone"),
@@ -178,7 +180,8 @@ def validate_step_configuration(language, channel, key, configuration):
         voice_parts = configuration.get(voice_field, [])
         if voice_field in configuration and voice_parts == []:
             raise ValidationError("Enter a voice segment or remove the override.")
-        if errors := validate_prompt(language, prompt, chat_text, voice_parts):
+        validation_prompt = "delivery" if prompt == DELIVERY_RETRY_PROMPT else prompt
+        if errors := validate_prompt(language, validation_prompt, chat_text, voice_parts):
             raise ValidationError([f"{prompt}: {error}" for error in errors.values()])
 
 

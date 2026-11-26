@@ -1,5 +1,17 @@
 # Session handoff
 
+## Delivery choice retry wording
+
+Staff can edit the versioned chat wording and spoken segments for an
+unrecognized delivery choice. The live booking flow and simulator use the
+same approved retry. Blank fields inherit available shared retry wording or
+repeat the usual delivery prompt. Retry-limit handover takes precedence.
+All 65 focused tests and 20 independently rerun tests passed. Django checks
+and migration drift checks passed. The 377-test Windows run had one session
+expiry failure, which also reproduced on the unchanged main branch.
+The next 0.6 action is to review a pinned numeric date order setting for
+arrival and departure, including simulator parity and Polish welcome replies.
+
 ## Scenario simulator reply input modes
 
 Staff can preview typed replies with voice off, typed or edited replies with
