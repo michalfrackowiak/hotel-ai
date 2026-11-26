@@ -35,6 +35,7 @@ See the [phased roadmap for versions 0.4–1.0](next-versions-roadmap.md) for pr
 - [x] 0.9 parser correction conflicts: show when enabled rules in the same exact match scope disagree and explain how a conflict affects guest replies.
 - [x] 0.9 fictional date regression replay: compare a proposed correction with expected English and Polish dates in the private parser preview.
 - [x] 0.9 fictional correction effectiveness: summarize baseline and proposed match counts, improvements and regressions in the date replay.
+- [x] 0.6 scenario simulator reply input modes: preview typed, voice-active typed, and transcribed replies with the selected scenario's prompts and policies.
 - [x] 0.6 scenario simulator voice silence: preview how final silence keeps later booking steps open in chat, with the configured listening window when present.
 - [x] 0.6 scenario simulator parser parity: preview fictional room, email and phone corrections under the selected scenario policy.
 - [x] 0.9 live correction usage: emit a bounded event for a reviewed parser correction that changes a committed booking turn.

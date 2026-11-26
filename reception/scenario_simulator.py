@@ -61,6 +61,15 @@ LATER_VOICE_TIMEOUT_CHOICES = (
     ("phone", "Phone entry"), ("confirm_email", "Contact review (email)"), ("confirm_sms", "Contact review (SMS)"),
 )
 LATER_VOICE_TIMEOUT_STEPS = {f"{step}_voice_timeout": step for step, _ in LATER_VOICE_TIMEOUT_CHOICES}
+REPLY_INPUT_MODES = {
+    "typed": "Typed with voice off",
+    "typed_voice": "Typed or edited with voice on",
+    "transcribed": "Unedited microphone transcript",
+}
+
+
+def _reply_input_mode(channel, selected_mode):
+    return selected_mode or ("transcribed" if channel == "voice" else "typed")
 
 
 class BookingReplySimulationForm(forms.Form):
@@ -79,6 +88,11 @@ class BookingReplySimulationForm(forms.Form):
           for step, label in LATER_VOICE_TIMEOUT_CHOICES),
     ))
     reply = forms.CharField(label="Example guest reply", max_length=500, required=False)
+    reply_input_mode = forms.ChoiceField(
+        label="Reply input mode", required=False,
+        choices=(("", "Use the scenario channel default"), *REPLY_INPUT_MODES.items()),
+        help_text="Applies to reply previews. The selected scenario still supplies its prompts and policies.",
+    )
     fictional_correction = forms.CharField(
         label="Fictional parser correction", max_length=500, required=False,
         help_text=(
@@ -114,6 +128,7 @@ class BookingReplySimulationForm(forms.Form):
         values = super().clean()
         stage = values.get("stage")
         parser_stage = "check_in" if stage == "welcome" else stage
+        input_mode = _reply_input_mode(self.channel, values.get("reply_input_mode"))
         if stage in RECEIPT_METHODS and values.get("receipt_outcome") == "":
             self.add_error("receipt_outcome", "Choose a fictional receipt status.")
         elif (stage and stage not in RECEIPT_METHODS and stage not in TIMEOUT_STEPS
@@ -134,7 +149,8 @@ class BookingReplySimulationForm(forms.Form):
             else:
                 try:
                     validated = validate_correction(
-                        parser_stage, reply, corrected, language=self.language, source=self.channel,
+                        parser_stage, reply, corrected, language=self.language,
+                        source="voice" if input_mode == "transcribed" else "chat",
                         room_codes=FICTIONAL_ROOM_CODES,
                     )
                     if parser_stage == "email" and validated.rsplit("@", 1)[-1].casefold() not in {
@@ -185,7 +201,7 @@ def _fictional_booking(**_booking_details):
 
 def simulate_booking_reply(
     language, channel, steps, transitions, *, stage, reply, prior_retries=None, receipt_outcome="",
-    fictional_correction="", fictional_model_value="",
+    fictional_correction="", fictional_model_value="", reply_input_mode="",
 ):
     step_keys = {step.pk: step.key for step, _ in steps}
     edges = {(step_keys[source], event): step_keys[target] for source, event, target in transitions}
@@ -233,6 +249,9 @@ def simulate_booking_reply(
             **_render_result(language, channel, configurations, result, decisions),
         }
 
+    input_mode = _reply_input_mode(channel, reply_input_mode)
+    parser_source = "voice" if input_mode == "transcribed" else "chat"
+    voice_turn = input_mode != "typed"
     configuration = configurations[stage]
     parser_stage = "check_in" if stage == "welcome" else stage
     parser_configuration = configurations[parser_stage]
@@ -251,7 +270,7 @@ def simulate_booking_reply(
         state["check_out"] = check_out.isoformat()
     if needs_room_offer:
         # Prepare a two-guest example independently of the edge for the turn being simulated.
-        state = advance(state, "", 2, voice=final_voice_timeout or channel == "voice", room_search=_fictional_room_search)
+        state = advance(state, "", 2, voice=final_voice_timeout or voice_turn, room_search=_fictional_room_search)
         if stage != "room":
             state = advance(state, "1", None)
         if needs_delivery:
@@ -293,7 +312,7 @@ def simulate_booking_reply(
         and (stage != "welcome" or parsed is not None)
     ):
         correction = apply_reviewed_correction(
-            {**state, "stage": parser_stage}, reply, parsed, fictional_correction, source=channel,
+            {**state, "stage": parser_stage}, reply, parsed, fictional_correction, source=parser_source,
             room_codes=FICTIONAL_ROOM_CODES,
         )
     if correction is not None:
@@ -304,7 +323,7 @@ def simulate_booking_reply(
         state[RETRY_COUNT] = prior_retries
     result = advance_counted_turn(
         state, reply, parsed, resolve, lambda: retry_limit,
-        voice=channel == "voice", input_parsed=input_parsed,
+        voice=voice_turn, input_parsed=input_parsed,
         require_arrival_range=require_range, room_search=_fictional_room_search,
         booking_writer=_fictional_booking,
     )
@@ -322,6 +341,7 @@ def simulate_booking_reply(
         "context_arrival": check_in.isoformat() if check_in else None,
         "context_departure": check_out.isoformat() if check_out else None,
         "input_stage": stage,
+        "reply_input_mode": REPLY_INPUT_MODES[input_mode],
         "fictional_correction": fictional_correction,
         "model_outcome": model_outcome,
         "correction_applied": correction is not None,
