@@ -2,6 +2,7 @@
 
 from django.core.exceptions import ValidationError
 
+from .models import ParserConfiguration
 from .scenario import DELIVERY_RETRY_PROMPT
 from .scenario_answers import answer_label_fields, validate_answer_labels
 from .scenario_editor import validate_prompt
@@ -10,6 +11,9 @@ from .scenario_editor import validate_prompt
 CHAT_FIELD = "chat_text"
 VOICE_FIELD = "voice_parts"
 ARRIVAL_INPUT_FIELD = "arrival_input"
+NUMERIC_DATE_ORDER_FIELD = "numeric_date_order"
+NUMERIC_DATE_ORDER_LABELS = dict(ParserConfiguration.DATE_ORDER_CHOICES)
+DATE_PARSER_STEPS = frozenset({"check_in", "check_out"})
 PARSER_FALLBACK_FIELD = "parser_fallback"
 STAY_PARSER_STEPS = frozenset({"check_in", "check_out", "guests"})
 BUILT_IN_PARSER_ONLY = "built_in_only"
@@ -109,6 +113,7 @@ def prompt_fields(language, channel, step_key):
     primary = kinds if step_key in STEP_PROMPTS else ()
     outcomes = (outcome_field(prompt, kind) for prompt in OUTCOME_PROMPTS.get(step_key, ()) for kind in kinds)
     parser = (ARRIVAL_INPUT_FIELD,) if step_key == "check_in" and channel in CHANNEL_FIELDS else ()
+    date_order = (NUMERIC_DATE_ORDER_FIELD,) if step_key in DATE_PARSER_STEPS and kinds else ()
     fallback = (PARSER_FALLBACK_FIELD,) if step_key in STAY_PARSER_STEPS and kinds else ()
     corrections = (PARSER_CORRECTIONS_FIELD,) if step_key in PARSER_CORRECTIONS_STEPS and kinds else ()
     retry = (RETRY_LIMIT_FIELD,) if step_key in RETRY_LIMIT_STEPS and channel in CHANNEL_FIELDS else ()
@@ -123,7 +128,7 @@ def prompt_fields(language, channel, step_key):
     ) else ()
     return (
         *primary, *outcomes, *answer_label_fields(language, channel, step_key),
-        *parser, *fallback, *corrections, *retry, *silence, *interruption, *timeout,
+        *parser, *date_order, *fallback, *corrections, *retry, *silence, *interruption, *timeout,
     )
 
 
@@ -164,6 +169,8 @@ def validate_step_configuration(language, channel, key, configuration):
         raise ValidationError("Choose a supported parser fallback policy.")
     if PARSER_CORRECTIONS_FIELD in configuration and parser_corrections_mode(configuration) is None:
         raise ValidationError("Choose a supported parser corrections policy.")
+    if NUMERIC_DATE_ORDER_FIELD in configuration and numeric_date_order_override(configuration) is None:
+        raise ValidationError("Choose a supported numeric date order.")
     if ARRIVAL_INPUT_FIELD in configuration:
         mode = configuration[ARRIVAL_INPUT_FIELD]
         if not isinstance(mode, str) or mode not in dict(ARRIVAL_INPUT_CHOICES):
@@ -183,6 +190,13 @@ def validate_step_configuration(language, channel, key, configuration):
         validation_prompt = "delivery" if prompt == DELIVERY_RETRY_PROMPT else prompt
         if errors := validate_prompt(language, validation_prompt, chat_text, voice_parts):
             raise ValidationError([f"{prompt}: {error}" for error in errors.values()])
+
+
+def numeric_date_order_override(configuration):
+    if not isinstance(configuration, dict):
+        return None
+    value = configuration.get(NUMERIC_DATE_ORDER_FIELD)
+    return value if isinstance(value, str) and value in NUMERIC_DATE_ORDER_LABELS else None
 
 
 def retry_limit_value(configuration):

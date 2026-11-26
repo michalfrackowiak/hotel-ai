@@ -69,7 +69,7 @@
     <p>For an email or SMS receipt, choose a fictional delivery status. Leave the reply blank. The preview uses a fictional reference and does not contact a delivery provider.</p>
     <p>Choose chat inactivity or the final voice listening window for arrival and Polish welcome. Later booking steps offer a final voice listening window preview, including when the combined reception uses a chat version with the microphone active. Leave the reply blank for timeouts.</p>
     <p>For a reply step with a retry limit, the prior count represents fictional consecutive retries at that same step. If the next reply reaches the limit, the simulator previews the reception handover without opening a staff conversation.</p>
-    <p>The reply preview uses built-in parsing and the current date settings. For welcome, arrival, departure, or guest count, you can enter a fictional model result or parser correction. The preview applies the scenario's model fallback setting without contacting a model provider or reading saved corrections.</p>
+    <p>The reply preview uses built-in parsing and the selected scenario’s numeric date order when configured. Other date settings come from the language’s parser configuration. For welcome, arrival, departure, or guest count, you can enter a fictional model result or parser correction. The preview applies the scenario's model fallback setting without contacting a model provider or reading saved corrections.</p>
     {% if simulation_form.language == "pl" %}
       <p>In a Polish welcome or arrival reply, enter <code>English</code> or <code>2</code> to preview switching to the built-in English arrival prompt.</p>
     {% endif %}

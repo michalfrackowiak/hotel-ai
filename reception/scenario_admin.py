@@ -14,11 +14,13 @@ from .scenario_answers import MAX_ANSWER_LABEL, ROOM_ANSWER_LABEL, answer_label_
 from .scenario_editor import ARRIVAL_KEYS, VoicePartsField, _fields, _placeholder_help
 from .scenario_step_settings import (
     ARRIVAL_INPUT_CHOICES, ARRIVAL_INPUT_FIELD, CHAT_FIELD, MAX_CHAT_TEXT, MAX_RETRY_LIMIT, MAX_SILENCE_SECONDS,
-    OUTCOME_PROMPTS, PARSER_CORRECTIONS_CHOICES, PARSER_CORRECTIONS_FIELD, PARSER_CORRECTIONS_LABELS,
+    NUMERIC_DATE_ORDER_FIELD, NUMERIC_DATE_ORDER_LABELS, OUTCOME_PROMPTS, PARSER_CORRECTIONS_CHOICES,
+    PARSER_CORRECTIONS_FIELD, PARSER_CORRECTIONS_LABELS,
     PARSER_FALLBACK_CHOICES, PARSER_FALLBACK_FIELD, PARSER_FALLBACK_LABELS, RETRY_LIMIT_FIELD,
     SILENCE_WINDOW_FIELD, VOICE_FIELD, VOICE_INTERRUPTION_CHOICES,
     VOICE_INTERRUPTION_FIELD, VOICE_INTERRUPTION_LABELS, VOICE_TIMEOUT_CHOICES, VOICE_TIMEOUT_FIELD,
-    VOICE_TIMEOUT_LABELS, outcome_field, parser_corrections_mode, parser_fallback_mode, prompt_bindings, prompt_fields,
+    VOICE_TIMEOUT_LABELS, numeric_date_order_override, outcome_field, parser_corrections_mode, parser_fallback_mode,
+    prompt_bindings, prompt_fields,
     silence_window_seconds, validate_step_configuration, voice_interruption_mode, voice_timeout_mode,
 )
 
@@ -360,6 +362,14 @@ class ScenarioStepDraftForm(forms.ModelForm):
         choices=(("", "Use shared or built-in setting"), *ARRIVAL_INPUT_CHOICES),
         help_text="Require both stay dates in one answer or allow guests to give their departure separately.",
     )
+    numeric_date_order = forms.ChoiceField(
+        required=False, label="Numeric date order",
+        choices=(("", "Use shared or language setting"), *NUMERIC_DATE_ORDER_LABELS.items()),
+        help_text=(
+            "Choose the order the built-in parser uses for numeric guest replies. "
+            "ISO dates and reviewed corrections keep their existing interpretation."
+        ),
+    )
     chat_text = forms.CharField(
         required=False, max_length=MAX_CHAT_TEXT, label="Chat wording", widget=forms.Textarea(attrs={"rows": 4}),
     )
@@ -379,7 +389,7 @@ class ScenarioStepDraftForm(forms.ModelForm):
         scenario = step.version.scenario if step.pk else None
         applicable_fields = prompt_fields(scenario.language, scenario.channel, step.key) if scenario else ()
         settings = (
-            ARRIVAL_INPUT_FIELD, RETRY_LIMIT_FIELD, SILENCE_WINDOW_FIELD, VOICE_INTERRUPTION_FIELD,
+            ARRIVAL_INPUT_FIELD, NUMERIC_DATE_ORDER_FIELD, RETRY_LIMIT_FIELD, SILENCE_WINDOW_FIELD, VOICE_INTERRUPTION_FIELD,
             VOICE_TIMEOUT_FIELD, PARSER_FALLBACK_FIELD, PARSER_CORRECTIONS_FIELD,
         )
         for name in (CHAT_FIELD, VOICE_FIELD, *settings):
@@ -480,6 +490,7 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
             summary = ("outcome_wording",) if obj.key in OUTCOME_PROMPTS else ()
             labels = ("answer_button_labels",) if answer_label_fields(scenario.language, scenario.channel, obj.key) else ()
             parser = ("arrival_input_setting",) if ARRIVAL_INPUT_FIELD in prompts else ()
+            date_order = ("numeric_date_order_setting",) if NUMERIC_DATE_ORDER_FIELD in prompts else ()
             fallback = ("parser_fallback_setting",) if PARSER_FALLBACK_FIELD in prompts else ()
             corrections = ("parser_corrections_setting",) if PARSER_CORRECTIONS_FIELD in prompts else ()
             retry = ("retry_limit_setting",) if RETRY_LIMIT_FIELD in prompts else ()
@@ -487,7 +498,7 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
             interruption = ("voice_interruption_setting",) if VOICE_INTERRUPTION_FIELD in prompts else ()
             timeout = ("voice_timeout_setting",) if VOICE_TIMEOUT_FIELD in prompts else ()
             return (
-                *self.fields, *primary, *summary, *labels, *parser, *fallback, *corrections,
+                *self.fields, *primary, *summary, *labels, *parser, *date_order, *fallback, *corrections,
                 *retry, *silence, *interruption, *timeout,
             )
         fields = (*self.fields, *prompts)
@@ -550,6 +561,10 @@ class ScenarioStepAdmin(ScenarioDraftAdmin):
         from .scenario_publication import describe_arrival_input
 
         return describe_arrival_input(obj.configuration) or "Shared or built-in setting"
+
+    @admin.display(description="Numeric date order")
+    def numeric_date_order_setting(self, obj):
+        return NUMERIC_DATE_ORDER_LABELS.get(numeric_date_order_override(obj.configuration), "Shared or language setting")
 
     @admin.display(description="Reviewed parser corrections")
     def parser_corrections_setting(self, obj):

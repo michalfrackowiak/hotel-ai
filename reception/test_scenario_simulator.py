@@ -2,8 +2,9 @@ from datetime import date, timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from bookings.models import Booking, BookingConfirmation, Price, Room
 
@@ -21,9 +22,11 @@ class ScenarioSimulatorTests(TestCase):
     def setUp(self):
         self.client.force_login(self.staff)
 
-    def make_version(self, language, channel, configurations=None, extra_edges=()):
-        scenario = Scenario.objects.create(language=language, channel=channel)
-        version = ScenarioVersion.objects.create(scenario=scenario, number=1)
+    def make_version(
+        self, language, channel, configurations=None, extra_edges=(), *, scenario=None, number=1, base_version=None,
+    ):
+        scenario = scenario or Scenario.objects.create(language=language, channel=channel)
+        version = ScenarioVersion.objects.create(scenario=scenario, number=number, base_version=base_version)
         configurations = configurations or {}
         steps = {
             key: ScenarioStep.objects.create(version=version, key=key, configuration=configurations.get(key, {}))
@@ -118,6 +121,67 @@ class ScenarioSimulatorTests(TestCase):
                 self.assertEqual(preview["departure"], (today + timedelta(days=4)).isoformat())
                 self.assertEqual(preview["stage"], "guests")
                 self.assertEqual(preview["decisions"], [("check_in", "stay_dates", "guests")])
+
+    @patch("django.utils.timezone.localdate", return_value=date(2030, 1, 1))
+    def test_inherited_numeric_date_order_applies_to_simulator_and_only_new_browser_drafts(self, _today):
+        shared = self.make_version("pl", "shared", {"check_in": {"numeric_date_order": "mdy"}})
+        ScenarioVersion.objects.filter(pk=shared.pk).update(published_at=timezone.now())
+        original = self.make_version("pl", "chat")
+
+        def publish(version):
+            review = review_scenario_selection(version.scenario_id, version.pk, actor=self.staff, action="publish")
+            publish_scenario_version(
+                version.scenario_id, version.pk, actor=self.staff, expected_version_id=review.expected_version_id,
+                expected_audit_id=review.expected_audit_id, expected_fingerprint=review.fingerprint,
+            )
+            return review
+
+        def turn(client, **payload):
+            response = client.post(
+                reverse("reception-message"), {"language": "pl", **payload}, content_type="application/json",
+            )
+            self.assertEqual(response.status_code, 200, response.content)
+            return response.json()
+
+        publish(original)
+        old_client = Client()
+        old_welcome = turn(old_client, reset=True)
+        edited = self.make_version("pl", "chat", scenario=original.scenario, number=2, base_version=shared)
+        checkout_step = edited.steps.get(key="check_out")
+        editor_url = reverse("admin:reception_scenariostep_change", args=[checkout_step.pk])
+        self.assertContains(self.client.get(editor_url), "Numeric date order")
+        invalid = self.client.post(editor_url, {"position": 0, "numeric_date_order": "ymd"})
+        self.assertIn("numeric_date_order", invalid.context["adminform"].form.errors)
+        self.assertEqual(self.client.post(editor_url, {"position": 0, "numeric_date_order": "dmy"}).status_code, 302)
+        stay = self.preview(edited, "welcome", reply="01/05/2030 do 01/08/2030")
+        self.assertEqual((stay["arrival"], stay["departure"]), ("2030-01-05", "2030-01-08"))
+        checkout = self.preview(edited, "check_out", reply="07/01/2030")
+        self.assertEqual(checkout["departure"], "2030-01-07")
+        corrected = self.preview(edited, "check_in", reply="słabe nagranie", fictional_correction="03/06/2030")
+        self.assertTrue(corrected["correction_applied"])
+        self.assertEqual(corrected["arrival"], "2030-06-03")
+
+        review = publish(edited)
+        self.assertIn("Numeric date order: Month / day / year", "\n".join(review.diff))
+        self.assertIn("Numeric date order: Day / month / year", "\n".join(review.diff))
+        self.assertEqual(edited.steps.get(key="check_in").configuration, {"numeric_date_order": "mdy"})
+
+        old_arrival = turn(old_client, revision=old_welcome["revision"], message="01/05/2030")
+        self.assertEqual(old_arrival["stage"], "check_out")
+        self.assertEqual(old_arrival["booking_summary"]["check_in"], "2030-05-01")
+        new_client = Client()
+        new_welcome = turn(new_client, reset=True)
+        arrival = turn(new_client, revision=new_welcome["revision"], message="01/05/2030")
+        self.assertEqual(arrival["stage"], "check_out")
+        self.assertEqual(arrival["booking_summary"]["check_in"], stay["arrival"])
+        departure = turn(new_client, revision=arrival["revision"], message="07/01/2030")
+        self.assertEqual(departure["stage"], "guests")
+        self.assertEqual(departure["booking_summary"]["check_out"], checkout["departure"])
+        new_welcome = turn(new_client, reset=True)
+        live_stay = turn(new_client, revision=new_welcome["revision"], message="01/05/2030 do 01/08/2030")
+        self.assertEqual(live_stay["stage"], "guests")
+        self.assertEqual(live_stay["booking_summary"]["check_in"], stay["arrival"])
+        self.assertEqual(live_stay["booking_summary"]["check_out"], stay["departure"])
 
     def test_guest_preview_applies_fictional_correction_and_model_only_when_allowed(self):
         version = self.make_version("en", "chat")

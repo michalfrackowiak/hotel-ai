@@ -216,6 +216,20 @@ class NoisyStayParsingTests(TestCase):
                             expected if iso and localized else None,
                         )
 
+    def test_reply_date_order_overrides_only_the_saved_order(self, _today):
+        settings = ParserConfiguration.objects.filter(language="en")
+        settings.update(numeric_date_order="dmy", allow_slash_dates=False, allow_yearless_dates=False)
+        day_first = date(2027, 3, 2)
+        month_first = date(2027, 2, 3)
+        self.assertEqual(parse_stay_input("check_in", "02.03.2027", "en"), day_first)
+        self.assertEqual(parse_stay_input("check_in", "02.03.2027", "en", numeric_date_order="mdy"), month_first)
+        for reply, expected in (
+            ("02/03/2027", None), ("02.03", None), ("2027-03-02", day_first),
+            ("March 2, 2027", day_first), ("tomorrow", date(2026, 11, 16)),
+        ):
+            with self.subTest(reply=reply):
+                self.assertEqual(parse_stay_input("check_in", reply, "en", numeric_date_order="mdy"), expected)
+
     def test_yearless_checkout_uses_the_arrival_year_in_both_languages(self, _today):
         arrival = date(2027, 12, 10)
         for language, standalone, embedded, pair in (
